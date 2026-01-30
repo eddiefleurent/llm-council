@@ -33,11 +33,13 @@ function App() {
   }, []);
 
   // Load conversation details when selected
+  // IMPORTANT: Skip loading if isLoading is true - prevents race condition where
+  // loadConversation overwrites optimistic UI state during message streaming
   useEffect(() => {
-    if (currentConversationId && !isDraftMode) {
+    if (currentConversationId && !isDraftMode && !isLoading) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId, isDraftMode]);
+  }, [currentConversationId, isDraftMode, isLoading]);
 
   const loadConversations = async () => {
     try {
