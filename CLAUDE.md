@@ -185,7 +185,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Uses OpenRouter's built-in web search plugin
 - Provides real-time information access beyond model training data
 - Applied at query time via `get_effective_models()` - base model IDs stored in config
-- See: https://openrouter.ai/docs/guides/routing/model-variants/online
+- See: [OpenRouter :online variant docs](https://openrouter.ai/docs/guides/routing/model-variants/online)
 
 ### Stage 2 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
@@ -284,9 +284,9 @@ The entire flow is async/parallel where possible to minimize latency.
 
 ### Creating Pull Requests
 This repo is a personal fork maintained by the user. When creating PRs:
-- Always push to `origin` (the user's fork)
-- Create PRs to `main` branch of the same fork
-- Use `gh pr create` with appropriate title and body
+- Always push to `origin` (the user's fork: `eddiefleurent/llm-council`)
+- Create PRs to `main` branch of the **same fork** (NOT upstream)
+- **IMPORTANT**: Use `--repo eddiefleurent/llm-council --base main` to avoid creating PRs on upstream
 
 Example workflow:
 ```bash
@@ -294,5 +294,7 @@ git checkout -b feature/my-feature
 # ... make changes ...
 git add -A && git commit -m "feat: description"
 git push -u origin HEAD
-gh pr create --title "feat: description" --body "## Summary\n- Change 1\n- Change 2"
+gh pr create --repo eddiefleurent/llm-council --base main --title "feat: description" --body "## Summary\n- Change 1\n- Change 2"
 ```
+
+**Note**: Without `--repo`, `gh pr create` defaults to the upstream repo (karpathy/llm-council) which is NOT what we want.

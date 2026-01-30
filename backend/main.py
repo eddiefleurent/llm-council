@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from . import storage
 from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings
 from .context import build_context_messages
-from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL
+from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_effective_models
 from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
 
 
@@ -395,9 +395,14 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 request.content
             )
 
+            # Get effective models (applies :online suffix if web search enabled)
+            effective = get_effective_models()
+            council_models = effective["council_models"]
+            chairman_model = effective["chairman_model"]
+
             # Stage 1: Collect responses with context
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results, stage1_errors = await stage1_collect_responses(messages)
+            stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
 
             # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
@@ -410,14 +415,14 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(request.content, stage1_results)
+            stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(request.content, stage1_results, council_models)
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
 
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result, stage3_errors = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
+            stage3_result, stage3_errors = await stage3_synthesize_final(request.content, stage1_results, stage2_results, chairman_model)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
 
             # Wait for title generation if it was started
