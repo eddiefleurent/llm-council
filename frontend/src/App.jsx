@@ -9,6 +9,7 @@ function App() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDraftMode, setIsDraftMode] = useState(false);
 
   // Load conversations on mount
   useEffect(() => {
@@ -17,10 +18,10 @@ function App() {
 
   // Load conversation details when selected
   useEffect(() => {
-    if (currentConversationId) {
+    if (currentConversationId && !isDraftMode) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, isDraftMode]);
 
   const loadConversations = async () => {
     try {
@@ -40,28 +41,57 @@ function App() {
     }
   };
 
-  const handleNewConversation = async () => {
-    try {
-      const newConv = await api.createConversation();
-      setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
-        ...conversations,
-      ]);
-      setCurrentConversationId(newConv.id);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-    }
+  const handleNewConversation = () => {
+    // Set draft mode instead of creating conversation immediately
+    setIsDraftMode(true);
+    setCurrentConversationId(null);
+    setCurrentConversation({
+      id: null,
+      created_at: new Date().toISOString(),
+      title: 'New Conversation',
+      messages: [],
+    });
   };
 
   const handleSelectConversation = (id) => {
+    setIsDraftMode(false);
     setCurrentConversationId(id);
   };
 
-  const handleSendMessage = async (content) => {
-    if (!currentConversationId) return;
+  const handleClearConversations = async () => {
+    if (!window.confirm('Clear all conversations? This cannot be undone.')) return;
+    try {
+      await api.deleteAllConversations();
+      setConversations([]);
+      setCurrentConversationId(null);
+      setCurrentConversation(null);
+      setIsDraftMode(false);
+    } catch (error) {
+      console.error('Failed to clear conversations:', error);
+    }
+  };
 
+  const handleSendMessage = async (content) => {
     setIsLoading(true);
     try {
+      let conversationId = currentConversationId;
+
+      // If in draft mode, create the conversation first
+      if (isDraftMode) {
+        const newConv = await api.createConversation();
+        conversationId = newConv.id;
+        setCurrentConversationId(conversationId);
+        setIsDraftMode(false);
+
+        // Update conversations list
+        setConversations([
+          { id: newConv.id, created_at: newConv.created_at, title: 'New Conversation', message_count: 0 },
+          ...conversations,
+        ]);
+      }
+
+      if (!conversationId) return;
+
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
       setCurrentConversation((prev) => ({
@@ -90,7 +120,7 @@ function App() {
       }));
 
       // Send message with streaming
-      await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
+      await api.sendMessageStream(conversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
             setCurrentConversation((prev) => {
@@ -188,6 +218,8 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onClearConversations={handleClearConversations}
+        isLoading={isLoading}
       />
       <ChatInterface
         conversation={currentConversation}

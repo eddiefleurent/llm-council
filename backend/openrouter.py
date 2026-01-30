@@ -1,15 +1,33 @@
 """OpenRouter API client for making LLM requests."""
 
 import httpx
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
+from dataclasses import dataclass
 from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+
+
+@dataclass
+class ModelQueryError:
+    """Structured error information from a failed model query."""
+    error_type: str  # 'auth', 'rate_limit', 'not_found', 'payment', 'server', 'timeout', 'unknown'
+    message: str
+    status_code: Optional[int] = None
+    model: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'error_type': self.error_type,
+            'message': self.message,
+            'status_code': self.status_code,
+            'model': self.model
+        }
 
 
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
     timeout: float = 120.0
-) -> Optional[Dict[str, Any]]:
+) -> Union[Dict[str, Any], ModelQueryError]:
     """
     Query a single model via OpenRouter API.
 
@@ -19,7 +37,8 @@ async def query_model(
         timeout: Request timeout in seconds
 
     Returns:
-        Response dict with 'content' and optional 'reasoning_details', or None if failed
+        Response dict with 'content' and optional 'reasoning_details',
+        or ModelQueryError if the request failed
     """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -38,6 +57,44 @@ async def query_model(
                 headers=headers,
                 json=payload
             )
+
+            # Handle specific HTTP error codes
+            if response.status_code == 401:
+                return ModelQueryError(
+                    error_type='auth',
+                    message='Invalid API key. Please check your OPENROUTER_API_KEY.',
+                    status_code=401,
+                    model=model
+                )
+            elif response.status_code == 402:
+                return ModelQueryError(
+                    error_type='payment',
+                    message='Payment required. Please add credits to your OpenRouter account.',
+                    status_code=402,
+                    model=model
+                )
+            elif response.status_code == 404:
+                return ModelQueryError(
+                    error_type='not_found',
+                    message=f'Model "{model}" not found on OpenRouter.',
+                    status_code=404,
+                    model=model
+                )
+            elif response.status_code == 429:
+                return ModelQueryError(
+                    error_type='rate_limit',
+                    message='Rate limit exceeded. Please wait before retrying.',
+                    status_code=429,
+                    model=model
+                )
+            elif response.status_code >= 500:
+                return ModelQueryError(
+                    error_type='server',
+                    message=f'OpenRouter server error (HTTP {response.status_code}). Please try again.',
+                    status_code=response.status_code,
+                    model=model
+                )
+
             response.raise_for_status()
 
             data = response.json()
@@ -48,15 +105,32 @@ async def query_model(
                 'reasoning_details': message.get('reasoning_details')
             }
 
+    except httpx.TimeoutException:
+        return ModelQueryError(
+            error_type='timeout',
+            message=f'Request timed out after {timeout}s.',
+            model=model
+        )
+    except httpx.HTTPStatusError as e:
+        return ModelQueryError(
+            error_type='unknown',
+            message=f'HTTP error: {e}',
+            status_code=e.response.status_code if e.response else None,
+            model=model
+        )
     except Exception as e:
         print(f"Error querying model {model}: {e}")
-        return None
+        return ModelQueryError(
+            error_type='unknown',
+            message=str(e),
+            model=model
+        )
 
 
 async def query_models_parallel(
     models: List[str],
     messages: List[Dict[str, str]]
-) -> Dict[str, Optional[Dict[str, Any]]]:
+) -> Dict[str, Union[Dict[str, Any], ModelQueryError]]:
     """
     Query multiple models in parallel.
 
@@ -65,7 +139,7 @@ async def query_models_parallel(
         messages: List of message dicts to send to each model
 
     Returns:
-        Dict mapping model identifier to response dict (or None if failed)
+        Dict mapping model identifier to response dict or ModelQueryError
     """
     import asyncio
 
@@ -77,3 +151,8 @@ async def query_models_parallel(
 
     # Map models to their responses
     return {model: response for model, response in zip(models, responses)}
+
+
+def is_error(response: Union[Dict[str, Any], ModelQueryError, None]) -> bool:
+    """Check if a response is an error."""
+    return isinstance(response, ModelQueryError) or response is None

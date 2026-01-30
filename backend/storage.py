@@ -170,3 +170,18 @@ def update_conversation_title(conversation_id: str, title: str):
 
     conversation["title"] = title
     save_conversation(conversation)
+
+
+def delete_all_conversations():
+    """
+    Delete all conversation files from the data directory.
+    """
+    ensure_data_dir()
+    for filename in os.listdir(DATA_DIR):
+        if filename.endswith('.json'):
+            path = os.path.join(DATA_DIR, filename)
+            try:
+                os.remove(path)
+            except OSError:
+                # ignore failures to remove individual files
+                pass

@@ -52,11 +52,19 @@
   border: 1px solid #e0e0e0;
 }
 
+.response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
 .model-name {
   color: #888;
   font-size: 12px;
-  margin-bottom: 12px;
   font-family: monospace;
+  flex: 1;
 }
 
 .response-text {
