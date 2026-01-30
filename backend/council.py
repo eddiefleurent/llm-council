@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Tuple, Optional
 from .openrouter import query_models_parallel, query_model, ModelQueryError, is_error
-from .config import DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_council_config
+from .config import DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_council_config, get_effective_models
 
 
 async def stage1_collect_responses(
@@ -518,7 +518,8 @@ Title:"""
 async def run_full_council(
     messages: List[Dict[str, str]],
     council_models: Optional[List[str]] = None,
-    chairman_model: Optional[str] = None
+    chairman_model: Optional[str] = None,
+    web_search_enabled: Optional[bool] = None
 ) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process with conversation context.
@@ -527,6 +528,7 @@ async def run_full_council(
         messages: Full message history in OpenAI format
         council_models: Optional list of model IDs for the council (defaults to configured)
         chairman_model: Optional model ID for the chairman (defaults to configured)
+        web_search_enabled: Optional flag to enable web search (defaults to configured)
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
@@ -541,13 +543,11 @@ async def run_full_council(
             "response": "No messages provided. Please enter a query."
         }, {"errors": [{"error_type": "validation", "message": "Empty messages list"}]}
     
-    # Get config if models not specified
-    if council_models is None or chairman_model is None:
-        config = get_council_config()
-        if council_models is None:
-            council_models = config["council_models"]
-        if chairman_model is None:
-            chairman_model = config["chairman_model"]
+    # Get effective models (applies :online suffix if web search enabled)
+    effective = get_effective_models(council_models, chairman_model, web_search_enabled)
+    council_models = effective["council_models"]
+    chairman_model = effective["chairman_model"]
+    web_search_enabled = effective["web_search_enabled"]
     
     # Extract current query from messages
     current_query = messages[-1]["content"]
@@ -590,6 +590,7 @@ async def run_full_council(
         "tournament_rankings": tournament_rankings,
         "council_models": council_models,
         "chairman_model": chairman_model,
+        "web_search_enabled": web_search_enabled,
         "errors": {
             "stage1": stage1_errors,
             "stage2": stage2_errors,

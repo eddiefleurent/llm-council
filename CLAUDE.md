@@ -17,6 +17,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Validates API key at startup** - fails fast with clear error message
 - `get_council_config()`: Returns current council config (from file or defaults)
 - `save_council_config()`: Persists council config to `data/council_config.json`
+- `get_effective_models()`: Returns models with `:online` suffix if web search enabled
+- `apply_online_variant()`: Helper to append `:online` to model IDs
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
 
 **`models.py`** - OpenRouter Model Discovery
@@ -49,9 +51,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Chairman synthesizes from all responses + rankings
   - Optional `chairman_model` parameter
   - Returns tuple: (result, errors)
-- `run_full_council(messages, council_models=None, chairman_model=None)`: Full orchestration
-  - Now accepts optional model parameters
-  - Metadata now includes `council_models` and `chairman_model` used
+- `run_full_council(messages, council_models=None, chairman_model=None, web_search_enabled=None)`: Full orchestration
+  - Now accepts optional model parameters and web search flag
+  - Metadata now includes `council_models`, `chairman_model`, and `web_search_enabled` used
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section
 - `calculate_aggregate_rankings()`: Mean position averaging
 - **`calculate_tournament_rankings()`**: Pairwise comparison (Condorcet voting) - more robust to outliers
@@ -74,7 +76,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
 - POST `/api/conversations/{id}/message` returns metadata in addition to stages
 - DELETE `/api/conversations` clears all conversations
-- Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, errors
+- Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, web_search_enabled, errors
 
 **Model Discovery Endpoints:**
 - GET `/api/models` - List all models grouped by provider
@@ -83,7 +85,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **Council Configuration Endpoints:**
 - GET `/api/council/config` - Get current config (with defaults)
-- PUT `/api/council/config` - Update council models and chairman
+- PUT `/api/council/config` - Update council models, chairman, and web search setting
 - POST `/api/council/config/reset` - Reset to defaults
 
 ### Frontend Structure (`frontend/src/`)
@@ -100,7 +102,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `getModelsForProvider(providerId)`: Get models for specific provider
 - `refreshModels()`: Force refresh models cache
 - `getCouncilConfig()`: Get current council configuration
-- `updateCouncilConfig(councilModels, chairmanModel)`: Update configuration
+- `updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled)`: Update configuration
 - `resetCouncilConfig()`: Reset to defaults
 
 **`utils.js`**
@@ -128,6 +130,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Shows current config with model chips (color-coded by provider)
 - Add/remove council members
 - Select chairman model
+- **Web Search toggle**: Enable/disable `:online` variant for real-time web search
 - Reset to defaults button
 - Validates configuration before saving
 
@@ -175,6 +178,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Models auto-discovered from OpenRouter API with 5-minute cache
 - Priority providers (OpenAI, Anthropic, Google, xAI) shown first in UI
 - Validation ensures selected models exist before saving
+
+### Web Search (`:online` variant)
+- Enabled via toggle in Council Configuration UI
+- When enabled, `:online` suffix is appended to all model IDs
+- Uses OpenRouter's built-in web search plugin
+- Provides real-time information access beyond model training data
+- Applied at query time via `get_effective_models()` - base model IDs stored in config
+- See: [OpenRouter :online variant docs](https://openrouter.ai/docs/guides/routing/model-variants/online)
 
 ### Stage 2 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
@@ -268,3 +279,22 @@ Frontend: Display with tabs + copy buttons + validation UI
 ```
 
 The entire flow is async/parallel where possible to minimize latency.
+
+## Git Workflow
+
+### Creating Pull Requests
+This repo is a personal fork maintained by the user. When creating PRs:
+- Always push to `origin` (the user's fork: `eddiefleurent/llm-council`)
+- Create PRs to `main` branch of the **same fork** (NOT upstream)
+- **IMPORTANT**: Use `--repo eddiefleurent/llm-council --base main` to avoid creating PRs on upstream
+
+Example workflow:
+```bash
+git checkout -b feature/my-feature
+# ... make changes ...
+git add -A && git commit -m "feat: description"
+git push -u origin HEAD
+gh pr create --repo eddiefleurent/llm-council --base main --title "feat: description" --body "## Summary\n- Change 1\n- Change 2"
+```
+
+**Note**: Without `--repo`, `gh pr create` defaults to the upstream repo (karpathy/llm-council) which is NOT what we want.

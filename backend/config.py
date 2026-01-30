@@ -61,6 +61,7 @@ def get_council_config() -> dict:
     Returns a dict with:
     - council_models: List of model IDs for the council (defensive copy)
     - chairman_model: Model ID for the chairman
+    - web_search_enabled: Whether to use :online variant for web search
     """
     import json
 
@@ -75,9 +76,15 @@ def get_council_config() -> dict:
                 if not isinstance(chairman, str) or not chairman.strip():
                     chairman = DEFAULT_CHAIRMAN_MODEL
 
+                # Web search defaults to False if not present
+                web_search_enabled = config.get("web_search_enabled", False)
+                if not isinstance(web_search_enabled, bool):
+                    web_search_enabled = False
+
                 return {
                     "council_models": _normalize_council_models(config.get("council_models")),
-                    "chairman_model": chairman
+                    "chairman_model": chairman,
+                    "web_search_enabled": web_search_enabled
                 }
         except (json.JSONDecodeError, IOError):
             pass
@@ -85,17 +92,81 @@ def get_council_config() -> dict:
     # Return defaults (defensive copies)
     return {
         "council_models": list(DEFAULT_COUNCIL_MODELS),
-        "chairman_model": DEFAULT_CHAIRMAN_MODEL
+        "chairman_model": DEFAULT_CHAIRMAN_MODEL,
+        "web_search_enabled": False
     }
 
 
-def save_council_config(council_models: List[str], chairman_model: str) -> None:
+def apply_online_variant(model_id: str) -> str:
+    """
+    Apply the :online variant to a model ID for web search capability.
+    
+    According to OpenRouter docs, append ':online' to any model ID to enable
+    real-time web search capabilities.
+    
+    Args:
+        model_id: The base model ID (e.g., "openai/gpt-5.2")
+        
+    Returns:
+        Model ID with :online suffix (e.g., "openai/gpt-5.2:online")
+    """
+    if not model_id:
+        return model_id
+    # Don't double-apply the suffix
+    if model_id.endswith(":online"):
+        return model_id
+    return f"{model_id}:online"
+
+
+def get_effective_models(
+    council_models: Optional[List[str]] = None,
+    chairman_model: Optional[str] = None,
+    web_search_enabled: Optional[bool] = None
+) -> dict:
+    """
+    Get effective model IDs with :online suffix applied if web search is enabled.
+    
+    Args:
+        council_models: List of council model IDs (uses config if None)
+        chairman_model: Chairman model ID (uses config if None)
+        web_search_enabled: Whether web search is enabled (uses config if None)
+        
+    Returns:
+        Dict with 'council_models' and 'chairman_model' keys, with :online suffix
+        applied if web_search_enabled is True
+    """
+    config = get_council_config()
+    
+    if council_models is None:
+        council_models = config["council_models"]
+    if chairman_model is None:
+        chairman_model = config["chairman_model"]
+    if web_search_enabled is None:
+        web_search_enabled = config["web_search_enabled"]
+    
+    if web_search_enabled:
+        council_models = [apply_online_variant(m) for m in council_models]
+        chairman_model = apply_online_variant(chairman_model)
+    
+    return {
+        "council_models": council_models,
+        "chairman_model": chairman_model,
+        "web_search_enabled": web_search_enabled
+    }
+
+
+def save_council_config(
+    council_models: List[str],
+    chairman_model: str,
+    web_search_enabled: bool = False
+) -> None:
     """
     Save council configuration to file.
 
     Args:
         council_models: List of model IDs for the council
         chairman_model: Model ID for the chairman
+        web_search_enabled: Whether to enable web search (:online variant)
     """
     import json
     import tempfile
@@ -106,7 +177,8 @@ def save_council_config(council_models: List[str], chairman_model: str) -> None:
 
     config = {
         "council_models": council_models,
-        "chairman_model": chairman_model
+        "chairman_model": chairman_model,
+        "web_search_enabled": web_search_enabled
     }
 
     # Use atomic write: temp file + replace to prevent corruption on crash
