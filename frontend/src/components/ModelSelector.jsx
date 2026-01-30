@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { getProviderColor } from '../providerColors';
 import { getModelDisplayName as getDisplayName } from '../utils';
@@ -34,12 +34,10 @@ export default function ModelSelector({
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const hasLoadedRef = useRef(false);
 
   // Load providers when opened
   useEffect(() => {
-    if (isOpen && !hasLoadedRef.current) {
-      hasLoadedRef.current = true;
+    if (isOpen) {
       loadProviders();
     }
   }, [isOpen]);

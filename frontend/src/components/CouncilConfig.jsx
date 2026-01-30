@@ -60,8 +60,6 @@ export default function CouncilConfig({ isOpen, onClose }) {
   const [chairmanModel, setChairmanModel] = useState('');
   // loadedConfig is the baseline for detecting changes (the persisted/saved state)
   const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '' });
-  // defaults from the server (the "factory defaults" for reset)
-  const [serverDefaults, setServerDefaults] = useState({ council_models: [], chairman_model: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -95,8 +93,6 @@ export default function CouncilConfig({ isOpen, onClose }) {
       setChairmanModel(currentChairman);
       // Set the loaded config as the baseline for change detection
       setLoadedConfig({ council_models: currentCouncil, chairman_model: currentChairman });
-      // Store factory defaults separately for reset functionality
-      setServerDefaults(config.defaults || { council_models: [], chairman_model: '' });
     } catch (err) {
       setError('Failed to load council configuration');
       console.error('Failed to load config:', err);
@@ -142,11 +138,11 @@ export default function CouncilConfig({ isOpen, onClose }) {
       setCouncilModels(result.council_models);
       setChairmanModel(result.chairman_model);
       // Update the loaded config baseline after reset (now using factory defaults)
-      setLoadedConfig({ 
-        council_models: result.council_models, 
-        chairman_model: result.chairman_model 
+      setLoadedConfig({
+        council_models: result.council_models,
+        chairman_model: result.chairman_model
       });
-    } catch (err) {
+    } catch {
       setError('Failed to reset configuration');
     } finally {
       setSaving(false);

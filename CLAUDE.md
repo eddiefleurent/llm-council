@@ -220,6 +220,14 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - `tests/integration/` for API tests
 - Run with: `uv run pytest` or `pytest`
 
+### Frontend Quality Commands
+- **Lint all files**: `npm run lint` (from `frontend/` directory)
+- **Lint specific file**: `npx eslint src/components/ModelSelector.jsx`
+- **Auto-fix issues**: `npm run lint -- --fix` (only fixes auto-fixable issues like whitespace)
+- **Build frontend**: `npm run build` - Vite builds to `dist/`
+- **Note**: Unused variables (unused state, catch parameters) must be manually removed - ESLint `--fix` doesn't handle these
+- **ModelSelector behavior**: Loads providers fresh on each modal open (no caching) - uses `useEffect` dependency on `isOpen`
+
 ## Common Gotchas
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
