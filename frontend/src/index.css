@@ -7,6 +7,84 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Light theme (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #fafafa;
+  --bg-hover: #f0f0f0;
+  --bg-input: #ffffff;
+  --bg-code: #f5f5f5;
+
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-tertiary: #888;
+  --text-muted: #999;
+
+  --border-primary: #e0e0e0;
+  --border-secondary: #d0d0d0;
+  --border-light: #ddd;
+
+  --accent-primary: #4a90e2;
+  --accent-hover: #357abd;
+  --accent-light: #f0f7ff;
+  --accent-border: #d0e7ff;
+
+  --stage3-bg: #f0fff0;
+  --stage3-border: #c8e6c8;
+  --stage3-text: #2d8a2d;
+
+  --error-bg: #fee2e2;
+  --error-text: #dc2626;
+  --error-border: #d9534f;
+
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+
+  --shadow-light: rgba(0, 0, 0, 0.05);
+  --shadow-medium: rgba(0, 0, 0, 0.1);
+  --shadow-heavy: rgba(0, 0, 0, 0.2);
+  --overlay-bg: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] {
+  /* Dark theme */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #121212;
+  --bg-tertiary: #242424;
+  --bg-hover: #2a2a2a;
+  --bg-input: #242424;
+  --bg-code: #2a2a2a;
+
+  --text-primary: #e0e0e0;
+  --text-secondary: #b0b0b0;
+  --text-tertiary: #888888;
+  --text-muted: #666666;
+
+  --border-primary: #333333;
+  --border-secondary: #404040;
+  --border-light: #444444;
+
+  --accent-primary: #5ba3ff;
+  --accent-hover: #4a90e2;
+  --accent-light: #1a2942;
+  --accent-border: #2a4a6a;
+
+  --stage3-bg: #1a2e1a;
+  --stage3-border: #2d5a2d;
+  --stage3-text: #6bca6b;
+
+  --error-bg: #3a1a1a;
+  --error-text: #ff6b6b;
+  --error-border: #7a3a3a;
+
+  --warning-bg: #3a3520;
+  --warning-text: #f0d878;
+
+  --shadow-light: rgba(0, 0, 0, 0.3);
+  --shadow-medium: rgba(0, 0, 0, 0.4);
+  --shadow-heavy: rgba(0, 0, 0, 0.6);
+  --overlay-bg: rgba(0, 0, 0, 0.7);
 }
 
 * {
@@ -37,7 +115,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
@@ -88,7 +168,7 @@ body {
 }
 
 .markdown-content pre {
-  background: #f5f5f5;
+  background: var(--bg-code);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
@@ -96,7 +176,7 @@ body {
 }
 
 .markdown-content code {
-  background: #f5f5f5;
+  background: var(--bg-code);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: monospace;
@@ -111,6 +191,6 @@ body {
 .markdown-content blockquote {
   margin: 0 0 12px 0;
   padding-left: 16px;
-  border-left: 4px solid #ddd;
-  color: #666;
+  border-left: 4px solid var(--border-light);
+  color: var(--text-secondary);
 }

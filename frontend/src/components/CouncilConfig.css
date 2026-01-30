@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12,7 +12,7 @@
 }
 
 .council-config-panel {
-  background: #fff;
+  background: var(--bg-primary);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
@@ -20,7 +20,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 60px var(--shadow-heavy);
 }
 
 .council-config-header {
@@ -28,20 +28,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .council-config-header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .council-config-header .close-btn {
   background: transparent;
   border: none;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 24px;
   padding: 0 4px;
@@ -50,7 +50,7 @@
 }
 
 .council-config-header .close-btn:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .council-config-content {
@@ -62,13 +62,13 @@
 .loading-state {
   padding: 40px;
   text-align: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error-banner {
   padding: 12px 16px;
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--error-bg);
+  color: var(--error-text);
   border-radius: 8px;
   margin-bottom: 20px;
   font-size: 14px;
@@ -87,12 +87,12 @@
   margin: 0 0 4px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .section-hint {
   font-size: 12px;
-  color: #888;
+  color: var(--text-tertiary);
 }
 
 /* Models grid */
@@ -112,7 +112,7 @@
   border: 1px solid;
   border-radius: 20px;
   font-size: 13px;
-  background: #fff;
+  background: var(--bg-primary);
 }
 
 .provider-dot {
@@ -123,7 +123,7 @@
 }
 
 .chip-name {
-  color: #333;
+  color: var(--text-primary);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -133,7 +133,7 @@
 .chip-remove {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 16px;
   padding: 0 2px;
@@ -142,7 +142,7 @@
 }
 
 .chip-remove:hover {
-  color: #dc2626;
+  color: var(--error-text);
 }
 
 /* Add model button */
@@ -151,19 +151,19 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px dashed #ccc;
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-secondary);
   border-radius: 20px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .add-model-btn:hover {
-  border-color: #4a90e2;
-  color: #4a90e2;
-  background: #f0f7ff;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
 }
 
 /* Chairman select */
@@ -172,25 +172,25 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #f8f8f8;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .chairman-select:hover {
-  border-color: #4a90e2;
-  background: #f0f7ff;
+  border-color: var(--accent-primary);
+  background: var(--accent-light);
 }
 
 .chairman-select .placeholder {
-  color: #999;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .chairman-select .change-btn {
-  color: #4a90e2;
+  color: var(--accent-primary);
   font-size: 13px;
   font-weight: 500;
 }
@@ -202,7 +202,7 @@
   align-items: center;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-primary);
 }
 
 .action-group {
@@ -212,18 +212,18 @@
 
 .reset-btn {
   padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .reset-btn:hover {
-  background: #f8f8f8;
-  border-color: #ccc;
+  background: var(--bg-tertiary);
+  border-color: var(--border-secondary);
 }
 
 .reset-btn:disabled {
@@ -233,17 +233,17 @@
 
 .cancel-btn {
   padding: 10px 20px;
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .cancel-btn:hover {
-  background: #f8f8f8;
+  background: var(--bg-tertiary);
 }
 
 .cancel-btn:disabled {
@@ -253,7 +253,7 @@
 
 .save-btn {
   padding: 10px 24px;
-  background: #4a90e2;
+  background: var(--accent-primary);
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -264,10 +264,11 @@
 }
 
 .save-btn:hover {
-  background: #357abd;
+  background: var(--accent-hover);
 }
 
 .save-btn:disabled {
-  background: #9fc5f0;
+  background: var(--accent-hover);
+  opacity: 0.6;
   cursor: not-allowed;
 }

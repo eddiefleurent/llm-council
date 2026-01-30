@@ -11,6 +11,22 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDraftMode, setIsDraftMode] = useState(false);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme || 'light';
+  });
+
+  // Apply theme to root element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
@@ -229,6 +245,8 @@ function App() {
         onNewConversation={handleNewConversation}
         onClearConversations={handleClearConversations}
         isLoading={isLoading}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <ChatInterface
         conversation={currentConversation}
