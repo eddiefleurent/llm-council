@@ -45,34 +45,43 @@ def _normalize_council_models(value) -> List[str]:
     """
     Normalize and validate council models value.
     Returns a defensive copy to prevent mutation of defaults.
+    Treats empty lists or lists with non-string/blank entries as invalid.
     """
-    if isinstance(value, list) and all(isinstance(m, str) for m in value):
-        return list(value)  # Return a copy
+    if isinstance(value, list) and value:  # Must be non-empty list
+        # Ensure all entries are non-empty strings
+        if all(isinstance(m, str) and m.strip() for m in value):
+            return list(value)  # Return a copy
     return list(DEFAULT_COUNCIL_MODELS)  # Return a copy of defaults
 
 
 def get_council_config() -> dict:
     """
     Get the current council configuration.
-    
+
     Returns a dict with:
     - council_models: List of model IDs for the council (defensive copy)
     - chairman_model: Model ID for the chairman
     """
     import json
-    
+
     # Try to load from config file
     if os.path.exists(COUNCIL_CONFIG_FILE):
         try:
             with open(COUNCIL_CONFIG_FILE, "r") as f:
                 config = json.load(f)
+
+                # Validate chairman_model - must be non-empty string
+                chairman = config.get("chairman_model")
+                if not isinstance(chairman, str) or not chairman.strip():
+                    chairman = DEFAULT_CHAIRMAN_MODEL
+
                 return {
                     "council_models": _normalize_council_models(config.get("council_models")),
-                    "chairman_model": config.get("chairman_model", DEFAULT_CHAIRMAN_MODEL)
+                    "chairman_model": chairman
                 }
         except (json.JSONDecodeError, IOError):
             pass
-    
+
     # Return defaults (defensive copies)
     return {
         "council_models": list(DEFAULT_COUNCIL_MODELS),
@@ -83,20 +92,26 @@ def get_council_config() -> dict:
 def save_council_config(council_models: List[str], chairman_model: str) -> None:
     """
     Save council configuration to file.
-    
+
     Args:
         council_models: List of model IDs for the council
         chairman_model: Model ID for the chairman
     """
     import json
-    
+    import tempfile
+
     # Ensure data directory exists
-    os.makedirs(os.path.dirname(COUNCIL_CONFIG_FILE), exist_ok=True)
-    
+    dir_path = os.path.dirname(COUNCIL_CONFIG_FILE)
+    os.makedirs(dir_path, exist_ok=True)
+
     config = {
         "council_models": council_models,
         "chairman_model": chairman_model
     }
-    
-    with open(COUNCIL_CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+
+    # Use atomic write: temp file + replace to prevent corruption on crash
+    with tempfile.NamedTemporaryFile("w", dir=dir_path, delete=False) as tmp:
+        json.dump(config, tmp, indent=2)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+    os.replace(tmp.name, COUNCIL_CONFIG_FILE)

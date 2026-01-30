@@ -1,6 +1,7 @@
 """FastAPI backend for LLM Council."""
 
 import logging
+import re
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -151,7 +152,7 @@ async def get_council_configuration():
 async def update_council_configuration(request: UpdateCouncilConfigRequest):
     """
     Update the council configuration.
-    
+
     Validates that all model IDs exist in OpenRouter before saving.
     """
     # Pre-validation: require council_models and chairman_model
@@ -159,7 +160,7 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
         raise HTTPException(status_code=400, detail="At least one council model is required")
     if not request.chairman_model:
         raise HTTPException(status_code=400, detail="Chairman model is required")
-    
+
     # Deduplicate council models while preserving order
     seen = set()
     deduped_council_models = []
@@ -167,30 +168,55 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
         if model_id not in seen:
             seen.add(model_id)
             deduped_council_models.append(model_id)
-    
+
+    # Lightweight ID format validation helper
+    def validate_model_id_format(model_id: str) -> bool:
+        """Validate model ID matches 'provider/model' format."""
+        return bool(model_id and re.match(r'^[^/]+/[^/]+$', model_id))
+
+    # Validate model ID formats before OpenRouter validation
+    invalid_formats = []
+    for model_id in deduped_council_models:
+        if not validate_model_id_format(model_id):
+            invalid_formats.append(model_id)
+    if not validate_model_id_format(request.chairman_model):
+        invalid_formats.append(request.chairman_model)
+
+    if invalid_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
+        )
+
     # Validate models exist in OpenRouter
     try:
         cache = await get_available_models()
-        
+
         # Combine all models to validate
         all_models_to_validate = deduped_council_models + [request.chairman_model]
         _, invalid_models = validate_model_ids(all_models_to_validate, cache)
-        
+
         if invalid_models:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Invalid model(s): {', '.join(invalid_models)}"
             )
     except HTTPException:
         raise
     except Exception as e:
-        # If we can't validate (e.g., OpenRouter is down), allow the update
-        # but log a warning
+        # If we can't validate (e.g., OpenRouter is down), still apply format validation
         logger.warning(f"Could not validate models against OpenRouter: {e}")
-    
+
+        # Re-check format validation in fallback path
+        if invalid_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
+            )
+
     # Save the configuration (use deduplicated list)
     save_council_config(deduped_council_models, request.chairman_model)
-    
+
     return {
         "status": "ok",
         "council_models": deduped_council_models,

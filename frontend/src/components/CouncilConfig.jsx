@@ -206,7 +206,7 @@ export default function CouncilConfig({ isOpen, onClose }) {
                 </div>
                 
                 <div className="models-grid">
-                  {councilModels.map((modelId, index) => (
+                  {councilModels.map((modelId) => (
                     <ModelChip
                       key={modelId}
                       modelId={modelId}

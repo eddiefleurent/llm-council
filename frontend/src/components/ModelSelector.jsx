@@ -1,22 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { getProviderColor } from '../providerColors';
+import { getModelDisplayName as getDisplayName } from '../utils';
 import './ModelSelector.css';
 
 /**
- * Get a display-friendly name for a model.
- * Returns the last path segment for model IDs with multiple slashes.
+ * Get display name from model object or ID string.
  */
 function getModelDisplayName(model) {
   if (!model) return 'Unknown';
-  // Handle model object vs string
   const name = model.name || model.id || model;
-  if (typeof name !== 'string') return 'Unknown';
-  // If it has a slash, get the last segment (handles multi-slash IDs like "anthropic/claude-3/opus")
-  if (name.includes('/')) {
-    return name.split('/').pop();
-  }
-  return name;
+  return getDisplayName(name);
 }
 
 /**
@@ -40,10 +34,12 @@ export default function ModelSelector({
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const hasLoadedRef = useRef(false);
 
   // Load providers when opened
   useEffect(() => {
-    if (isOpen && providers.length === 0) {
+    if (isOpen && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
       loadProviders();
     }
   }, [isOpen]);
@@ -154,7 +150,13 @@ export default function ModelSelector({
                     </div>
                     <div className="model-meta">
                       <span className="context-length">
-                        {(model.context_length / 1000).toFixed(0)}k ctx
+                        {(() => {
+                          const ctxLen = Number(model.context_length);
+                          if (isFinite(ctxLen) && ctxLen > 0) {
+                            return `${(ctxLen / 1000).toFixed(0)}k ctx`;
+                          }
+                          return 'N/A ctx';
+                        })()}
                       </span>
                       {isSelected && <span className="selected-badge">Selected</span>}
                     </div>

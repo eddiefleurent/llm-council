@@ -77,8 +77,19 @@ export const api = {
       }),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to update council config');
+      let errorMessage = 'Failed to update council config';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        // If JSON parsing fails, try to get text or use status text
+        try {
+          errorMessage = await response.text() || response.statusText || errorMessage;
+        } catch {
+          errorMessage = response.statusText || errorMessage;
+        }
+      }
+      throw new Error(errorMessage);
     }
     return response.json();
   },
