@@ -65,6 +65,7 @@ class UpdateCouncilConfigRequest(BaseModel):
     """Request to update council configuration."""
     council_models: List[str]
     chairman_model: str
+    web_search_enabled: bool = False
 
 
 class ConversationMetadata(BaseModel):
@@ -167,15 +168,17 @@ async def get_council_configuration():
     """
     Get the current council configuration.
     
-    Returns the list of council models and the chairman model.
+    Returns the list of council models, chairman model, and web search setting.
     """
     config = get_council_config()
     return {
         "council_models": config["council_models"],
         "chairman_model": config["chairman_model"],
+        "web_search_enabled": config["web_search_enabled"],
         "defaults": {
             "council_models": DEFAULT_COUNCIL_MODELS,
-            "chairman_model": DEFAULT_CHAIRMAN_MODEL
+            "chairman_model": DEFAULT_CHAIRMAN_MODEL,
+            "web_search_enabled": False
         }
     }
 
@@ -247,12 +250,13 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
             )
 
     # Save the configuration (use deduplicated list)
-    save_council_config(deduped_council_models, request.chairman_model)
+    save_council_config(deduped_council_models, request.chairman_model, request.web_search_enabled)
 
     return {
         "status": "ok",
         "council_models": deduped_council_models,
-        "chairman_model": request.chairman_model
+        "chairman_model": request.chairman_model,
+        "web_search_enabled": request.web_search_enabled
     }
 
 
@@ -261,11 +265,12 @@ async def reset_council_configuration():
     """
     Reset council configuration to defaults.
     """
-    save_council_config(DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL)
+    save_council_config(DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, False)
     return {
         "status": "ok",
         "council_models": DEFAULT_COUNCIL_MODELS,
-        "chairman_model": DEFAULT_CHAIRMAN_MODEL
+        "chairman_model": DEFAULT_CHAIRMAN_MODEL,
+        "web_search_enabled": False
     }
 
 

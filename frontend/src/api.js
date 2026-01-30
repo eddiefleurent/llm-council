@@ -65,7 +65,7 @@ export const api = {
   /**
    * Update the council configuration.
    */
-  async updateCouncilConfig(councilModels, chairmanModel) {
+  async updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled = false) {
     const response = await fetch(`${API_BASE}/api/council/config`, {
       method: 'PUT',
       headers: {
@@ -74,6 +74,7 @@ export const api = {
       body: JSON.stringify({
         council_models: councilModels,
         chairman_model: chairmanModel,
+        web_search_enabled: webSearchEnabled,
       }),
     });
     if (!response.ok) {

@@ -58,8 +58,9 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
 export default function CouncilConfig({ isOpen, onClose }) {
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   // loadedConfig is the baseline for detecting changes (the persisted/saved state)
-  const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '' });
+  const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '', web_search_enabled: false });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -78,9 +79,10 @@ export default function CouncilConfig({ isOpen, onClose }) {
   useEffect(() => {
     const configChanged = 
       JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
-      chairmanModel !== loadedConfig.chairman_model;
+      chairmanModel !== loadedConfig.chairman_model ||
+      webSearchEnabled !== loadedConfig.web_search_enabled;
     setHasChanges(configChanged);
-  }, [councilModels, chairmanModel, loadedConfig]);
+  }, [councilModels, chairmanModel, webSearchEnabled, loadedConfig]);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -89,10 +91,12 @@ export default function CouncilConfig({ isOpen, onClose }) {
       const config = await api.getCouncilConfig();
       const currentCouncil = config.council_models || [];
       const currentChairman = config.chairman_model || '';
+      const currentWebSearch = config.web_search_enabled || false;
       setCouncilModels(currentCouncil);
       setChairmanModel(currentChairman);
+      setWebSearchEnabled(currentWebSearch);
       // Set the loaded config as the baseline for change detection
-      setLoadedConfig({ council_models: currentCouncil, chairman_model: currentChairman });
+      setLoadedConfig({ council_models: currentCouncil, chairman_model: currentChairman, web_search_enabled: currentWebSearch });
     } catch (err) {
       setError('Failed to load council configuration');
       console.error('Failed to load config:', err);
@@ -114,11 +118,12 @@ export default function CouncilConfig({ isOpen, onClose }) {
     setSaving(true);
     setError(null);
     try {
-      const result = await api.updateCouncilConfig(councilModels, chairmanModel);
+      const result = await api.updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled);
       // Update the loaded config baseline after successful save
       setLoadedConfig({ 
         council_models: result.council_models, 
-        chairman_model: result.chairman_model 
+        chairman_model: result.chairman_model,
+        web_search_enabled: result.web_search_enabled
       });
       onClose();
     } catch (err) {
@@ -137,10 +142,12 @@ export default function CouncilConfig({ isOpen, onClose }) {
       const result = await api.resetCouncilConfig();
       setCouncilModels(result.council_models);
       setChairmanModel(result.chairman_model);
+      setWebSearchEnabled(result.web_search_enabled || false);
       // Update the loaded config baseline after reset (now using factory defaults)
       setLoadedConfig({
         council_models: result.council_models,
-        chairman_model: result.chairman_model
+        chairman_model: result.chairman_model,
+        web_search_enabled: result.web_search_enabled || false
       });
     } catch {
       setError('Failed to reset configuration');
@@ -237,6 +244,37 @@ export default function CouncilConfig({ isOpen, onClose }) {
                   )}
                   <span className="change-btn">Change</span>
                 </div>
+              </section>
+
+              {/* Web Search Section */}
+              <section className="config-section">
+                <div className="section-header">
+                  <h3>Web Search</h3>
+                  <span className="section-hint">
+                    Enable real-time web search for up-to-date information
+                  </span>
+                </div>
+                
+                <label className="toggle-row">
+                  <span className="toggle-label">
+                    <span className="toggle-icon">🌐</span>
+                    Enable web search
+                  </span>
+                  <div className="toggle-switch-wrapper">
+                    <input
+                      type="checkbox"
+                      className="toggle-input"
+                      checked={webSearchEnabled}
+                      onChange={(e) => setWebSearchEnabled(e.target.checked)}
+                    />
+                    <span className="toggle-switch"></span>
+                  </div>
+                </label>
+                {webSearchEnabled && (
+                  <div className="toggle-description">
+                    Models will have access to real-time web search results via OpenRouter&apos;s <code>:online</code> variant.
+                  </div>
+                )}
               </section>
 
               {/* Actions */}
