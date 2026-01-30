@@ -18,12 +18,10 @@ export default function Stage1({ responses, errors }) {
     <div className="stage stage1">
       <h3 className="stage-title">
         Stage 1: Individual Responses
-        {totalQueried > 0 && (
-          <span className="model-count">
-            {' '}[{totalQueried} models queried, {responses.length} successful
-            {hasFailed && `, ${errors.length} failed`}]
-          </span>
-        )}
+        <span className="model-count">
+          {' '}[{totalQueried} models queried, {responses.length} successful
+          {hasFailed && `, ${errors.length} failed`}]
+        </span>
       </h3>
 
       {hasFailed && (

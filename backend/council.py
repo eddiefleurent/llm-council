@@ -240,13 +240,13 @@ Provide a clear, well-reasoned final answer that represents the council's collec
                 'message': 'Unknown error occurred',
                 'model': chairman_model
             })
-            print(f"[Stage 3] ✗ Chairman failed: unknown error")
+            print("[Stage 3] ✗ Chairman failed: unknown error")
             return {
                 "model": chairman_model,
                 "response": "Error: Unable to generate final synthesis."
             }, stage3_errors
 
-    print(f"[Stage 3] ✓ Chairman synthesis complete")
+    print("[Stage 3] ✓ Chairman synthesis complete")
     return {
         "model": chairman_model,
         "response": response.get('content', '')
@@ -583,14 +583,18 @@ async def run_full_council(
     )
     all_errors.extend(stage3_errors)
 
-    # Prepare metadata
+    # Prepare metadata with structured per-stage errors
     metadata = {
         "label_to_model": label_to_model,
         "aggregate_rankings": aggregate_rankings,
         "tournament_rankings": tournament_rankings,
         "council_models": council_models,
         "chairman_model": chairman_model,
-        "errors": all_errors if all_errors else None
+        "errors": {
+            "stage1": stage1_errors,
+            "stage2": stage2_errors,
+            "stage3": stage3_errors
+        } if any([stage1_errors, stage2_errors, stage3_errors]) else None
     }
 
     # Final summary

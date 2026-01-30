@@ -138,21 +138,6 @@ function App() {
         messages: [...prev.messages, assistantMessage],
       }));
 
-      // Helper to immutably update the last message in a conversation
-      const updateLastMessage = (updates) => {
-        setCurrentConversation((prev) => {
-          const messages = prev.messages.slice(0, -1);
-          const lastMsg = prev.messages[prev.messages.length - 1];
-          return {
-            ...prev,
-            messages: [
-              ...messages,
-              { ...lastMsg, ...updates },
-            ],
-          };
-        });
-      };
-
       // Helper to immutably update loading state of the last message
       const updateLastMessageLoading = (loadingUpdates) => {
         setCurrentConversation((prev) => {

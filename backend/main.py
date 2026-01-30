@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -20,20 +21,11 @@ from .context import build_context_messages
 from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL
 from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
 
-app = FastAPI(title="LLM Council API")
 
-# Enable CORS for local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Log startup configuration
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup and shutdown events."""
+    # Startup: Log configuration
     config = get_council_config()
     print("\n" + "="*60)
     print("LLM Council Configuration")
@@ -43,6 +35,20 @@ async def startup_event():
         print(f"  {i}. {model}")
     print(f"\nChairman Model: {config['chairman_model']}")
     print("="*60 + "\n")
+    yield
+    # Shutdown: Nothing to clean up currently
+
+
+app = FastAPI(title="LLM Council API", lifespan=lifespan)
+
+# Enable CORS for local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class CreateConversationRequest(BaseModel):
@@ -111,7 +117,7 @@ async def list_models():
         return await get_models_grouped_by_provider()
     except Exception as e:
         logger.exception("Failed to fetch models from OpenRouter")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
 
 
 @app.get("/api/models/{provider_id}")
@@ -133,7 +139,7 @@ async def list_models_for_provider(provider_id: str):
         raise
     except Exception as e:
         logger.exception(f"Failed to fetch models for provider {provider_id}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
 
 
 @app.post("/api/models/refresh")
@@ -149,7 +155,7 @@ async def refresh_models():
         return {"status": "ok", "total_models": len(cache.models)}
     except Exception as e:
         logger.exception("Failed to refresh models cache")
-        raise HTTPException(status_code=502, detail=f"Failed to refresh models: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to refresh models: {e!s}") from e
 
 
 # ============================================================================
@@ -331,12 +337,8 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     # Run the 3-stage council process with context
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
 
-    # Collect all errors for persistence
-    errors = {
-        "stage1": metadata.get("errors", [])[:len(stage1_results)] if metadata.get("errors") else [],
-        "stage2": metadata.get("errors", [])[len(stage1_results):len(stage1_results)+len(stage2_results)] if metadata.get("errors") else [],
-        "stage3": metadata.get("errors", [])[len(stage1_results)+len(stage2_results):] if metadata.get("errors") else []
-    }
+    # Extract structured errors directly from metadata
+    errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
 
     # Add assistant message with all stages and errors
     storage.add_assistant_message(
