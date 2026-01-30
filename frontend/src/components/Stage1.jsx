@@ -29,7 +29,9 @@ export default function Stage1({ responses }) {
 
       <div className="tab-content">
         <div className="response-header">
-          <div className="model-name">{responses[activeTab].model}</div>
+          <div className="model-name" title={responses[activeTab].model}>
+            {getModelDisplayName(responses[activeTab].model)}
+          </div>
           <CopyButton 
             text={responses[activeTab].response} 
             label="Copy markdown response"

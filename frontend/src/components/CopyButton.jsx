@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './CopyButton.css';
 
 export default function CopyButton({ text, label = "Copy" }) {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef(null);
+
+  // Clear timeout on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -16,7 +26,7 @@ export default function CopyButton({ text, label = "Copy" }) {
 
   return (
     <button
-      className="copy-button"
+      className={`copy-button${copied ? ' copy-button--success' : ''}`}
       onClick={handleCopy}
       title={copied ? "Copied!" : label}
       aria-label={label}

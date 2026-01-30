@@ -476,6 +476,13 @@ async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, 
     """
     all_errors = []
     
+    # Defensive check: ensure messages is not empty
+    if not messages:
+        return [], [], {
+            "model": "error",
+            "response": "No messages provided. Please enter a query."
+        }, {"errors": [{"error_type": "validation", "message": "Empty messages list"}]}
+    
     # Extract current query from messages
     current_query = messages[-1]["content"]
 

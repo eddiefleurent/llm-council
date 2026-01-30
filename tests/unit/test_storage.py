@@ -31,7 +31,8 @@ def test_create_conversation(temp_data_dir):
     assert os.path.exists(path)
 
 
-def test_get_conversation(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_get_conversation():
     """Test retrieving a conversation."""
     conv_id = "test-456"
     storage.create_conversation(conv_id)
@@ -42,13 +43,15 @@ def test_get_conversation(temp_data_dir):
     assert result["id"] == conv_id
 
 
-def test_get_conversation_not_found(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_get_conversation_not_found():
     """Test retrieving non-existent conversation returns None."""
     result = storage.get_conversation("nonexistent")
     assert result is None
 
 
-def test_add_user_message(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_add_user_message():
     """Test adding a user message to conversation."""
     conv_id = "test-789"
     storage.create_conversation(conv_id)
@@ -61,7 +64,8 @@ def test_add_user_message(temp_data_dir):
     assert conv["messages"][0]["content"] == "Hello, world!"
 
 
-def test_add_assistant_message(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_add_assistant_message():
     """Test adding an assistant message with stages."""
     conv_id = "test-101"
     storage.create_conversation(conv_id)
@@ -80,7 +84,8 @@ def test_add_assistant_message(temp_data_dir):
     assert conv["messages"][0]["stage3"] == stage3
 
 
-def test_list_conversations(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_list_conversations():
     """Test listing all conversations."""
     storage.create_conversation("conv-1")
     storage.create_conversation("conv-2")
@@ -95,7 +100,8 @@ def test_list_conversations(temp_data_dir):
     assert "conv-3" in ids
 
 
-def test_update_conversation_title(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_update_conversation_title():
     """Test updating conversation title."""
     conv_id = "test-title"
     storage.create_conversation(conv_id)
@@ -106,7 +112,8 @@ def test_update_conversation_title(temp_data_dir):
     assert conv["title"] == "My Custom Title"
 
 
-def test_delete_all_conversations(temp_data_dir):
+@pytest.mark.usefixtures("temp_data_dir")
+def test_delete_all_conversations():
     """Test deleting all conversations."""
     storage.create_conversation("conv-1")
     storage.create_conversation("conv-2")

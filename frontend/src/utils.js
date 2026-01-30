@@ -28,7 +28,8 @@ export function getModelDisplayName(model) {
     return String(model);
   }
 
-  // Extract the part after the slash, or return the whole thing
-  const parts = model.split('/');
-  return parts.length > 1 ? parts[1] : model;
+  // Extract the last non-empty segment after splitting on '/'
+  // This handles multi-slash identifiers like "anthropic/claude-3/opus"
+  const parts = model.split('/').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : model;
 }

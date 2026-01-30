@@ -83,10 +83,10 @@ function App() {
         setCurrentConversationId(conversationId);
         setIsDraftMode(false);
 
-        // Update conversations list
-        setConversations([
+        // Update conversations list using functional updater to avoid stale state
+        setConversations((prev) => [
           { id: newConv.id, created_at: newConv.created_at, title: 'New Conversation', message_count: 0 },
-          ...conversations,
+          ...prev,
         ]);
       }
 

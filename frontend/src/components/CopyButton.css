@@ -26,8 +26,8 @@
   display: block;
 }
 
-/* Success state */
-.copy-button:has(svg polyline) {
+/* Success state - use class for broader browser support instead of :has() */
+.copy-button.copy-button--success {
   color: #4caf50;
   opacity: 1;
 }

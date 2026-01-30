@@ -108,6 +108,7 @@
 .conversation-item.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .conversation-item.disabled:hover {

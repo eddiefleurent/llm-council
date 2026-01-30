@@ -118,7 +118,7 @@ async def query_model(
             status_code=e.response.status_code if e.response else None,
             model=model
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - Intentional broad catch for graceful degradation
         print(f"Error querying model {model}: {e}")
         return ModelQueryError(
             error_type='unknown',

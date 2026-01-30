@@ -173,7 +173,7 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 
 ## Data Flow Summary
 
-```
+```text
 User Query
     ↓
 Build Context (summarize if long conversation)
