@@ -1,5 +1,6 @@
 """FastAPI backend for LLM Council."""
 
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -9,8 +10,11 @@ import uuid
 import json
 import asyncio
 
+logger = logging.getLogger(__name__)
+
 from . import storage
-from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings
+from .context import build_context_messages
 
 app = FastAPI(title="LLM Council API")
 
@@ -62,6 +66,18 @@ async def list_conversations():
     return storage.list_conversations()
 
 
+@app.delete("/api/conversations")
+async def delete_conversations(confirm: bool = False):
+    """Delete all conversations from storage. Requires confirm=true query param."""
+    if not confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=true to delete all conversations"
+        )
+    storage.delete_all_conversations()
+    return {"status": "ok"}
+
+
 @app.post("/api/conversations", response_model=Conversation)
 async def create_conversation(request: CreateConversationRequest):
     """Create a new conversation."""
@@ -101,10 +117,16 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         title = await generate_conversation_title(request.content)
         storage.update_conversation_title(conversation_id, title)
 
-    # Run the 3-stage council process
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+    # Build context messages from conversation history
+    # Re-fetch conversation to get the user message we just added
+    conversation = storage.get_conversation(conversation_id)
+    messages = await build_context_messages(
+        conversation["messages"][:-1],  # Exclude the user message we just added
         request.content
     )
+
+    # Run the 3-stage council process with context
+    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
 
     # Add assistant message with all stages
     storage.add_assistant_message(
@@ -147,21 +169,38 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             if is_first_message:
                 title_task = asyncio.create_task(generate_conversation_title(request.content))
 
-            # Stage 1: Collect responses
+            # Build context messages from conversation history
+            # Re-fetch conversation to get the user message we just added
+            conv = storage.get_conversation(conversation_id)
+            messages = await build_context_messages(
+                conv["messages"][:-1],  # Exclude the user message we just added
+                request.content
+            )
+
+            # Stage 1: Collect responses with context
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results = await stage1_collect_responses(request.content)
-            yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
+            stage1_results, stage1_errors = await stage1_collect_responses(messages)
+            yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
+
+            # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
+            if not stage1_results:
+                # Cancel title task if running
+                if title_task:
+                    title_task.cancel()
+                yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
+                return
 
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results)
+            stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(request.content, stage1_results)
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
+            tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
+            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
 
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
-            yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
+            stage3_result, stage3_errors = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
+            yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
 
             # Wait for title generation if it was started
             if title_task:
@@ -181,8 +220,9 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
         except Exception as e:
-            # Send error event
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            logger.exception("Error in streaming council process")
+            # Send sanitized error event (don't leak internal details)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

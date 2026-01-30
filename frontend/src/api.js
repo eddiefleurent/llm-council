@@ -112,4 +112,18 @@ export const api = {
       }
     }
   },
+  
+  /**
+   * Delete all conversations from the backend.
+   * Requires confirm=true query parameter to prevent accidental deletion.
+   */
+  async deleteAllConversations() {
+    const response = await fetch(`${API_BASE}/api/conversations?confirm=true`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete conversations');
+    }
+    return response.json();
+  },
 };

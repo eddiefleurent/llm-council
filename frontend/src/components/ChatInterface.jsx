@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
+import CopyButton from './CopyButton';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -57,7 +58,13 @@ export default function ChatInterface({
             <p>Ask a question to consult the LLM Council</p>
           </div>
         ) : (
-          conversation.messages.map((msg, index) => (
+          <>
+            {conversation.messages.length > 6 && (
+              <div className="context-indicator">
+                💭 Using conversation context ({conversation.messages.length} messages)
+              </div>
+            )}
+            {conversation.messages.map((msg, index) => (
             <div key={index} className="message-group">
               {msg.role === 'user' ? (
                 <div className="user-message">
@@ -67,6 +74,10 @@ export default function ChatInterface({
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   </div>
+                  <CopyButton 
+                    text={msg.content} 
+                    label="Copy message"
+                  />
                 </div>
               ) : (
                 <div className="assistant-message">
@@ -107,7 +118,8 @@ export default function ChatInterface({
                 </div>
               )}
             </div>
-          ))
+            ))}
+          </>
         )}
 
         {isLoading && (
@@ -120,26 +132,28 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {conversation.messages.length === 0 && (
-        <form className="input-form" onSubmit={handleSubmit}>
-          <textarea
-            className="message-input"
-            placeholder="Ask your question... (Shift+Enter for new line, Enter to send)"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            rows={3}
-          />
-          <button
-            type="submit"
-            className="send-button"
-            disabled={!input.trim() || isLoading}
-          >
-            Send
-          </button>
-        </form>
-      )}
+      <form className="input-form" onSubmit={handleSubmit}>
+        <textarea
+          className="message-input"
+          placeholder={
+            conversation.messages.length === 0
+              ? "Ask your question... (Shift+Enter for new line, Enter to send)"
+              : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
+          }
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isLoading}
+          rows={3}
+        />
+        <button
+          type="submit"
+          className="send-button"
+          disabled={!input.trim() || isLoading}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 }

@@ -1,41 +1,49 @@
 """3-stage LLM Council orchestration."""
 
 from typing import List, Dict, Any, Tuple
-from .openrouter import query_models_parallel, query_model
+from .openrouter import query_models_parallel, query_model, ModelQueryError, is_error
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+async def stage1_collect_responses(messages: List[Dict[str, str]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
-        user_query: The user's question
+        messages: Full message history including current query
 
     Returns:
-        List of dicts with 'model' and 'response' keys
+        Tuple of (successful responses list, errors list)
     """
-    messages = [{"role": "user", "content": user_query}]
-
-    # Query all models in parallel
+    # Query all models in parallel with full conversation context
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
 
-    # Format results
+    # Format results, separating successes from errors
     stage1_results = []
+    stage1_errors = []
     for model, response in responses.items():
-        if response is not None:  # Only include successful responses
+        if is_error(response):
+            if isinstance(response, ModelQueryError):
+                stage1_errors.append(response.to_dict())
+            else:
+                stage1_errors.append({
+                    'error_type': 'unknown',
+                    'message': 'Unknown error occurred',
+                    'model': model
+                })
+        else:
             stage1_results.append({
                 "model": model,
                 "response": response.get('content', '')
             })
 
-    return stage1_results
+    return stage1_results, stage1_errors
 
 
 async def stage2_collect_rankings(
     user_query: str,
     stage1_results: List[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, str], List[Dict[str, Any]]]:
     """
     Stage 2: Each model ranks the anonymized responses.
 
@@ -44,7 +52,7 @@ async def stage2_collect_rankings(
         stage1_results: Results from Stage 1
 
     Returns:
-        Tuple of (rankings list, label_to_model mapping)
+        Tuple of (rankings list, label_to_model mapping, errors list)
     """
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
@@ -97,10 +105,20 @@ Now provide your evaluation and ranking:"""
     # Get rankings from all council models in parallel
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
 
-    # Format results
+    # Format results, separating successes from errors
     stage2_results = []
+    stage2_errors = []
     for model, response in responses.items():
-        if response is not None:
+        if is_error(response):
+            if isinstance(response, ModelQueryError):
+                stage2_errors.append(response.to_dict())
+            else:
+                stage2_errors.append({
+                    'error_type': 'unknown',
+                    'message': 'Unknown error occurred',
+                    'model': model
+                })
+        else:
             full_text = response.get('content', '')
             parsed = parse_ranking_from_text(full_text)
             stage2_results.append({
@@ -109,14 +127,14 @@ Now provide your evaluation and ranking:"""
                 "parsed_ranking": parsed
             })
 
-    return stage2_results, label_to_model
+    return stage2_results, label_to_model, stage2_errors
 
 
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Stage 3: Chairman synthesizes final response.
 
@@ -126,7 +144,7 @@ async def stage3_synthesize_final(
         stage2_results: Rankings from Stage 2
 
     Returns:
-        Dict with 'model' and 'response' keys
+        Tuple of (result dict with 'model' and 'response' keys, errors list)
     """
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
@@ -161,17 +179,31 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     # Query the chairman model
     response = await query_model(CHAIRMAN_MODEL, messages)
 
-    if response is None:
-        # Fallback if chairman fails
-        return {
-            "model": CHAIRMAN_MODEL,
-            "response": "Error: Unable to generate final synthesis."
-        }
+    stage3_errors = []
+    if is_error(response):
+        if isinstance(response, ModelQueryError):
+            error_info = response.to_dict()
+            stage3_errors.append(error_info)
+            return {
+                "model": CHAIRMAN_MODEL,
+                "response": f"Error: {error_info['message']}",
+                "error": error_info
+            }, stage3_errors
+        else:
+            stage3_errors.append({
+                'error_type': 'unknown',
+                'message': 'Unknown error occurred',
+                'model': CHAIRMAN_MODEL
+            })
+            return {
+                "model": CHAIRMAN_MODEL,
+                "response": "Error: Unable to generate final synthesis."
+            }, stage3_errors
 
     return {
         "model": CHAIRMAN_MODEL,
         "response": response.get('content', '')
-    }
+    }, stage3_errors
 
 
 def parse_ranking_from_text(ranking_text: str) -> List[str]:
@@ -255,6 +287,143 @@ def calculate_aggregate_rankings(
     return aggregate
 
 
+def calculate_tournament_rankings(
+    stage2_results: List[Dict[str, Any]],
+    label_to_model: Dict[str, str]
+) -> List[Dict[str, Any]]:
+    """
+    Calculate rankings using tournament-style pairwise comparison.
+
+    For each pair of models, count how many rankers preferred one over the other.
+    The model with more pairwise wins ranks higher. This method is more robust
+    to outlier rankings than simple position averaging.
+
+    Args:
+        stage2_results: Rankings from each model with parsed_ranking
+        label_to_model: Mapping from anonymous labels to model names
+
+    Returns:
+        List of dicts sorted by win_percentage (descending):
+        [
+            {
+                "model": "openai/gpt-4o",
+                "wins": 4.0,
+                "losses": 1.0,
+                "ties": 1.0,
+                "win_percentage": 0.75,
+                "total_matchups": 6
+            },
+            ...
+        ]
+    """
+    from collections import defaultdict
+
+    # Get all models from label_to_model
+    models = list(set(label_to_model.values()))
+
+    if len(models) < 2:
+        # Need at least 2 models for pairwise comparison
+        return [{"model": m, "wins": 0, "losses": 0, "ties": 0, "win_percentage": 0.0, "total_matchups": 0} for m in models]
+
+    # Track pairwise wins: pairwise_wins[(model_a, model_b)] = count of times a ranked above b
+    pairwise_wins = defaultdict(int)
+
+    # Process each ranker's parsed ranking
+    # Use pre-parsed ranking if available, otherwise parse from text
+    for ranking in stage2_results:
+        parsed_ranking = ranking.get('parsed_ranking')
+        if not parsed_ranking:
+            # Fallback: parse from raw ranking text (consistent with calculate_aggregate_rankings)
+            ranking_text = ranking.get('ranking', '')
+            parsed_ranking = parse_ranking_from_text(ranking_text) if ranking_text else []
+
+        if not parsed_ranking:
+            continue
+
+        # Convert labels to model names and get their positions
+        model_positions = {}
+        for position, label in enumerate(parsed_ranking):
+            if label in label_to_model:
+                model_name = label_to_model[label]
+                model_positions[model_name] = position
+
+        # For each pair of models, record who was ranked higher (lower position = better)
+        ranked_models = list(model_positions.keys())
+        for i in range(len(ranked_models)):
+            for j in range(i + 1, len(ranked_models)):
+                model_a = ranked_models[i]
+                model_b = ranked_models[j]
+                pos_a = model_positions[model_a]
+                pos_b = model_positions[model_b]
+
+                # Ensure consistent ordering for the key
+                if model_a > model_b:
+                    model_a, model_b = model_b, model_a
+                    pos_a, pos_b = pos_b, pos_a
+
+                if pos_a < pos_b:
+                    pairwise_wins[(model_a, model_b, 'a')] += 1
+                elif pos_b < pos_a:
+                    pairwise_wins[(model_a, model_b, 'b')] += 1
+                # Equal positions would be a tie (shouldn't happen with rankings)
+
+    # Calculate wins, losses, and ties for each model
+    model_stats = {model: {"wins": 0.0, "losses": 0.0, "ties": 0.0} for model in models}
+
+    # Process each unique pair of models
+    processed_pairs = set()
+    for i in range(len(models)):
+        for j in range(i + 1, len(models)):
+            model_a, model_b = models[i], models[j]
+            if model_a > model_b:
+                model_a, model_b = model_b, model_a
+
+            pair_key = (model_a, model_b)
+            if pair_key in processed_pairs:
+                continue
+            processed_pairs.add(pair_key)
+
+            a_wins = pairwise_wins.get((model_a, model_b, 'a'), 0)
+            b_wins = pairwise_wins.get((model_a, model_b, 'b'), 0)
+
+            if a_wins > b_wins:
+                model_stats[model_a]["wins"] += 1
+                model_stats[model_b]["losses"] += 1
+            elif b_wins > a_wins:
+                model_stats[model_b]["wins"] += 1
+                model_stats[model_a]["losses"] += 1
+            elif a_wins == b_wins and (a_wins > 0 or b_wins > 0):
+                # Tie - both get 0.5
+                model_stats[model_a]["ties"] += 1
+                model_stats[model_b]["ties"] += 1
+
+    # Calculate win percentage and build results
+    results = []
+
+    for model in models:
+        stats = model_stats[model]
+        total_matchups = stats["wins"] + stats["losses"] + stats["ties"]
+        # Win percentage: wins + 0.5*ties / actual matchups participated in
+        if total_matchups > 0:
+            win_pct = (stats["wins"] + 0.5 * stats["ties"]) / total_matchups
+        else:
+            win_pct = 0.0
+
+        results.append({
+            "model": model,
+            "wins": stats["wins"],
+            "losses": stats["losses"],
+            "ties": stats["ties"],
+            "win_percentage": round(win_pct, 3),
+            "total_matchups": int(total_matchups)
+        })
+
+    # Sort by win percentage (higher is better)
+    results.sort(key=lambda x: (-x['win_percentage'], x['losses']))
+
+    return results
+
+
 async def generate_conversation_title(user_query: str) -> str:
     """
     Generate a short title for a conversation based on the first user message.
@@ -274,10 +443,10 @@ Title:"""
 
     messages = [{"role": "user", "content": title_prompt}]
 
-    # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=30.0)
+    # Use chairman model for title generation (configurable)
+    response = await query_model(CHAIRMAN_MODEL, messages, timeout=30.0)
 
-    if response is None:
+    if is_error(response):
         # Fallback to a generic title
         return "New Conversation"
 
@@ -293,43 +462,94 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, Dict, Dict]:
     """
-    Run the complete 3-stage council process.
+    Run the complete 3-stage council process with conversation context.
 
     Args:
-        user_query: The user's question
+        messages: Full message history in OpenAI format
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
+        metadata includes 'errors' list with any failures from all stages
     """
-    # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query)
-
-    # If no models responded successfully, return error
-    if not stage1_results:
+    all_errors = []
+    
+    # Defensive check: ensure messages is not empty
+    if not messages:
         return [], [], {
             "model": "error",
-            "response": "All models failed to respond. Please try again."
-        }, {}
+            "response": "No messages provided. Please enter a query."
+        }, {"errors": [{"error_type": "validation", "message": "Empty messages list"}]}
+    
+    # Extract current query from messages
+    current_query = messages[-1]["content"]
 
-    # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
+    # Stage 1: Collect individual responses (with full context)
+    stage1_results, stage1_errors = await stage1_collect_responses(messages)
+    all_errors.extend(stage1_errors)
 
-    # Calculate aggregate rankings
+    # If no models responded successfully, return error with details
+    if not stage1_results:
+        error_summary = _summarize_errors(stage1_errors)
+        return [], [], {
+            "model": "error",
+            "response": f"All models failed to respond. {error_summary}"
+        }, {"errors": all_errors}
+
+    # Stage 2: Collect rankings (uses current query only for ranking prompt)
+    stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(current_query, stage1_results)
+    all_errors.extend(stage2_errors)
+
+    # Calculate aggregate rankings (both methods)
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+    tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
 
     # Stage 3: Synthesize final answer
-    stage3_result = await stage3_synthesize_final(
-        user_query,
+    stage3_result, stage3_errors = await stage3_synthesize_final(
+        current_query,
         stage1_results,
         stage2_results
     )
+    all_errors.extend(stage3_errors)
 
     # Prepare metadata
     metadata = {
         "label_to_model": label_to_model,
-        "aggregate_rankings": aggregate_rankings
+        "aggregate_rankings": aggregate_rankings,
+        "tournament_rankings": tournament_rankings,
+        "errors": all_errors if all_errors else None
     }
 
     return stage1_results, stage2_results, stage3_result, metadata
+
+
+def _summarize_errors(errors: List[Dict[str, Any]]) -> str:
+    """Create a human-readable summary of errors."""
+    if not errors:
+        return "Please try again."
+
+    # Group by error type
+    by_type = {}
+    for error in errors:
+        error_type = error.get('error_type', 'unknown')
+        if error_type not in by_type:
+            by_type[error_type] = []
+        by_type[error_type].append(error)
+
+    summaries = []
+    if 'auth' in by_type:
+        summaries.append("API key issue - please check your OPENROUTER_API_KEY")
+    if 'payment' in by_type:
+        summaries.append("Payment required - please add credits to OpenRouter")
+    if 'rate_limit' in by_type:
+        summaries.append(f"{len(by_type['rate_limit'])} model(s) rate limited")
+    if 'not_found' in by_type:
+        models = [e.get('model', 'unknown') for e in by_type['not_found']]
+        summaries.append(f"Model(s) not found: {', '.join(models)}")
+    if 'timeout' in by_type:
+        summaries.append(f"{len(by_type['timeout'])} model(s) timed out")
+    if 'server' in by_type:
+        summaries.append("OpenRouter server error")
+
+    return "; ".join(summaries) if summaries else "Please try again."

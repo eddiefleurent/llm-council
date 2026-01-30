@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import CopyButton from './CopyButton';
+import { getModelDisplayName } from '../utils';
 import './Stage1.css';
 
 export default function Stage1({ responses }) {
@@ -20,13 +22,21 @@ export default function Stage1({ responses }) {
             className={`tab ${activeTab === index ? 'active' : ''}`}
             onClick={() => setActiveTab(index)}
           >
-            {resp.model.split('/')[1] || resp.model}
+            {getModelDisplayName(resp.model)}
           </button>
         ))}
       </div>
 
       <div className="tab-content">
-        <div className="model-name">{responses[activeTab].model}</div>
+        <div className="response-header">
+          <div className="model-name" title={responses[activeTab].model}>
+            {getModelDisplayName(responses[activeTab].model)}
+          </div>
+          <CopyButton 
+            text={responses[activeTab].response} 
+            label="Copy markdown response"
+          />
+        </div>
         <div className="response-text markdown-content">
           <ReactMarkdown>{responses[activeTab].response}</ReactMarkdown>
         </div>

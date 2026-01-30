@@ -33,6 +33,21 @@
   font-size: 16px;
 }
 
+.context-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f7ff 100%);
+  border: 1px solid #d0e7ff;
+  border-radius: 8px;
+  color: #4a90e2;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
 .message-group {
   margin-bottom: 32px;
 }
@@ -40,6 +55,17 @@
 .user-message,
 .assistant-message {
   margin-bottom: 16px;
+}
+
+.user-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-message .copy-button {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 
 .message-label {
@@ -160,4 +186,32 @@
   cursor: not-allowed;
   background: #ccc;
   border-color: #ccc;
+}
+
+/* Contain conversation and force wrapping */
+.chat-interface, .chat-container, .conversation, .messages {
+    max-width: 100%;
+    overflow-x: hidden; /* important: stop children from creating horizontal scroll */
+}
+
+/* Make each message wrap instead of expanding */
+.message, .message-bubble, .chat-message {
+    max-width: calc(100% - 48px); /* leave room for padding/avatar */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap; /* preserve line breaks but allow wrapping */
+    hyphens: auto;
+    box-sizing: border-box;
+}
+
+/* Prevent media from overflowing */
+.message img, .message video, .message iframe {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* If using flex rows, allow shrinking */
+.message-row, .message-wrapper {
+    min-width: 0; /* allows flex children to shrink instead of overflowing */
 }

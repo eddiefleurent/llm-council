@@ -9,6 +9,7 @@ function App() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDraftMode, setIsDraftMode] = useState(false);
 
   // Load conversations on mount
   useEffect(() => {
@@ -17,10 +18,10 @@ function App() {
 
   // Load conversation details when selected
   useEffect(() => {
-    if (currentConversationId) {
+    if (currentConversationId && !isDraftMode) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, isDraftMode]);
 
   const loadConversations = async () => {
     try {
@@ -40,28 +41,60 @@ function App() {
     }
   };
 
-  const handleNewConversation = async () => {
-    try {
-      const newConv = await api.createConversation();
-      setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
-        ...conversations,
-      ]);
-      setCurrentConversationId(newConv.id);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-    }
+  const handleNewConversation = () => {
+    // Set draft mode instead of creating conversation immediately
+    setIsDraftMode(true);
+    setCurrentConversationId(null);
+    setCurrentConversation({
+      id: null,
+      created_at: new Date().toISOString(),
+      title: 'New Conversation',
+      messages: [],
+    });
   };
 
   const handleSelectConversation = (id) => {
+    setIsDraftMode(false);
     setCurrentConversationId(id);
   };
 
-  const handleSendMessage = async (content) => {
-    if (!currentConversationId) return;
-
+  const handleClearConversations = async () => {
+    if (!window.confirm('Clear all conversations? This cannot be undone.')) return;
     setIsLoading(true);
     try {
+      await api.deleteAllConversations();
+      setConversations([]);
+      setCurrentConversationId(null);
+      setCurrentConversation(null);
+      setIsDraftMode(false);
+    } catch (error) {
+      console.error('Failed to clear conversations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (content) => {
+    setIsLoading(true);
+    try {
+      let conversationId = currentConversationId;
+
+      // If in draft mode, create the conversation first
+      if (isDraftMode) {
+        const newConv = await api.createConversation();
+        conversationId = newConv.id;
+        setCurrentConversationId(conversationId);
+        setIsDraftMode(false);
+
+        // Update conversations list using functional updater to avoid stale state
+        setConversations((prev) => [
+          { id: newConv.id, created_at: newConv.created_at, title: 'New Conversation', message_count: 0 },
+          ...prev,
+        ]);
+      }
+
+      if (!conversationId) return;
+
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
       setCurrentConversation((prev) => ({
@@ -89,64 +122,70 @@ function App() {
         messages: [...prev.messages, assistantMessage],
       }));
 
+      // Helper to immutably update the last message in a conversation
+      const updateLastMessage = (updates) => {
+        setCurrentConversation((prev) => {
+          const messages = prev.messages.slice(0, -1);
+          const lastMsg = prev.messages[prev.messages.length - 1];
+          return {
+            ...prev,
+            messages: [
+              ...messages,
+              { ...lastMsg, ...updates },
+            ],
+          };
+        });
+      };
+
+      // Helper to immutably update loading state of the last message
+      const updateLastMessageLoading = (loadingUpdates) => {
+        setCurrentConversation((prev) => {
+          const messages = prev.messages.slice(0, -1);
+          const lastMsg = prev.messages[prev.messages.length - 1];
+          return {
+            ...prev,
+            messages: [
+              ...messages,
+              { ...lastMsg, loading: { ...lastMsg.loading, ...loadingUpdates } },
+            ],
+          };
+        });
+      };
+
       // Send message with streaming
-      await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
+      await api.sendMessageStream(conversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage1 = true;
-              return { ...prev, messages };
-            });
+            updateLastMessageLoading({ stage1: true });
             break;
 
           case 'stage1_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage1 = event.data;
-              lastMsg.loading.stage1 = false;
-              return { ...prev, messages };
+            updateLastMessage({
+              stage1: event.data,
+              loading: { stage1: false, stage2: false, stage3: false },
             });
             break;
 
           case 'stage2_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage2 = true;
-              return { ...prev, messages };
-            });
+            updateLastMessageLoading({ stage2: true });
             break;
 
           case 'stage2_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage2 = event.data;
-              lastMsg.metadata = event.metadata;
-              lastMsg.loading.stage2 = false;
-              return { ...prev, messages };
+            updateLastMessage({
+              stage2: event.data,
+              metadata: event.metadata,
+              loading: { stage1: false, stage2: false, stage3: false },
             });
             break;
 
           case 'stage3_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage3 = true;
-              return { ...prev, messages };
-            });
+            updateLastMessageLoading({ stage3: true });
             break;
 
           case 'stage3_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage3 = event.data;
-              lastMsg.loading.stage3 = false;
-              return { ...prev, messages };
+            updateLastMessage({
+              stage3: event.data,
+              loading: { stage1: false, stage2: false, stage3: false },
             });
             break;
 
@@ -188,6 +227,8 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onClearConversations={handleClearConversations}
+        isLoading={isLoading}
       />
       <ChatInterface
         conversation={currentConversation}

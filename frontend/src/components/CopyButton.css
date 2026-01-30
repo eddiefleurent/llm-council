@@ -1,0 +1,33 @@
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0.6;
+}
+
+.copy-button:hover {
+  background: #f0f0f0;
+  opacity: 1;
+}
+
+.copy-button:active {
+  transform: scale(0.9);
+}
+
+.copy-button svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+/* Success state - use class for broader browser support instead of :has() */
+.copy-button.copy-button--success {
+  color: #4caf50;
+  opacity: 1;
+}

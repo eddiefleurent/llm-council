@@ -15,6 +15,24 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    /* prevent any accidental horizontal scroll from 100vw or wide children */
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+*, *::before, *::after {
+    box-sizing: inherit;
+}
+
+/* Ensure app-level container doesn't overflow */
+#root > .app, .App {
+    overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;

@@ -36,6 +36,27 @@
   border-color: #357abd;
 }
 
+.clear-history-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #d9534f;
+  color: #d9534f;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.clear-history-btn:hover {
+  background: #fcebea;
+}
+
+.clear-history-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -75,4 +96,30 @@
 .conversation-meta {
   color: #999;
   font-size: 12px;
+}
+
+/* Disabled state while loading */
+.new-conversation-btn:disabled {
+  background: #9fc5f0;
+  border-color: #9fc5f0;
+  cursor: not-allowed;
+}
+
+.conversation-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.conversation-item.disabled:hover {
+  background: transparent;
+}
+
+.sidebar-loading-warning {
+  padding: 8px 16px;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 12px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
 }
