@@ -398,15 +398,14 @@ def calculate_tournament_rankings(
                 model_stats[model_b]["ties"] += 1
 
     # Calculate win percentage and build results
-    total_possible_matchups = len(models) - 1 if len(models) > 1 else 1
     results = []
 
     for model in models:
         stats = model_stats[model]
         total_matchups = stats["wins"] + stats["losses"] + stats["ties"]
-        # Win percentage: wins + 0.5*ties / total matchups
+        # Win percentage: wins + 0.5*ties / actual matchups participated in
         if total_matchups > 0:
-            win_pct = (stats["wins"] + 0.5 * stats["ties"]) / total_possible_matchups
+            win_pct = (stats["wins"] + 0.5 * stats["ties"]) / total_matchups
         else:
             win_pct = 0.0
 
