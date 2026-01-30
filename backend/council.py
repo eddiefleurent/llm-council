@@ -23,7 +23,10 @@ async def stage1_collect_responses(
     if council_models is None:
         config = get_council_config()
         council_models = config["council_models"]
-    
+
+    # Log which models are being queried
+    print(f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}")
+
     # Query all models in parallel with full conversation context
     responses = await query_models_parallel(council_models, messages)
 
@@ -45,6 +48,12 @@ async def stage1_collect_responses(
                 "model": model,
                 "response": response.get('content', '')
             })
+
+    # Log results
+    print(f"[Stage 1] Results: {len(stage1_results)} successful, {len(stage1_errors)} failed")
+    if stage1_errors:
+        for error in stage1_errors:
+            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
 
     return stage1_results, stage1_errors
 
@@ -69,6 +78,9 @@ async def stage2_collect_rankings(
     if council_models is None:
         config = get_council_config()
         council_models = config["council_models"]
+
+    # Log which models are being queried
+    print(f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}")
     
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
@@ -143,6 +155,12 @@ Now provide your evaluation and ranking:"""
                 "parsed_ranking": parsed
             })
 
+    # Log results
+    print(f"[Stage 2] Results: {len(stage2_results)} successful, {len(stage2_errors)} failed")
+    if stage2_errors:
+        for error in stage2_errors:
+            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
+
     return stage2_results, label_to_model, stage2_errors
 
 
@@ -168,7 +186,10 @@ async def stage3_synthesize_final(
     if chairman_model is None:
         config = get_council_config()
         chairman_model = config["chairman_model"]
-    
+
+    # Log chairman model
+    print(f"[Stage 3] Chairman model: {chairman_model}")
+
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
@@ -207,6 +228,7 @@ Provide a clear, well-reasoned final answer that represents the council's collec
         if isinstance(response, ModelQueryError):
             error_info = response.to_dict()
             stage3_errors.append(error_info)
+            print(f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}")
             return {
                 "model": chairman_model,
                 "response": f"Error: {error_info['message']}",
@@ -218,11 +240,13 @@ Provide a clear, well-reasoned final answer that represents the council's collec
                 'message': 'Unknown error occurred',
                 'model': chairman_model
             })
+            print(f"[Stage 3] ✗ Chairman failed: unknown error")
             return {
                 "model": chairman_model,
                 "response": "Error: Unable to generate final synthesis."
             }, stage3_errors
 
+    print(f"[Stage 3] ✓ Chairman synthesis complete")
     return {
         "model": chairman_model,
         "response": response.get('content', '')
@@ -568,6 +592,12 @@ async def run_full_council(
         "chairman_model": chairman_model,
         "errors": all_errors if all_errors else None
     }
+
+    # Final summary
+    total_errors = len(all_errors)
+    print(f"[Council] Complete! Total errors: {total_errors}")
+    if total_errors > 0:
+        print(f"[Council] ⚠ {total_errors} model(s) failed during the process")
 
     return stage1_results, stage2_results, stage3_result, metadata
 

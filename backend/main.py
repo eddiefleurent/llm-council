@@ -1,6 +1,7 @@
 """FastAPI backend for LLM Council."""
 
 import logging
+import os
 import re
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Log startup configuration
+@app.on_event("startup")
+async def startup_event():
+    config = get_council_config()
+    print("\n" + "="*60)
+    print("LLM Council Configuration")
+    print("="*60)
+    print(f"Council Models ({len(config['council_models'])} members):")
+    for i, model in enumerate(config['council_models'], 1):
+        print(f"  {i}. {model}")
+    print(f"\nChairman Model: {config['chairman_model']}")
+    print("="*60 + "\n")
 
 
 class CreateConversationRequest(BaseModel):
@@ -67,6 +81,18 @@ class Conversation(BaseModel):
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
+
+
+@app.get("/api/debug/config")
+async def debug_config():
+    """Debug endpoint showing current configuration."""
+    config = get_council_config()
+    return {
+        "council_models": config["council_models"],
+        "chairman_model": config["chairman_model"],
+        "model_count": len(config["council_models"]),
+        "config_file_exists": os.path.exists("data/council_config.json")
+    }
 
 
 # ============================================================================

@@ -33,3 +33,31 @@ export function getModelDisplayName(model) {
   const parts = model.split('/').filter(Boolean);
   return parts.length ? parts[parts.length - 1] : model;
 }
+
+/**
+ * Get a human-readable error message from an error object.
+ *
+ * @param {Object} error - The error object with error_type, message, and status_code
+ * @returns {string} Human-readable error message
+ */
+export function getErrorMessage(error) {
+  if (!error) return 'Unknown error';
+
+  switch (error.error_type) {
+    case 'timeout':
+      return 'Timeout (120s exceeded)';
+    case 'rate_limit':
+      return 'Rate limit exceeded';
+    case 'auth':
+      return 'Authentication failed';
+    case 'payment':
+      return 'Payment required';
+    case 'not_found':
+      return 'Model not found';
+    case 'server':
+      return `Server error (${error.status_code || 'unknown'})`;
+    case 'unknown':
+    default:
+      return error.message || 'Unknown error';
+  }
+}

@@ -176,13 +176,24 @@ function App() {
             break;
 
           case 'stage1_complete':
-            updateLastMessage({
-              stage1: event.data,
-              errors: {
-                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
-                stage1: event.errors || []
-              },
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage1: event.data,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage1: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 
@@ -191,14 +202,25 @@ function App() {
             break;
 
           case 'stage2_complete':
-            updateLastMessage({
-              stage2: event.data,
-              metadata: event.metadata,
-              errors: {
-                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
-                stage2: event.errors || []
-              },
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage2: event.data,
+                    metadata: event.metadata,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage2: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 
@@ -207,13 +229,24 @@ function App() {
             break;
 
           case 'stage3_complete':
-            updateLastMessage({
-              stage3: event.data,
-              errors: {
-                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
-                stage3: event.errors || []
-              },
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage3: event.data,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage3: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 

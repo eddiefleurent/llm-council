@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import CopyButton from './CopyButton';
-import { getModelDisplayName } from '../utils';
+import { getModelDisplayName, getErrorMessage } from '../utils';
 import './Stage1.css';
 
 export default function Stage1({ responses, errors }) {
@@ -34,15 +34,7 @@ export default function Stage1({ responses, errors }) {
               <li key={index} className="error-item">
                 <span className="error-model">{getModelDisplayName(error.model)}</span>
                 <span className="error-separator"> - </span>
-                <span className="error-message">
-                  {error.error_type === 'timeout' && 'Timeout (120s exceeded)'}
-                  {error.error_type === 'rate_limit' && 'Rate limit exceeded'}
-                  {error.error_type === 'auth' && 'Authentication failed'}
-                  {error.error_type === 'payment' && 'Payment required'}
-                  {error.error_type === 'not_found' && 'Model not found'}
-                  {error.error_type === 'server' && `Server error (${error.status_code})`}
-                  {error.error_type === 'unknown' && (error.message || 'Unknown error')}
-                </span>
+                <span className="error-message">{getErrorMessage(error)}</span>
               </li>
             ))}
           </ul>
