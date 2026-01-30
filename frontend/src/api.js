@@ -5,6 +5,99 @@
 const API_BASE = 'http://localhost:8001';
 
 export const api = {
+  // ============================================================================
+  // Model Discovery
+  // ============================================================================
+  
+  /**
+   * Get all available models grouped by provider.
+   * Returns providers sorted with priority providers first.
+   */
+  async getModels() {
+    const response = await fetch(`${API_BASE}/api/models`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch models');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get models for a specific provider.
+   */
+  async getModelsForProvider(providerId) {
+    const response = await fetch(`${API_BASE}/api/models/${providerId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models for provider: ${providerId}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Force refresh the models cache from OpenRouter.
+   */
+  async refreshModels() {
+    const response = await fetch(`${API_BASE}/api/models/refresh`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to refresh models');
+    }
+    return response.json();
+  },
+
+  // ============================================================================
+  // Council Configuration
+  // ============================================================================
+
+  /**
+   * Get the current council configuration.
+   */
+  async getCouncilConfig() {
+    const response = await fetch(`${API_BASE}/api/council/config`);
+    if (!response.ok) {
+      throw new Error('Failed to get council config');
+    }
+    return response.json();
+  },
+
+  /**
+   * Update the council configuration.
+   */
+  async updateCouncilConfig(councilModels, chairmanModel) {
+    const response = await fetch(`${API_BASE}/api/council/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        council_models: councilModels,
+        chairman_model: chairmanModel,
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update council config');
+    }
+    return response.json();
+  },
+
+  /**
+   * Reset council configuration to defaults.
+   */
+  async resetCouncilConfig() {
+    const response = await fetch(`${API_BASE}/api/council/config/reset`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to reset council config');
+    }
+    return response.json();
+  },
+
+  // ============================================================================
+  // Conversations
+  // ============================================================================
+
   /**
    * List all conversations.
    */
