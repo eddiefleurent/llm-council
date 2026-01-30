@@ -11,11 +11,21 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 ### Backend Structure (`backend/`)
 
 **`config.py`**
-- Contains `COUNCIL_MODELS` (list of OpenRouter model identifiers)
-- Contains `CHAIRMAN_MODEL` (model that synthesizes final answer)
+- Contains `DEFAULT_COUNCIL_MODELS` and `DEFAULT_CHAIRMAN_MODEL` as fallback defaults
+- Legacy aliases `COUNCIL_MODELS` and `CHAIRMAN_MODEL` maintained for compatibility
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - **Validates API key at startup** - fails fast with clear error message
+- `get_council_config()`: Returns current council config (from file or defaults)
+- `save_council_config()`: Persists council config to `data/council_config.json`
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
+
+**`models.py`** - OpenRouter Model Discovery
+- `fetch_models_from_openrouter()`: Fetches all available models from OpenRouter API
+- `get_available_models()`: Returns cached models (5-minute TTL)
+- `get_models_grouped_by_provider()`: Groups models by provider for UI
+- `PRIORITY_PROVIDERS`: Top providers shown first (OpenAI, Anthropic, Google, xAI, etc.)
+- `PROVIDER_DISPLAY_NAMES`: Human-readable provider names
+- `validate_model_ids()`: Validates model IDs exist in OpenRouter
 
 **`openrouter.py`**
 - `query_model()`: Single async model query
@@ -26,19 +36,26 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Handles specific HTTP errors: 401 (auth), 402 (payment), 404 (not found), 429 (rate limit), 5xx (server)
 
 **`council.py`** - The Core Logic
-- `stage1_collect_responses()`: Parallel queries to all council models
-  - Now accepts `messages` list for conversation context
+- `stage1_collect_responses(messages, council_models=None)`: Parallel queries to all council models
+  - Accepts `messages` list for conversation context
+  - Optional `council_models` parameter (defaults to configured)
   - Returns tuple: (results, errors)
-- `stage2_collect_rankings()`:
+- `stage2_collect_rankings(user_query, stage1_results, council_models=None)`:
   - Anonymizes responses as "Response A, B, C, etc."
   - Creates `label_to_model` mapping for de-anonymization
+  - Optional `council_models` parameter
   - Returns tuple: (rankings_list, label_to_model_dict, errors)
-- `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
+- `stage3_synthesize_final(user_query, stage1_results, stage2_results, chairman_model=None)`:
+  - Chairman synthesizes from all responses + rankings
+  - Optional `chairman_model` parameter
   - Returns tuple: (result, errors)
+- `run_full_council(messages, council_models=None, chairman_model=None)`: Full orchestration
+  - Now accepts optional model parameters
+  - Metadata now includes `council_models` and `chairman_model` used
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section
 - `calculate_aggregate_rankings()`: Mean position averaging
 - **`calculate_tournament_rankings()`**: Pairwise comparison (Condorcet voting) - more robust to outliers
-- `generate_conversation_title()`: Uses CHAIRMAN_MODEL (configurable)
+- `generate_conversation_title(user_query, chairman_model=None)`: Uses configurable chairman
 
 **`context.py`** - Multi-turn Conversation Support
 - `build_context_messages()`: Builds message history with smart summarization
@@ -49,13 +66,25 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
 - Each conversation: `{id, created_at, title, messages[]}`
+- Messages now include optional `errors` field: `{stage1: [], stage2: [], stage3: []}`
+- `add_assistant_message()`: Accepts optional `errors` parameter for persistence
 - `delete_all_conversations()`: Clear all history
 
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
 - POST `/api/conversations/{id}/message` returns metadata in addition to stages
 - DELETE `/api/conversations` clears all conversations
-- Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, errors
+- Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, errors
+
+**Model Discovery Endpoints:**
+- GET `/api/models` - List all models grouped by provider
+- GET `/api/models/{provider_id}` - List models for a specific provider
+- POST `/api/models/refresh` - Force refresh the models cache
+
+**Council Configuration Endpoints:**
+- GET `/api/council/config` - Get current config (with defaults)
+- PUT `/api/council/config` - Update council models and chairman
+- POST `/api/council/config/reset` - Reset to defaults
 
 ### Frontend Structure (`frontend/src/`)
 
@@ -67,6 +96,12 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **`api.js`**
 - `deleteAllConversations()`: API call to clear history
+- `getModels()`: Fetch all models grouped by provider
+- `getModelsForProvider(providerId)`: Get models for specific provider
+- `refreshModels()`: Force refresh models cache
+- `getCouncilConfig()`: Get current council configuration
+- `updateCouncilConfig(councilModels, chairmanModel)`: Update configuration
+- `resetCouncilConfig()`: Reset to defaults
 
 **`utils.js`**
 - `getModelDisplayName()`: Safely extracts model name, handles arrays/null
@@ -86,11 +121,29 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Loading state**: Disables switching during response generation
 - **Clear History button**: Red-styled, with confirmation
 - Shows "Response in progress" warning
+- **Config button**: Opens council configuration panel (gear icon)
+
+**`components/CouncilConfig.jsx`**
+- Modal panel for configuring council models and chairman
+- Shows current config with model chips (color-coded by provider)
+- Add/remove council members
+- Select chairman model
+- Reset to defaults button
+- Validates configuration before saving
+
+**`components/ModelSelector.jsx`**
+- Two-step model selection: providers → models
+- Priority providers shown first (OpenAI, Anthropic, Google, xAI)
+- Models sorted by creation date (newest first)
+- Shows context length and selection status
+- Dark-themed overlay matching screenshot design
 
 **`components/Stage1.jsx`**
 - Tab view of individual model responses
 - Copy button for each response
 - Uses `getModelDisplayName()` for safe model name display
+- **Error display**: Shows failed models in warning section with error details
+- Model count in title: "[X queried, Y successful, Z failed]"
 
 **`components/Stage2.jsx`**
 - Tab view showing RAW evaluation text from each model
@@ -98,6 +151,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Shows "Extracted Ranking" below each evaluation
 - Aggregate rankings shown with average position and vote count
 - Uses `getModelDisplayName()` for safe model name display
+- **Error display**: Shows failed models in warning section with error details
+- Model count in title: "[X queried, Y successful, Z failed]"
 
 **`components/Stage3.jsx`**
 - Final synthesized answer from chairman
@@ -112,6 +167,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Loading/disabled states for sidebar
 
 ## Key Design Decisions
+
+### Dynamic Model Configuration
+- Council models and chairman are now configurable via UI
+- Defaults maintained in `config.py` for backward compatibility
+- Config persisted to `data/council_config.json`
+- Models auto-discovered from OpenRouter API with 5-minute cache
+- Priority providers (OpenAI, Anthropic, Google, xAI) shown first in UI
+- Validation ensures selected models exist before saving
 
 ### Stage 2 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
@@ -138,6 +201,11 @@ Two methods available in metadata:
 - Continue with successful responses if some models fail
 - Aggregate errors in metadata for debugging
 - Human-readable error summaries for users
+- **Error persistence**: Errors are now saved to conversation files alongside stages
+- **Error visibility**: Failed models displayed in UI with error type/message
+  - Stage 1/2 show warning sections: "⚠ Failed Models: model-name - error-type"
+  - Error types: timeout, rate_limit, auth, payment, not_found, server, unknown
+  - Visual count in stage titles: "[3 models queried, 2 successful, 1 failed]"
 
 ### Multi-turn Conversations
 - Stage 1 receives full conversation context
@@ -163,12 +231,20 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - `tests/integration/` for API tests
 - Run with: `uv run pytest` or `pytest`
 
+### Frontend Quality Commands
+- **Lint all files**: `npm run lint` (from `frontend/` directory)
+- **Lint specific file**: `npx eslint src/components/ModelSelector.jsx`
+- **Auto-fix issues**: `npm run lint -- --fix` (only fixes auto-fixable issues like whitespace)
+- **Build frontend**: `npm run build` - Vite builds to `dist/`
+- **Note**: Unused variables (unused state, catch parameters) must be manually removed - ESLint `--fix` doesn't handle these
+- **ModelSelector behavior**: Loads providers fresh on each modal open (no caching) - uses `useEffect` dependency on `isOpen`
+
 ## Common Gotchas
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend must match allowed origins in `main.py`
 3. **Ranking Parse Failures**: Fallback regex extracts any "Response X" patterns
-4. **Missing Metadata**: Metadata is ephemeral (not persisted), only in API responses
+4. **Metadata Persistence**: Rankings metadata (label_to_model, aggregate_rankings, tournament_rankings) is ephemeral (not persisted), only in API responses. Errors ARE persisted in conversation files for debugging.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 
 ## Data Flow Summary

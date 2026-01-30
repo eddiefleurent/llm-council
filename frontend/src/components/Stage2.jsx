@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { getModelDisplayName } from '../utils';
+import { getModelDisplayName, getErrorMessage } from '../utils';
 import './Stage2.css';
 
 function deAnonymizeText(text, labelToModel) {
@@ -15,16 +15,42 @@ function deAnonymizeText(text, labelToModel) {
   return result;
 }
 
-export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
+export default function Stage2({ rankings, labelToModel, aggregateRankings, errors }) {
   const [activeTab, setActiveTab] = useState(0);
 
   if (!rankings || rankings.length === 0) {
     return null;
   }
 
+  const totalQueried = rankings.length + (errors?.length || 0);
+  const hasFailed = errors && errors.length > 0;
+
   return (
     <div className="stage stage2">
-      <h3 className="stage-title">Stage 2: Peer Rankings</h3>
+      <h3 className="stage-title">
+        Stage 2: Peer Rankings
+        {totalQueried > 0 && (
+          <span className="model-count">
+            {' '}[{totalQueried} models queried, {rankings.length} successful
+            {hasFailed && `, ${errors.length} failed`}]
+          </span>
+        )}
+      </h3>
+
+      {hasFailed && (
+        <div className="error-section">
+          <div className="error-header">⚠ Failed Models:</div>
+          <ul className="error-list">
+            {errors.map((error, index) => (
+              <li key={index} className="error-item">
+                <span className="error-model">{getModelDisplayName(error.model)}</span>
+                <span className="error-separator"> - </span>
+                <span className="error-message">{getErrorMessage(error)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h4>Raw Evaluations</h4>
       <p className="stage-description">

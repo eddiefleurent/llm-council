@@ -1,11 +1,14 @@
 """FastAPI backend for LLM Council."""
 
 import logging
+import os
+import re
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 import json
 import asyncio
@@ -15,8 +18,28 @@ logger = logging.getLogger(__name__)
 from . import storage
 from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings
 from .context import build_context_messages
+from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL
+from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
 
-app = FastAPI(title="LLM Council API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup and shutdown events."""
+    # Startup: Log configuration
+    config = get_council_config()
+    print("\n" + "="*60)
+    print("LLM Council Configuration")
+    print("="*60)
+    print(f"Council Models ({len(config['council_models'])} members):")
+    for i, model in enumerate(config['council_models'], 1):
+        print(f"  {i}. {model}")
+    print(f"\nChairman Model: {config['chairman_model']}")
+    print("="*60 + "\n")
+    yield
+    # Shutdown: Nothing to clean up currently
+
+
+app = FastAPI(title="LLM Council API", lifespan=lifespan)
 
 # Enable CORS for local development
 app.add_middleware(
@@ -36,6 +59,12 @@ class CreateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
+
+
+class UpdateCouncilConfigRequest(BaseModel):
+    """Request to update council configuration."""
+    council_models: List[str]
+    chairman_model: str
 
 
 class ConversationMetadata(BaseModel):
@@ -58,6 +87,186 @@ class Conversation(BaseModel):
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
+
+
+@app.get("/api/debug/config")
+async def debug_config():
+    """Debug endpoint showing current configuration."""
+    config = get_council_config()
+    return {
+        "council_models": config["council_models"],
+        "chairman_model": config["chairman_model"],
+        "model_count": len(config["council_models"]),
+        "config_file_exists": os.path.exists("data/council_config.json")
+    }
+
+
+# ============================================================================
+# Model Discovery Endpoints
+# ============================================================================
+
+@app.get("/api/models")
+async def list_models():
+    """
+    Get all available models from OpenRouter, grouped by provider.
+    
+    Returns providers sorted with priority providers first (OpenAI, Anthropic, etc.),
+    with models within each provider sorted by creation date (newest first).
+    """
+    try:
+        return await get_models_grouped_by_provider()
+    except Exception as e:
+        logger.exception("Failed to fetch models from OpenRouter")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
+
+
+@app.get("/api/models/{provider_id}")
+async def list_models_for_provider(provider_id: str):
+    """
+    Get models for a specific provider.
+    
+    Args:
+        provider_id: Provider identifier (e.g., "anthropic", "openai")
+        
+    Returns list of models sorted by creation date (newest first).
+    """
+    try:
+        models = await get_models_for_provider(provider_id)
+        if not models:
+            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
+        return {"provider": provider_id, "models": models}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to fetch models for provider {provider_id}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
+
+
+@app.post("/api/models/refresh")
+async def refresh_models():
+    """
+    Force refresh the models cache from OpenRouter.
+    
+    Useful when new models are added to OpenRouter.
+    """
+    try:
+        from .models import get_available_models
+        cache = await get_available_models(force_refresh=True)
+        return {"status": "ok", "total_models": len(cache.models)}
+    except Exception as e:
+        logger.exception("Failed to refresh models cache")
+        raise HTTPException(status_code=502, detail=f"Failed to refresh models: {e!s}") from e
+
+
+# ============================================================================
+# Council Configuration Endpoints
+# ============================================================================
+
+@app.get("/api/council/config")
+async def get_council_configuration():
+    """
+    Get the current council configuration.
+    
+    Returns the list of council models and the chairman model.
+    """
+    config = get_council_config()
+    return {
+        "council_models": config["council_models"],
+        "chairman_model": config["chairman_model"],
+        "defaults": {
+            "council_models": DEFAULT_COUNCIL_MODELS,
+            "chairman_model": DEFAULT_CHAIRMAN_MODEL
+        }
+    }
+
+
+@app.put("/api/council/config")
+async def update_council_configuration(request: UpdateCouncilConfigRequest):
+    """
+    Update the council configuration.
+
+    Validates that all model IDs exist in OpenRouter before saving.
+    """
+    # Pre-validation: require council_models and chairman_model
+    if not request.council_models:
+        raise HTTPException(status_code=400, detail="At least one council model is required")
+    if not request.chairman_model:
+        raise HTTPException(status_code=400, detail="Chairman model is required")
+
+    # Deduplicate council models while preserving order
+    seen = set()
+    deduped_council_models = []
+    for model_id in request.council_models:
+        if model_id not in seen:
+            seen.add(model_id)
+            deduped_council_models.append(model_id)
+
+    # Lightweight ID format validation helper
+    def validate_model_id_format(model_id: str) -> bool:
+        """Validate model ID matches 'provider/model' format."""
+        return bool(model_id and re.match(r'^[^/]+/[^/]+$', model_id))
+
+    # Validate model ID formats before OpenRouter validation
+    invalid_formats = []
+    for model_id in deduped_council_models:
+        if not validate_model_id_format(model_id):
+            invalid_formats.append(model_id)
+    if not validate_model_id_format(request.chairman_model):
+        invalid_formats.append(request.chairman_model)
+
+    if invalid_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
+        )
+
+    # Validate models exist in OpenRouter
+    try:
+        cache = await get_available_models()
+
+        # Combine all models to validate
+        all_models_to_validate = deduped_council_models + [request.chairman_model]
+        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
+
+        if invalid_models:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model(s): {', '.join(invalid_models)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # If we can't validate (e.g., OpenRouter is down), still apply format validation
+        logger.warning(f"Could not validate models against OpenRouter: {e}")
+
+        # Re-check format validation in fallback path
+        if invalid_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
+            )
+
+    # Save the configuration (use deduplicated list)
+    save_council_config(deduped_council_models, request.chairman_model)
+
+    return {
+        "status": "ok",
+        "council_models": deduped_council_models,
+        "chairman_model": request.chairman_model
+    }
+
+
+@app.post("/api/council/config/reset")
+async def reset_council_configuration():
+    """
+    Reset council configuration to defaults.
+    """
+    save_council_config(DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL)
+    return {
+        "status": "ok",
+        "council_models": DEFAULT_COUNCIL_MODELS,
+        "chairman_model": DEFAULT_CHAIRMAN_MODEL
+    }
 
 
 @app.get("/api/conversations", response_model=List[ConversationMetadata])
@@ -128,12 +337,16 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     # Run the 3-stage council process with context
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
 
-    # Add assistant message with all stages
+    # Extract structured errors directly from metadata
+    errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
+
+    # Add assistant message with all stages and errors
     storage.add_assistant_message(
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        errors
     )
 
     # Return the complete response with metadata
@@ -208,12 +421,20 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 storage.update_conversation_title(conversation_id, title)
                 yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
 
-            # Save complete assistant message
+            # Collect all errors for persistence
+            errors = {
+                "stage1": stage1_errors if stage1_errors else [],
+                "stage2": stage2_errors if stage2_errors else [],
+                "stage3": stage3_errors if stage3_errors else []
+            }
+
+            # Save complete assistant message with errors
             storage.add_assistant_message(
                 conversation_id,
                 stage1_results,
                 stage2_results,
-                stage3_result
+                stage3_result,
+                errors
             )
 
             # Send completion event

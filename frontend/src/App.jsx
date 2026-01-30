@@ -11,6 +11,22 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDraftMode, setIsDraftMode] = useState(false);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme || 'light';
+  });
+
+  // Apply theme to root element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
@@ -122,21 +138,6 @@ function App() {
         messages: [...prev.messages, assistantMessage],
       }));
 
-      // Helper to immutably update the last message in a conversation
-      const updateLastMessage = (updates) => {
-        setCurrentConversation((prev) => {
-          const messages = prev.messages.slice(0, -1);
-          const lastMsg = prev.messages[prev.messages.length - 1];
-          return {
-            ...prev,
-            messages: [
-              ...messages,
-              { ...lastMsg, ...updates },
-            ],
-          };
-        });
-      };
-
       // Helper to immutably update loading state of the last message
       const updateLastMessageLoading = (loadingUpdates) => {
         setCurrentConversation((prev) => {
@@ -160,9 +161,24 @@ function App() {
             break;
 
           case 'stage1_complete':
-            updateLastMessage({
-              stage1: event.data,
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage1: event.data,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage1: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 
@@ -171,10 +187,25 @@ function App() {
             break;
 
           case 'stage2_complete':
-            updateLastMessage({
-              stage2: event.data,
-              metadata: event.metadata,
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage2: event.data,
+                    metadata: event.metadata,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage2: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 
@@ -183,9 +214,24 @@ function App() {
             break;
 
           case 'stage3_complete':
-            updateLastMessage({
-              stage3: event.data,
-              loading: { stage1: false, stage2: false, stage3: false },
+            setCurrentConversation((prev) => {
+              const messages = prev.messages.slice(0, -1);
+              const lastMsg = prev.messages[prev.messages.length - 1];
+              return {
+                ...prev,
+                messages: [
+                  ...messages,
+                  {
+                    ...lastMsg,
+                    stage3: event.data,
+                    errors: {
+                      ...(lastMsg.errors || {}),
+                      stage3: event.errors || []
+                    },
+                    loading: { stage1: false, stage2: false, stage3: false }
+                  }
+                ]
+              };
             });
             break;
 
@@ -229,6 +275,8 @@ function App() {
         onNewConversation={handleNewConversation}
         onClearConversations={handleClearConversations}
         isLoading={isLoading}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <ChatInterface
         conversation={currentConversation}

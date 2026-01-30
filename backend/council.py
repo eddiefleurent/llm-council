@@ -1,22 +1,34 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from .openrouter import query_models_parallel, query_model, ModelQueryError, is_error
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
+from .config import DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_council_config
 
 
-async def stage1_collect_responses(messages: List[Dict[str, str]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+async def stage1_collect_responses(
+    messages: List[Dict[str, str]],
+    council_models: Optional[List[str]] = None
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         messages: Full message history including current query
+        council_models: Optional list of model IDs to use (defaults to configured council)
 
     Returns:
         Tuple of (successful responses list, errors list)
     """
+    # Use provided models or fall back to configured/default
+    if council_models is None:
+        config = get_council_config()
+        council_models = config["council_models"]
+
+    # Log which models are being queried
+    print(f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}")
+
     # Query all models in parallel with full conversation context
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(council_models, messages)
 
     # Format results, separating successes from errors
     stage1_results = []
@@ -37,12 +49,19 @@ async def stage1_collect_responses(messages: List[Dict[str, str]]) -> Tuple[List
                 "response": response.get('content', '')
             })
 
+    # Log results
+    print(f"[Stage 1] Results: {len(stage1_results)} successful, {len(stage1_errors)} failed")
+    if stage1_errors:
+        for error in stage1_errors:
+            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
+
     return stage1_results, stage1_errors
 
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    council_models: Optional[List[str]] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str], List[Dict[str, Any]]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -50,10 +69,19 @@ async def stage2_collect_rankings(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
+        council_models: Optional list of model IDs to use (defaults to configured council)
 
     Returns:
         Tuple of (rankings list, label_to_model mapping, errors list)
     """
+    # Use provided models or fall back to configured/default
+    if council_models is None:
+        config = get_council_config()
+        council_models = config["council_models"]
+
+    # Log which models are being queried
+    print(f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}")
+    
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
 
@@ -103,7 +131,7 @@ Now provide your evaluation and ranking:"""
     messages = [{"role": "user", "content": ranking_prompt}]
 
     # Get rankings from all council models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(council_models, messages)
 
     # Format results, separating successes from errors
     stage2_results = []
@@ -127,13 +155,20 @@ Now provide your evaluation and ranking:"""
                 "parsed_ranking": parsed
             })
 
+    # Log results
+    print(f"[Stage 2] Results: {len(stage2_results)} successful, {len(stage2_errors)} failed")
+    if stage2_errors:
+        for error in stage2_errors:
+            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
+
     return stage2_results, label_to_model, stage2_errors
 
 
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]]
+    stage2_results: List[Dict[str, Any]],
+    chairman_model: Optional[str] = None
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -142,10 +177,19 @@ async def stage3_synthesize_final(
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
+        chairman_model: Optional model ID for chairman (defaults to configured chairman)
 
     Returns:
         Tuple of (result dict with 'model' and 'response' keys, errors list)
     """
+    # Use provided model or fall back to configured/default
+    if chairman_model is None:
+        config = get_council_config()
+        chairman_model = config["chairman_model"]
+
+    # Log chairman model
+    print(f"[Stage 3] Chairman model: {chairman_model}")
+
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
@@ -177,15 +221,16 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     messages = [{"role": "user", "content": chairman_prompt}]
 
     # Query the chairman model
-    response = await query_model(CHAIRMAN_MODEL, messages)
+    response = await query_model(chairman_model, messages)
 
     stage3_errors = []
     if is_error(response):
         if isinstance(response, ModelQueryError):
             error_info = response.to_dict()
             stage3_errors.append(error_info)
+            print(f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}")
             return {
-                "model": CHAIRMAN_MODEL,
+                "model": chairman_model,
                 "response": f"Error: {error_info['message']}",
                 "error": error_info
             }, stage3_errors
@@ -193,15 +238,17 @@ Provide a clear, well-reasoned final answer that represents the council's collec
             stage3_errors.append({
                 'error_type': 'unknown',
                 'message': 'Unknown error occurred',
-                'model': CHAIRMAN_MODEL
+                'model': chairman_model
             })
+            print("[Stage 3] ✗ Chairman failed: unknown error")
             return {
-                "model": CHAIRMAN_MODEL,
+                "model": chairman_model,
                 "response": "Error: Unable to generate final synthesis."
             }, stage3_errors
 
+    print("[Stage 3] ✓ Chairman synthesis complete")
     return {
-        "model": CHAIRMAN_MODEL,
+        "model": chairman_model,
         "response": response.get('content', '')
     }, stage3_errors
 
@@ -424,16 +471,22 @@ def calculate_tournament_rankings(
     return results
 
 
-async def generate_conversation_title(user_query: str) -> str:
+async def generate_conversation_title(user_query: str, chairman_model: Optional[str] = None) -> str:
     """
     Generate a short title for a conversation based on the first user message.
 
     Args:
         user_query: The first user message
+        chairman_model: Optional model ID for title generation (defaults to configured chairman)
 
     Returns:
         A short title (3-5 words)
     """
+    # Use provided model or fall back to configured/default
+    if chairman_model is None:
+        config = get_council_config()
+        chairman_model = config["chairman_model"]
+    
     title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
 
@@ -444,7 +497,7 @@ Title:"""
     messages = [{"role": "user", "content": title_prompt}]
 
     # Use chairman model for title generation (configurable)
-    response = await query_model(CHAIRMAN_MODEL, messages, timeout=30.0)
+    response = await query_model(chairman_model, messages, timeout=30.0)
 
     if is_error(response):
         # Fallback to a generic title
@@ -462,12 +515,18 @@ Title:"""
     return title
 
 
-async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(
+    messages: List[Dict[str, str]],
+    council_models: Optional[List[str]] = None,
+    chairman_model: Optional[str] = None
+) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process with conversation context.
 
     Args:
         messages: Full message history in OpenAI format
+        council_models: Optional list of model IDs for the council (defaults to configured)
+        chairman_model: Optional model ID for the chairman (defaults to configured)
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
@@ -482,11 +541,19 @@ async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, 
             "response": "No messages provided. Please enter a query."
         }, {"errors": [{"error_type": "validation", "message": "Empty messages list"}]}
     
+    # Get config if models not specified
+    if council_models is None or chairman_model is None:
+        config = get_council_config()
+        if council_models is None:
+            council_models = config["council_models"]
+        if chairman_model is None:
+            chairman_model = config["chairman_model"]
+    
     # Extract current query from messages
     current_query = messages[-1]["content"]
 
     # Stage 1: Collect individual responses (with full context)
-    stage1_results, stage1_errors = await stage1_collect_responses(messages)
+    stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
     all_errors.extend(stage1_errors)
 
     # If no models responded successfully, return error with details
@@ -498,7 +565,9 @@ async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, 
         }, {"errors": all_errors}
 
     # Stage 2: Collect rankings (uses current query only for ranking prompt)
-    stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(current_query, stage1_results)
+    stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
+        current_query, stage1_results, council_models
+    )
     all_errors.extend(stage2_errors)
 
     # Calculate aggregate rankings (both methods)
@@ -509,17 +578,30 @@ async def run_full_council(messages: List[Dict[str, str]]) -> Tuple[List, List, 
     stage3_result, stage3_errors = await stage3_synthesize_final(
         current_query,
         stage1_results,
-        stage2_results
+        stage2_results,
+        chairman_model
     )
     all_errors.extend(stage3_errors)
 
-    # Prepare metadata
+    # Prepare metadata with structured per-stage errors
     metadata = {
         "label_to_model": label_to_model,
         "aggregate_rankings": aggregate_rankings,
         "tournament_rankings": tournament_rankings,
-        "errors": all_errors if all_errors else None
+        "council_models": council_models,
+        "chairman_model": chairman_model,
+        "errors": {
+            "stage1": stage1_errors,
+            "stage2": stage2_errors,
+            "stage3": stage3_errors
+        } if any([stage1_errors, stage2_errors, stage3_errors]) else None
     }
+
+    # Final summary
+    total_errors = len(all_errors)
+    print(f"[Council] Complete! Total errors: {total_errors}")
+    if total_errors > 0:
+        print(f"[Council] ⚠ {total_errors} model(s) failed during the process")
 
     return stage1_results, stage2_results, stage3_result, metadata
 
