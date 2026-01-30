@@ -1,38 +1,22 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { getProviderColor } from '../providerColors';
 import './ModelSelector.css';
 
 /**
  * Get a display-friendly name for a model.
+ * Returns the last path segment for model IDs with multiple slashes.
  */
 function getModelDisplayName(model) {
   if (!model) return 'Unknown';
   // Handle model object vs string
   const name = model.name || model.id || model;
   if (typeof name !== 'string') return 'Unknown';
-  // If it has a slash, get just the model part
+  // If it has a slash, get the last segment (handles multi-slash IDs like "anthropic/claude-3/opus")
   if (name.includes('/')) {
-    return name.split('/')[1];
+    return name.split('/').pop();
   }
   return name;
-}
-
-/**
- * Provider badge colors
- */
-const PROVIDER_COLORS = {
-  openai: { bg: '#10a37f', text: '#fff' },
-  anthropic: { bg: '#d4a27f', text: '#000' },
-  google: { bg: '#4285f4', text: '#fff' },
-  'x-ai': { bg: '#000', text: '#fff' },
-  'meta-llama': { bg: '#0668e1', text: '#fff' },
-  mistralai: { bg: '#f7931a', text: '#000' },
-  deepseek: { bg: '#6366f1', text: '#fff' },
-  cohere: { bg: '#39594d', text: '#fff' },
-};
-
-function getProviderColor(providerId) {
-  return PROVIDER_COLORS[providerId] || { bg: '#6b7280', text: '#fff' };
 }
 
 /**
@@ -117,7 +101,7 @@ export default function ModelSelector({
               <span className="subtitle">Select Source</span>
             </>
           )}
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
         <div className="model-selector-content">

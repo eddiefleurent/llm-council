@@ -2,30 +2,13 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 import ModelSelector from './ModelSelector';
 import { getModelDisplayName } from '../utils';
+import { getProviderColor } from '../providerColors';
 import './CouncilConfig.css';
-
-/**
- * Provider badge colors - matching ModelSelector
- */
-const PROVIDER_COLORS = {
-  openai: { bg: '#10a37f', text: '#fff' },
-  anthropic: { bg: '#d4a27f', text: '#000' },
-  google: { bg: '#4285f4', text: '#fff' },
-  'x-ai': { bg: '#000', text: '#fff' },
-  'meta-llama': { bg: '#0668e1', text: '#fff' },
-  mistralai: { bg: '#f7931a', text: '#000' },
-  deepseek: { bg: '#6366f1', text: '#fff' },
-  cohere: { bg: '#39594d', text: '#fff' },
-};
 
 function getProviderFromModelId(modelId) {
   if (!modelId || typeof modelId !== 'string') return null;
   const parts = modelId.split('/');
   return parts.length > 1 ? parts[0] : null;
-}
-
-function getProviderColor(providerId) {
-  return PROVIDER_COLORS[providerId] || { bg: '#6b7280', text: '#fff' };
 }
 
 /**
@@ -52,6 +35,7 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
       {showRemove && (
         <button 
           className="chip-remove"
+          aria-label={`Remove model ${displayName}`}
           onClick={(e) => {
             e.stopPropagation();
             onRemove(modelId);
@@ -74,7 +58,10 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
 export default function CouncilConfig({ isOpen, onClose }) {
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
-  const [defaults, setDefaults] = useState({ council_models: [], chairman_model: '' });
+  // loadedConfig is the baseline for detecting changes (the persisted/saved state)
+  const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '' });
+  // defaults from the server (the "factory defaults" for reset)
+  const [serverDefaults, setServerDefaults] = useState({ council_models: [], chairman_model: '' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -89,22 +76,27 @@ export default function CouncilConfig({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // Track changes
+  // Track changes against the loaded (persisted) config, not the factory defaults
   useEffect(() => {
     const configChanged = 
-      JSON.stringify(councilModels) !== JSON.stringify(defaults.council_models) ||
-      chairmanModel !== defaults.chairman_model;
+      JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
+      chairmanModel !== loadedConfig.chairman_model;
     setHasChanges(configChanged);
-  }, [councilModels, chairmanModel, defaults]);
+  }, [councilModels, chairmanModel, loadedConfig]);
 
   const loadConfig = async () => {
     setLoading(true);
     setError(null);
     try {
       const config = await api.getCouncilConfig();
-      setCouncilModels(config.council_models || []);
-      setChairmanModel(config.chairman_model || '');
-      setDefaults(config.defaults || { council_models: [], chairman_model: '' });
+      const currentCouncil = config.council_models || [];
+      const currentChairman = config.chairman_model || '';
+      setCouncilModels(currentCouncil);
+      setChairmanModel(currentChairman);
+      // Set the loaded config as the baseline for change detection
+      setLoadedConfig({ council_models: currentCouncil, chairman_model: currentChairman });
+      // Store factory defaults separately for reset functionality
+      setServerDefaults(config.defaults || { council_models: [], chairman_model: '' });
     } catch (err) {
       setError('Failed to load council configuration');
       console.error('Failed to load config:', err);
@@ -126,7 +118,12 @@ export default function CouncilConfig({ isOpen, onClose }) {
     setSaving(true);
     setError(null);
     try {
-      await api.updateCouncilConfig(councilModels, chairmanModel);
+      const result = await api.updateCouncilConfig(councilModels, chairmanModel);
+      // Update the loaded config baseline after successful save
+      setLoadedConfig({ 
+        council_models: result.council_models, 
+        chairman_model: result.chairman_model 
+      });
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save configuration');
@@ -144,6 +141,11 @@ export default function CouncilConfig({ isOpen, onClose }) {
       const result = await api.resetCouncilConfig();
       setCouncilModels(result.council_models);
       setChairmanModel(result.chairman_model);
+      // Update the loaded config baseline after reset (now using factory defaults)
+      setLoadedConfig({ 
+        council_models: result.council_models, 
+        chairman_model: result.chairman_model 
+      });
     } catch (err) {
       setError('Failed to reset configuration');
     } finally {
@@ -183,7 +185,7 @@ export default function CouncilConfig({ isOpen, onClose }) {
         <div className="council-config-panel" onClick={(e) => e.stopPropagation()}>
           <div className="council-config-header">
             <h2>Council Configuration</h2>
-            <button className="close-btn" onClick={onClose}>×</button>
+            <button className="close-btn" aria-label="Close" onClick={onClose}>×</button>
           </div>
 
           {loading ? (

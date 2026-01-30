@@ -25,7 +25,9 @@ export const api = {
    * Get models for a specific provider.
    */
   async getModelsForProvider(providerId) {
-    const response = await fetch(`${API_BASE}/api/models/${providerId}`);
+    const response = await fetch(
+      `${API_BASE}/api/models/${encodeURIComponent(providerId)}`
+    );
     if (!response.ok) {
       throw new Error(`Failed to fetch models for provider: ${providerId}`);
     }

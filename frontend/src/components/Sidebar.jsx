@@ -30,9 +30,11 @@ export default function Sidebar({
         <div className="header-title-row">
           <h1>LLM Council</h1>
           <button 
+            type="button"
             className="config-btn"
             onClick={() => setShowConfig(true)}
             title="Configure Council"
+            aria-label="Configure Council"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"></circle>

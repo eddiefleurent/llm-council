@@ -41,12 +41,22 @@ DATA_DIR = "data/conversations"
 COUNCIL_CONFIG_FILE = "data/council_config.json"
 
 
+def _normalize_council_models(value) -> List[str]:
+    """
+    Normalize and validate council models value.
+    Returns a defensive copy to prevent mutation of defaults.
+    """
+    if isinstance(value, list) and all(isinstance(m, str) for m in value):
+        return list(value)  # Return a copy
+    return list(DEFAULT_COUNCIL_MODELS)  # Return a copy of defaults
+
+
 def get_council_config() -> dict:
     """
     Get the current council configuration.
     
     Returns a dict with:
-    - council_models: List of model IDs for the council
+    - council_models: List of model IDs for the council (defensive copy)
     - chairman_model: Model ID for the chairman
     """
     import json
@@ -57,15 +67,15 @@ def get_council_config() -> dict:
             with open(COUNCIL_CONFIG_FILE, "r") as f:
                 config = json.load(f)
                 return {
-                    "council_models": config.get("council_models", DEFAULT_COUNCIL_MODELS),
+                    "council_models": _normalize_council_models(config.get("council_models")),
                     "chairman_model": config.get("chairman_model", DEFAULT_CHAIRMAN_MODEL)
                 }
         except (json.JSONDecodeError, IOError):
             pass
     
-    # Return defaults
+    # Return defaults (defensive copies)
     return {
-        "council_models": DEFAULT_COUNCIL_MODELS,
+        "council_models": list(DEFAULT_COUNCIL_MODELS),
         "chairman_model": DEFAULT_CHAIRMAN_MODEL
     }
 

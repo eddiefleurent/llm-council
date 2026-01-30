@@ -154,28 +154,32 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
     
     Validates that all model IDs exist in OpenRouter before saving.
     """
-    # Validate that we have at least one council model
+    # Pre-validation: require council_models and chairman_model
     if not request.council_models:
         raise HTTPException(status_code=400, detail="At least one council model is required")
+    if not request.chairman_model:
+        raise HTTPException(status_code=400, detail="Chairman model is required")
+    
+    # Deduplicate council models while preserving order
+    seen = set()
+    deduped_council_models = []
+    for model_id in request.council_models:
+        if model_id not in seen:
+            seen.add(model_id)
+            deduped_council_models.append(model_id)
     
     # Validate models exist in OpenRouter
     try:
         cache = await get_available_models()
         
-        # Check council models
-        valid_council, invalid_council = validate_model_ids(request.council_models, cache)
-        if invalid_council:
+        # Combine all models to validate
+        all_models_to_validate = deduped_council_models + [request.chairman_model]
+        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
+        
+        if invalid_models:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid council model(s): {', '.join(invalid_council)}"
-            )
-        
-        # Check chairman model
-        valid_chairman, invalid_chairman = validate_model_ids([request.chairman_model], cache)
-        if invalid_chairman:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid chairman model: {request.chairman_model}"
+                detail=f"Invalid model(s): {', '.join(invalid_models)}"
             )
     except HTTPException:
         raise
@@ -184,12 +188,12 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
         # but log a warning
         logger.warning(f"Could not validate models against OpenRouter: {e}")
     
-    # Save the configuration
-    save_council_config(request.council_models, request.chairman_model)
+    # Save the configuration (use deduplicated list)
+    save_council_config(deduped_council_models, request.chairman_model)
     
     return {
         "status": "ok",
-        "council_models": request.council_models,
+        "council_models": deduped_council_models,
         "chairman_model": request.chairman_model
     }
 

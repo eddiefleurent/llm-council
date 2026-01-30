@@ -87,6 +87,26 @@ PROVIDER_DISPLAY_NAMES = {
 }
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    """Safely convert a value to float, returning default on failure."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(value, default: int = 0) -> int:
+    """Safely convert a value to int, returning default on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _parse_model(model_data: Dict[str, Any]) -> Optional[ModelInfo]:
     """Parse a model from the OpenRouter API response."""
     model_id = model_data.get("id", "")
@@ -98,15 +118,23 @@ def _parse_model(model_data: Dict[str, Any]) -> Optional[ModelInfo]:
     provider = model_id.split("/")[0]
     
     # Get pricing info (per million tokens)
-    pricing = model_data.get("pricing", {})
-    prompt_price = float(pricing.get("prompt", 0)) * 1_000_000  # Convert to per-million
-    completion_price = float(pricing.get("completion", 0)) * 1_000_000
+    # Guard against pricing being None or non-dict
+    pricing = model_data.get("pricing")
+    if not isinstance(pricing, dict):
+        pricing = {}
+    
+    # Safe conversion with fallback to 0
+    prompt_price = _safe_float(pricing.get("prompt", 0)) * 1_000_000  # Convert to per-million
+    completion_price = _safe_float(pricing.get("completion", 0)) * 1_000_000
+    
+    # Safe conversion of context_length
+    context_length = _safe_int(model_data.get("context_length", 0))
     
     return ModelInfo(
         id=model_id,
         name=model_data.get("name", model_id),
         provider=provider,
-        context_length=model_data.get("context_length", 0),
+        context_length=context_length,
         pricing_prompt=prompt_price,
         pricing_completion=completion_price,
         description=model_data.get("description"),
