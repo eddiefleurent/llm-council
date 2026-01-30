@@ -178,6 +178,10 @@ function App() {
           case 'stage1_complete':
             updateLastMessage({
               stage1: event.data,
+              errors: {
+                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
+                stage1: event.errors || []
+              },
               loading: { stage1: false, stage2: false, stage3: false },
             });
             break;
@@ -190,6 +194,10 @@ function App() {
             updateLastMessage({
               stage2: event.data,
               metadata: event.metadata,
+              errors: {
+                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
+                stage2: event.errors || []
+              },
               loading: { stage1: false, stage2: false, stage3: false },
             });
             break;
@@ -201,6 +209,10 @@ function App() {
           case 'stage3_complete':
             updateLastMessage({
               stage3: event.data,
+              errors: {
+                ...currentConversation.messages[currentConversation.messages.length - 1]?.errors,
+                stage3: event.errors || []
+              },
               loading: { stage1: false, stage2: false, stage3: false },
             });
             break;

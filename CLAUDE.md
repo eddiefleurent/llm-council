@@ -66,6 +66,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
 - Each conversation: `{id, created_at, title, messages[]}`
+- Messages now include optional `errors` field: `{stage1: [], stage2: [], stage3: []}`
+- `add_assistant_message()`: Accepts optional `errors` parameter for persistence
 - `delete_all_conversations()`: Clear all history
 
 **`main.py`**
@@ -140,6 +142,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Tab view of individual model responses
 - Copy button for each response
 - Uses `getModelDisplayName()` for safe model name display
+- **Error display**: Shows failed models in warning section with error details
+- Model count in title: "[X queried, Y successful, Z failed]"
 
 **`components/Stage2.jsx`**
 - Tab view showing RAW evaluation text from each model
@@ -147,6 +151,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Shows "Extracted Ranking" below each evaluation
 - Aggregate rankings shown with average position and vote count
 - Uses `getModelDisplayName()` for safe model name display
+- **Error display**: Shows failed models in warning section with error details
+- Model count in title: "[X queried, Y successful, Z failed]"
 
 **`components/Stage3.jsx`**
 - Final synthesized answer from chairman
@@ -195,6 +201,11 @@ Two methods available in metadata:
 - Continue with successful responses if some models fail
 - Aggregate errors in metadata for debugging
 - Human-readable error summaries for users
+- **Error persistence**: Errors are now saved to conversation files alongside stages
+- **Error visibility**: Failed models displayed in UI with error type/message
+  - Stage 1/2 show warning sections: "⚠ Failed Models: model-name - error-type"
+  - Error types: timeout, rate_limit, auth, payment, not_found, server, unknown
+  - Visual count in stage titles: "[3 models queried, 2 successful, 1 failed]"
 
 ### Multi-turn Conversations
 - Stage 1 receives full conversation context
@@ -233,7 +244,7 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend must match allowed origins in `main.py`
 3. **Ranking Parse Failures**: Fallback regex extracts any "Response X" patterns
-4. **Missing Metadata**: Metadata is ephemeral (not persisted), only in API responses
+4. **Metadata Persistence**: Rankings metadata (label_to_model, aggregate_rankings, tournament_rankings) is ephemeral (not persisted), only in API responses. Errors ARE persisted in conversation files for debugging.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 
 ## Data Flow Summary

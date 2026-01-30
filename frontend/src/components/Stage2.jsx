@@ -15,16 +15,50 @@ function deAnonymizeText(text, labelToModel) {
   return result;
 }
 
-export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
+export default function Stage2({ rankings, labelToModel, aggregateRankings, errors }) {
   const [activeTab, setActiveTab] = useState(0);
 
   if (!rankings || rankings.length === 0) {
     return null;
   }
 
+  const totalQueried = rankings.length + (errors?.length || 0);
+  const hasFailed = errors && errors.length > 0;
+
   return (
     <div className="stage stage2">
-      <h3 className="stage-title">Stage 2: Peer Rankings</h3>
+      <h3 className="stage-title">
+        Stage 2: Peer Rankings
+        {totalQueried > 0 && (
+          <span className="model-count">
+            {' '}[{totalQueried} models queried, {rankings.length} successful
+            {hasFailed && `, ${errors.length} failed`}]
+          </span>
+        )}
+      </h3>
+
+      {hasFailed && (
+        <div className="error-section">
+          <div className="error-header">⚠ Failed Models:</div>
+          <ul className="error-list">
+            {errors.map((error, index) => (
+              <li key={index} className="error-item">
+                <span className="error-model">{getModelDisplayName(error.model)}</span>
+                <span className="error-separator"> - </span>
+                <span className="error-message">
+                  {error.error_type === 'timeout' && 'Timeout (120s exceeded)'}
+                  {error.error_type === 'rate_limit' && 'Rate limit exceeded'}
+                  {error.error_type === 'auth' && 'Authentication failed'}
+                  {error.error_type === 'payment' && 'Payment required'}
+                  {error.error_type === 'not_found' && 'Model not found'}
+                  {error.error_type === 'server' && `Server error (${error.status_code})`}
+                  {error.error_type === 'unknown' && (error.message || 'Unknown error')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h4>Raw Evaluations</h4>
       <p className="stage-description">

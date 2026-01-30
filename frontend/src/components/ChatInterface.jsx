@@ -90,7 +90,7 @@ export default function ChatInterface({
                       <span>Running Stage 1: Collecting individual responses...</span>
                     </div>
                   )}
-                  {msg.stage1 && <Stage1 responses={msg.stage1} />}
+                  {msg.stage1 && <Stage1 responses={msg.stage1} errors={msg.errors?.stage1} />}
 
                   {/* Stage 2 */}
                   {msg.loading?.stage2 && (
@@ -104,6 +104,7 @@ export default function ChatInterface({
                       rankings={msg.stage2}
                       labelToModel={msg.metadata?.label_to_model}
                       aggregateRankings={msg.metadata?.aggregate_rankings}
+                      errors={msg.errors?.stage2}
                     />
                   )}
 

@@ -305,12 +305,20 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     # Run the 3-stage council process with context
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
 
-    # Add assistant message with all stages
+    # Collect all errors for persistence
+    errors = {
+        "stage1": metadata.get("errors", [])[:len(stage1_results)] if metadata.get("errors") else [],
+        "stage2": metadata.get("errors", [])[len(stage1_results):len(stage1_results)+len(stage2_results)] if metadata.get("errors") else [],
+        "stage3": metadata.get("errors", [])[len(stage1_results)+len(stage2_results):] if metadata.get("errors") else []
+    }
+
+    # Add assistant message with all stages and errors
     storage.add_assistant_message(
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        errors
     )
 
     # Return the complete response with metadata
@@ -385,12 +393,20 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 storage.update_conversation_title(conversation_id, title)
                 yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
 
-            # Save complete assistant message
+            # Collect all errors for persistence
+            errors = {
+                "stage1": stage1_errors if stage1_errors else [],
+                "stage2": stage2_errors if stage2_errors else [],
+                "stage3": stage3_errors if stage3_errors else []
+            }
+
+            # Save complete assistant message with errors
             storage.add_assistant_message(
                 conversation_id,
                 stage1_results,
                 stage2_results,
-                stage3_result
+                stage3_result,
+                errors
             )
 
             # Send completion event

@@ -75,3 +75,50 @@
   color: var(--text-primary);
   line-height: 1.6;
 }
+
+.model-count {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.error-section {
+  margin: 0 0 16px 0;
+  padding: 12px;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 6px;
+}
+
+.error-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ff9800;
+  margin-bottom: 8px;
+}
+
+.error-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.error-item {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.error-model {
+  font-family: monospace;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.error-separator {
+  color: var(--text-tertiary);
+}
+
+.error-message {
+  color: var(--text-secondary);
+}
