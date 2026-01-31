@@ -14,8 +14,16 @@ def ensure_data_dir():
 
 
 def get_conversation_path(conversation_id: str) -> str:
-    """Get the file path for a conversation."""
-    return os.path.join(DATA_DIR, f"{conversation_id}.json")
+    """Get the file path for a conversation, constrained to DATA_DIR."""
+    base_dir = os.path.realpath(DATA_DIR)
+    # Construct and normalize the path
+    fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
+
+    # Ensure the resulting path is within the data directory
+    if not (fullpath == base_dir or fullpath.startswith(base_dir + os.sep)):
+        raise ValueError("Invalid conversation_id path")
+
+    return fullpath
 
 
 def create_conversation(conversation_id: str) -> Dict[str, Any]:
