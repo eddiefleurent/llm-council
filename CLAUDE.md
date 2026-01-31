@@ -124,6 +124,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Clear History button**: Red-styled, with confirmation
 - Shows "Response in progress" warning
 - **Config button**: Opens council configuration panel (gear icon)
+- **Theme toggle button**: Moon/sun icon to switch between light/dark modes
+- Receives `theme` prop and `onToggleTheme` callback from App.jsx
 
 **`components/CouncilConfig.jsx`**
 - Modal panel for configuring council models and chairman
@@ -163,9 +165,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Copy button for response
 
 **Styling (`*.css`)**
-- Light mode theme (not dark mode)
-- Primary color: #4a90e2 (blue)
-- Global markdown styling in `index.css` with `.markdown-content` class
+- Dual-theme support: Light (default) and dark modes with CSS variables
+- Theme toggle button in sidebar header (moon/sun icons)
+- Theme preference stored in localStorage (`theme` key)
+- Light theme: `#ffffff` background, `#333` text
+- Dark theme: `#1a1a1a` background, `#e0e0e0` text
+- Primary color: `#4a90e2` (light), `#5ba3ff` (dark)
+- Color variables defined in `index.css` (`:root` and `:root[data-theme='dark']`)
+- Global markdown styling with `.markdown-content` class
 - Text overflow fixes for long content
 - Loading/disabled states for sidebar
 

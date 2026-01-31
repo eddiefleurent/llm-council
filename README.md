@@ -74,7 +74,7 @@ cd frontend
 pnpm run dev
 ```
 
-Then open http://localhost:5173 in your browser.
+Then open <http://localhost:5173> in your browser.
 
 ## How Ranking Works
 
@@ -85,7 +85,7 @@ In **Stage 2**, council members rank each other's responses using two algorithms
 
 Responses are anonymized as "Response A", "Response B", etc. to prevent bias. Models provide rankings in this format:
 
-```
+```text
 FINAL RANKING:
 1. Response C
 2. Response A
@@ -108,7 +108,7 @@ Major improvements since forking from karpathy/llm-council:
 - **Context Indicator** - Visual feedback when using conversation history
 - **Conversation Management** - Clear history, delete conversations, draft mode
 - **Comprehensive Tests** - Unit and integration tests with pytest
-- **Dark Mode** - Dark mode theme support
+- **Dark Mode** - Dark theme with toggle button, persisted via localStorage
 
 ## Tech Stack
 
