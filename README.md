@@ -10,6 +10,40 @@ In a bit more detail, here is what happens when you submit a query:
 2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
 3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
 
+## How It Works - Visual Walkthrough
+
+Try asking the council a fun, controversial question like **"Is a hot dog a sandwich?"** to see how different AI models reason through subjective debates.
+
+### Stage 1: Independent Responses
+
+Each council member independently answers your question, showcasing different reasoning styles and perspectives.
+
+![Stage 1 - Multiple model responses](docs/images/stage1-responses.png)
+
+### Stage 2: Anonymous Peer Review
+
+Models evaluate and rank each other's responses without knowing who wrote what. This prevents bias and reveals which arguments are most compelling.
+
+![Stage 2 - Rankings and evaluations](docs/images/stage2-rankings.png)
+
+### Stage 3: Chairman Synthesis
+
+The Chairman reviews all responses and rankings to produce a final, comprehensive answer that synthesizes the best insights.
+
+![Stage 3 - Chairman's final answer](docs/images/stage3-council-final-answer.png)
+
+### Configuration
+
+Customize your council through the UI - add/remove members, choose your chairman, and enable web search for real-time information.
+
+![Model Configuration Panel](docs/images/config-panel.png)
+
+Models are auto-discovered from OpenRouter's API. Browse providers and select from hundreds of available models with pricing and context length info.
+
+![OpenRouter Providers](docs/images/config-openrouter-labs.png)
+
+![OpenRouter Models](docs/images/config-openrouter-models.png)
+
 ## Resources
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/eddiefleurent/llm-council)
