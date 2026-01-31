@@ -208,6 +208,16 @@
   border-radius: 4px;
 }
 
+.pricing-info {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  cursor: help;
+}
+
 .selected-badge {
   font-size: 10px;
   color: var(--accent-primary);
