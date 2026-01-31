@@ -1,6 +1,6 @@
 # LLM Council
 
-![llmcouncil](header.jpg)
+![llmcouncil](header.png)
 
 The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, eg.c), you can group them into your "LLM Council". This repo is a simple, local web app that essentially looks like ChatGPT except it uses OpenRouter to send your query to multiple LLMs, it then asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
 
@@ -108,7 +108,7 @@ Major improvements since forking from karpathy/llm-council:
 - **Context Indicator** - Visual feedback when using conversation history
 - **Conversation Management** - Clear history, delete conversations, draft mode
 - **Comprehensive Tests** - Unit and integration tests with pytest
-- **Dark Mode** - Dark theme with toggle button, persisted via localStorage
+- **Dark Mode** - Dark theme with toggle button
 
 ## Tech Stack
 
