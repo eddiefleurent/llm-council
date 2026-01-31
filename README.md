@@ -10,6 +10,12 @@ In a bit more detail, here is what happens when you submit a query:
 2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
 3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
 
+## Resources
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/eddiefleurent/llm-council)
+
+**[Ask DeepWiki about this codebase](https://deepwiki.com/eddiefleurent/llm-council)** - AI-powered Q&A to understand the implementation, architecture, and code. Great for contributors or anyone curious about how the council system works under the hood.
+
 ## About This Fork
 
 This is an actively maintained fork of [karpathy/llm-council](https://github.com/karpathy/llm-council). While the original was a weekend hack project, this fork adds production features, better UX, and ongoing improvements. See the [Changelog](#changelog) below for what's new.
@@ -104,6 +110,7 @@ Major improvements since forking from karpathy/llm-council:
 - **Error Handling** - Graceful degradation when models fail, detailed error reporting
 - **Tournament Rankings** - Condorcet voting algorithm alongside mean position averaging
 - **Model Pricing Display** - See pricing and context limits in model selector
+- **DeepWiki Integration** - AI-powered codebase Q&A for understanding architecture and implementation
 - **Copy to Clipboard** - One-click copy for responses across all stages
 - **Context Indicator** - Visual feedback when using conversation history
 - **Conversation Management** - Clear history, delete conversations, draft mode
