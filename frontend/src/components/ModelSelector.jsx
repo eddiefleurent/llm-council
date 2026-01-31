@@ -14,6 +14,31 @@ function getModelDisplayName(model) {
 }
 
 /**
+ * Format pricing for display.
+ * Shows price per million tokens in a compact format.
+ * @param {number} price - Price per million tokens
+ * @returns {string} Formatted price string
+ */
+function formatPrice(price) {
+  if (price === null || price === undefined || !isFinite(price)) {
+    return 'N/A';
+  }
+  if (price === 0) {
+    return 'Free';
+  }
+  if (price < 0.01) {
+    return '<$0.01';
+  }
+  if (price < 1) {
+    return `$${price.toFixed(2)}`;
+  }
+  if (price < 10) {
+    return `$${price.toFixed(1)}`;
+  }
+  return `$${Math.round(price)}`;
+}
+
+/**
  * Model selector component with provider grouping.
  * 
  * @param {Object} props
@@ -155,6 +180,9 @@ export default function ModelSelector({
                           }
                           return 'N/A ctx';
                         })()}
+                      </span>
+                      <span className="pricing-info" title="Input / Output per 1M tokens">
+                        {formatPrice(model.pricing?.prompt)} / {formatPrice(model.pricing?.completion)}
                       </span>
                       {isSelected && <span className="selected-badge">Selected</span>}
                     </div>
