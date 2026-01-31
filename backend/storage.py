@@ -13,17 +13,81 @@ def ensure_data_dir():
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
-def get_conversation_path(conversation_id: str) -> str:
-    """Get the file path for a conversation, constrained to DATA_DIR."""
+def _get_safe_path(conversation_id: str) -> str:
+    """
+    Construct and validate a safe file path for a conversation.
+    
+    This function validates that the resulting path stays within DATA_DIR,
+    preventing path traversal attacks.
+    
+    Args:
+        conversation_id: The conversation identifier
+        
+    Returns:
+        Validated absolute path within DATA_DIR
+        
+    Raises:
+        ValueError: If the path would escape DATA_DIR
+    """
     base_dir = os.path.realpath(DATA_DIR)
     # Construct and normalize the path
     fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
-
-    # Ensure the resulting path is within the data directory
-    if not (fullpath == base_dir or fullpath.startswith(base_dir + os.sep)):
-        raise ValueError("Invalid conversation_id path")
-
+    
+    # Ensure the resulting path is within the data directory (path traversal protection)
+    if not fullpath.startswith(base_dir + os.sep):
+        raise ValueError("Invalid conversation_id: path traversal detected")
+    
     return fullpath
+
+
+def _safe_open_read(conversation_id: str):
+    """
+    Safely open a conversation file for reading with path validation.
+    
+    Validates the path is within DATA_DIR before opening.
+    Following CodeQL's recommended pattern for path injection prevention.
+    """
+    base_dir = os.path.realpath(DATA_DIR)
+    fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
+    
+    # GOOD: Verify path is within base directory before any file operation
+    if not fullpath.startswith(base_dir + os.sep):
+        raise ValueError("Invalid conversation_id: path traversal detected")
+    
+    return open(fullpath, 'r')
+
+
+def _safe_open_write(conversation_id: str):
+    """
+    Safely open a conversation file for writing with path validation.
+    
+    Validates the path is within DATA_DIR before opening.
+    Following CodeQL's recommended pattern for path injection prevention.
+    """
+    base_dir = os.path.realpath(DATA_DIR)
+    fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
+    
+    # GOOD: Verify path is within base directory before any file operation
+    if not fullpath.startswith(base_dir + os.sep):
+        raise ValueError("Invalid conversation_id: path traversal detected")
+    
+    return open(fullpath, 'w')
+
+
+def _safe_path_exists(conversation_id: str) -> bool:
+    """
+    Safely check if a conversation file exists with path validation.
+    
+    Validates the path is within DATA_DIR before checking existence.
+    """
+    base_dir = os.path.realpath(DATA_DIR)
+    fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
+    
+    # GOOD: Verify path is within base directory before any file operation
+    if not fullpath.startswith(base_dir + os.sep):
+        raise ValueError("Invalid conversation_id: path traversal detected")
+    
+    return os.path.exists(fullpath)
 
 
 def create_conversation(conversation_id: str) -> Dict[str, Any]:
@@ -45,9 +109,8 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
         "messages": []
     }
 
-    # Save to file
-    path = get_conversation_path(conversation_id)
-    with open(path, 'w') as f:
+    # Save to file with path validation
+    with _safe_open_write(conversation_id) as f:
         json.dump(conversation, f, indent=2)
 
     return conversation
@@ -63,12 +126,10 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Conversation dict or None if not found
     """
-    path = get_conversation_path(conversation_id)
-
-    if not os.path.exists(path):
+    if not _safe_path_exists(conversation_id):
         return None
 
-    with open(path, 'r') as f:
+    with _safe_open_read(conversation_id) as f:
         return json.load(f)
 
 
@@ -81,8 +142,7 @@ def save_conversation(conversation: Dict[str, Any]):
     """
     ensure_data_dir()
 
-    path = get_conversation_path(conversation['id'])
-    with open(path, 'w') as f:
+    with _safe_open_write(conversation['id']) as f:
         json.dump(conversation, f, indent=2)
 
 
