@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Frontend dependencies (pnpm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+      timezone: "America/New_York"
+    # Group all patch and minor updates together to reduce PR noise
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Keep major version updates separate for easier review
+    open-pull-requests-limit: 10
+    # Automatically rebase PRs when base branch updates
+    rebase-strategy: "auto"
+    # Add labels for easy filtering
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  # Backend Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+      timezone: "America/New_York"
+    # Group all patch and minor updates together
+    groups:
+      backend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 10
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "backend"
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "github-actions"
