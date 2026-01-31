@@ -243,12 +243,17 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - Run with: `uv run pytest` or `pytest`
 
 ### Frontend Quality Commands
-- **Lint all files**: `npm run lint` (from `frontend/` directory)
-- **Lint specific file**: `npx eslint src/components/ModelSelector.jsx`
-- **Auto-fix issues**: `npm run lint -- --fix` (only fixes auto-fixable issues like whitespace)
-- **Build frontend**: `npm run build` - Vite builds to `dist/`
+- **Lint all files**: `pnpm run lint` (from `frontend/` directory)
+- **Lint specific file**: `pnpm exec eslint src/components/ModelSelector.jsx`
+- **Auto-fix issues**: `pnpm run lint -- --fix` (only fixes auto-fixable issues like whitespace)
+- **Build frontend**: `pnpm run build` - Vite builds to `dist/`
 - **Note**: Unused variables (unused state, catch parameters) must be manually removed - ESLint `--fix` doesn't handle these
 - **ModelSelector behavior**: Loads providers fresh on each modal open (no caching) - uses `useEffect` dependency on `isOpen`
+
+### Documentation Maintenance
+- **README.md Changelog**: When adding significant features, update the "Changelog" section in README.md with a concise bullet point
+- Keep changelog focused on user-visible features (UI improvements, new capabilities, major fixes)
+- Technical implementation details belong in this CLAUDE.md file, not the README changelog
 
 ## Common Gotchas
 
