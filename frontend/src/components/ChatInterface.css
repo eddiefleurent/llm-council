@@ -135,6 +135,13 @@
   background: var(--bg-tertiary);
 }
 
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
 .message-input {
   flex: 1;
   padding: 14px;
@@ -173,7 +180,7 @@
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
-  align-self: flex-end;
+  min-width: 80px;
 }
 
 .send-button:hover:not(:disabled) {

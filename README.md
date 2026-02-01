@@ -74,15 +74,18 @@ pnpm install
 cd ..
 ```
 
-### 2. Configure API Key
+### 2. Configure API Keys
 
 Create a `.env` file in the project root:
 
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-...
+GROQ_API_KEY=gsk_...  # Optional: For voice transcription
 ```
 
-Get your API key at [openrouter.ai](https://openrouter.ai/). Make sure to purchase the credits you need, or sign up for automatic top up.
+Get your OpenRouter API key at [openrouter.ai](https://openrouter.ai/). Make sure to purchase the credits you need, or sign up for automatic top up.
+
+For voice transcription (optional), get a free Groq API key at [console.groq.com](https://console.groq.com/). The app works without it, but the microphone button will show setup instructions.
 
 ### 3. Configure Models (Optional)
 
@@ -138,6 +141,7 @@ Both ranking methods appear in the metadata, and the Chairman sees both when syn
 
 Major improvements since forking from karpathy/llm-council:
 
+- **Voice Transcription** - Microphone button for speech-to-text input using Groq Whisper API
 - **Dynamic Model Configuration** - Configure council/chairman via UI with auto-discovery from OpenRouter
 - **Web Search Toggle** - Enable `:online` variant for real-time information access
 - **Multi-turn Conversations** - Full conversation context with smart summarization
