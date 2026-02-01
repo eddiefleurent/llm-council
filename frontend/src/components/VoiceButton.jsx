@@ -14,6 +14,7 @@ export default function VoiceButton({ onTranscription, disabled }) {
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
+  const mimeTypeRef = useRef('audio/webm'); // Default fallback
 
   // Cleanup on unmount - release microphone stream
   useEffect(() => {
@@ -52,6 +53,9 @@ export default function VoiceButton({ onTranscription, disabled }) {
 
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
+      // Store actual MIME type from recorder for later use
+      mimeTypeRef.current = mediaRecorder.mimeType || 'audio/webm';
+
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
@@ -72,13 +76,17 @@ export default function VoiceButton({ onTranscription, disabled }) {
           return;
         }
 
-        // Create blob from chunks
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        
+        // Create blob from chunks using actual MIME type
+        const audioBlob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
+
+        // Generate filename with correct extension based on MIME type
+        const extension = mimeTypeRef.current.includes('mp4') ? 'mp4' : 'webm';
+        const filename = `recording.${extension}`;
+
         // Transcribe the audio
         setIsTranscribing(true);
         try {
-          const result = await api.transcribeAudio(audioBlob, 'recording.webm');
+          const result = await api.transcribeAudio(audioBlob, filename);
           if (result.text && result.text.trim()) {
             onTranscription(result.text);
           }
@@ -137,7 +145,7 @@ export default function VoiceButton({ onTranscription, disabled }) {
         onClick={handleClick}
         disabled={isDisabled}
         title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
-        aria-label={isRecording ? 'Stop recording' : 'Start voice dictation'}
+        aria-label={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
       >
         {isTranscribing ? (
           <span className="voice-spinner"></span>

@@ -5,6 +5,7 @@ import os
 import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from anyio import to_thread
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -173,19 +174,27 @@ async def transcribe_voice(audio: UploadFile = File(...)):
     Returns 503 with setup instructions if GROQ_API_KEY is not configured.
     """
     try:
-        # Read audio data
-        audio_data = await audio.read()
+        # Limit file size (Groq's limit is 25MB) while reading
+        MAX_SIZE = 25 * 1024 * 1024
+        chunks: list[bytes] = []
+        size = 0
+        while True:
+            chunk = await audio.read(1024 * 1024)  # 1MB chunks
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_SIZE:
+                raise HTTPException(status_code=413, detail="Audio file too large (max 25MB)")
+            chunks.append(chunk)
 
+        audio_data = b"".join(chunks)
         if not audio_data:
             raise HTTPException(status_code=400, detail="Empty audio file")
 
-        # Limit file size (Groq's limit is 25MB)
-        MAX_SIZE = 25 * 1024 * 1024
-        if len(audio_data) > MAX_SIZE:
-            raise HTTPException(status_code=413, detail="Audio file too large (max 25MB)")
-
-        # Transcribe using Groq (synchronous call)
-        text = transcribe_audio(audio_data, audio.filename or "audio.webm")
+        # Transcribe using Groq (offload to thread pool to avoid blocking event loop)
+        text = await to_thread.run_sync(
+            transcribe_audio, audio_data, audio.filename or "audio.webm"
+        )
 
         return {"text": text}
     except GroqNotConfiguredError as e:
