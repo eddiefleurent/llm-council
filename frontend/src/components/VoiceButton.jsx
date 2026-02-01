@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { api } from '../api';
 import './VoiceButton.css';
 
@@ -12,24 +12,45 @@ export default function VoiceButton({ onTranscription, disabled }) {
   const [error, setError] = useState(null);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
   const chunksRef = useRef([]);
+
+  // Cleanup on unmount - release microphone stream
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onstop = null;
+      }
+    };
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
       setError(null);
       
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-        } 
+        }
       });
 
-      // Create MediaRecorder with webm format (widely supported)
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
+      // Store stream for cleanup
+      streamRef.current = stream;
+
+      // Create MediaRecorder with best available format (Safari compatibility)
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : undefined; // Let browser choose default
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
       chunksRef.current = [];
 
@@ -41,7 +62,10 @@ export default function VoiceButton({ onTranscription, disabled }) {
 
       mediaRecorder.onstop = async () => {
         // Stop all tracks to release the microphone
-        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
 
         if (chunksRef.current.length === 0) {
           setError('No audio recorded');

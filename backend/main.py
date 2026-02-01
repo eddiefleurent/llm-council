@@ -168,20 +168,25 @@ async def refresh_models():
 async def transcribe_voice(audio: UploadFile = File(...)):
     """
     Transcribe audio using Groq's Whisper API.
-    
+
     Accepts audio files (webm, mp3, m4a, wav, etc.) and returns transcribed text.
     Returns 503 with setup instructions if GROQ_API_KEY is not configured.
     """
     try:
         # Read audio data
         audio_data = await audio.read()
-        
+
         if not audio_data:
             raise HTTPException(status_code=400, detail="Empty audio file")
-        
+
+        # Limit file size (Groq's limit is 25MB)
+        MAX_SIZE = 25 * 1024 * 1024
+        if len(audio_data) > MAX_SIZE:
+            raise HTTPException(status_code=413, detail="Audio file too large (max 25MB)")
+
         # Transcribe using Groq (synchronous call)
         text = transcribe_audio(audio_data, audio.filename or "audio.webm")
-        
+
         return {"text": text}
     except GroqNotConfiguredError as e:
         # Missing API key - return user-friendly message
