@@ -233,4 +233,37 @@ export const api = {
     }
     return response.json();
   },
+
+  // ============================================================================
+  // Voice Transcription
+  // ============================================================================
+
+  /**
+   * Transcribe audio using Groq's Whisper API.
+   * @param {Blob} audioBlob - The audio blob to transcribe
+   * @param {string} filename - Optional filename (default: "audio.webm")
+   * @returns {Promise<{text: string}>} - The transcribed text
+   */
+  async transcribeAudio(audioBlob, filename = 'audio.webm') {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, filename);
+
+    const response = await fetch(`${API_BASE}/api/transcribe`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'Failed to transcribe audio';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.json();
+  },
 };

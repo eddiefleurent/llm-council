@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ from .council import run_full_council, generate_conversation_title, stage1_colle
 from .context import build_context_messages
 from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_effective_models
 from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
+from .transcription import transcribe_audio, GroqNotConfiguredError
 
 
 @asynccontextmanager
@@ -157,6 +158,40 @@ async def refresh_models():
     except Exception as e:
         logger.exception("Failed to refresh models cache")
         raise HTTPException(status_code=502, detail=f"Failed to refresh models: {e!s}") from e
+
+
+# ============================================================================
+# Voice Transcription Endpoint
+# ============================================================================
+
+@app.post("/api/transcribe")
+async def transcribe_voice(audio: UploadFile = File(...)):
+    """
+    Transcribe audio using Groq's Whisper API.
+    
+    Accepts audio files (webm, mp3, m4a, wav, etc.) and returns transcribed text.
+    Returns 503 with setup instructions if GROQ_API_KEY is not configured.
+    """
+    try:
+        # Read audio data
+        audio_data = await audio.read()
+        
+        if not audio_data:
+            raise HTTPException(status_code=400, detail="Empty audio file")
+        
+        # Transcribe using Groq (synchronous call)
+        text = transcribe_audio(audio_data, audio.filename or "audio.webm")
+        
+        return {"text": text}
+    except GroqNotConfiguredError as e:
+        # Missing API key - return user-friendly message
+        logger.warning(f"Voice transcription not configured: {e}")
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to transcribe audio")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e!s}") from e
 
 
 # ============================================================================

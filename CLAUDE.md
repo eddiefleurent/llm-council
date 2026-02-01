@@ -72,6 +72,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `add_assistant_message()`: Accepts optional `errors` parameter for persistence
 - `delete_all_conversations()`: Clear all history
 
+**`transcription.py`** - Voice Transcription (Optional)
+- Uses Groq's Whisper API for speech-to-text
+- **Optional**: `GROQ_API_KEY` environment variable (voice feature disabled without it)
+- `GroqNotConfiguredError`: Raised when API key is missing
+- `get_groq_client()`: Lazy initialization of Groq client (imports groq only when needed)
+- `transcribe_audio()`: Synchronous function to transcribe audio bytes
+- Uses `whisper-large-v3-turbo` model for fast, accurate transcription
+
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
 - POST `/api/conversations/{id}/message` returns metadata in addition to stages
@@ -87,6 +95,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - GET `/api/council/config` - Get current config (with defaults)
 - PUT `/api/council/config` - Update council models, chairman, and web search setting
 - POST `/api/council/config/reset` - Reset to defaults
+
+**Voice Transcription Endpoint:**
+- POST `/api/transcribe` - Transcribe audio file using Groq Whisper
 
 ### Frontend Structure (`frontend/src/`)
 
@@ -104,6 +115,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `getCouncilConfig()`: Get current council configuration
 - `updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled)`: Update configuration
 - `resetCouncilConfig()`: Reset to defaults
+- `transcribeAudio(audioBlob, filename)`: Send audio for transcription
 
 **`utils.js`**
 - `getModelDisplayName()`: Safely extracts model name, handles arrays/null
@@ -114,6 +126,15 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Always visible input form** for follow-up questions
 - **Context indicator**: Shows when using conversation history (>6 messages)
 - Dynamic placeholder text for follow-ups
+- **Voice dictation**: Microphone button to record and transcribe speech
+
+**`components/VoiceButton.jsx`**
+- Records audio using MediaRecorder API (webm/opus format)
+- Sends audio to backend for transcription via Groq Whisper
+- Visual states: idle, recording (pulsing red), transcribing (spinner)
+- Appends transcribed text to input field
+- Error handling for microphone access denied/not found
+- **Setup modal**: Shows instructions when GROQ_API_KEY is not configured
 
 **`components/CopyButton.jsx`**
 - Copy-to-clipboard functionality with visual feedback
