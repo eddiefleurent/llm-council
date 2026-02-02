@@ -6,12 +6,8 @@
 // - In production/Docker: Use same hostname as frontend, but port 8001
 // - In development: Use localhost:8001
 const getApiBase = () => {
-  // If accessing from localhost, use localhost
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8001';
-  }
-  // Otherwise use the same hostname (for Docker/Unraid deployments)
-  return `http://${window.location.hostname}:8001`;
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:8001`;
 };
 
 const API_BASE = getApiBase();
