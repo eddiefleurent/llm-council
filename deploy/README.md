@@ -71,7 +71,8 @@ docker run -d \
          - ./data:/app/data
        environment:
          - OPENROUTER_API_KEY=sk-or-v1-your-key-here
-         - GROQ_API_KEY=  # Optional
+         # Optional: Groq API key for voice transcription
+         - GROQ_API_KEY=
          - PYTHONUNBUFFERED=1
    ```
 
