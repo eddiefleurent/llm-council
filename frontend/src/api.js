@@ -2,7 +2,19 @@
  * API client for the LLM Council backend.
  */
 
-const API_BASE = 'http://localhost:8001';
+// Dynamically determine API base URL:
+// - In production/Docker: Use same hostname as frontend, but port 8001
+// - In development: Use localhost:8001
+const getApiBase = () => {
+  // If accessing from localhost, use localhost
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8001';
+  }
+  // Otherwise use the same hostname (for Docker/Unraid deployments)
+  return `http://${window.location.hostname}:8001`;
+};
+
+const API_BASE = getApiBase();
 
 export const api = {
   // ============================================================================
