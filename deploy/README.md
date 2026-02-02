@@ -133,22 +133,22 @@ docker rm llm-council
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENROUTER_API_KEY` | Yes | Your OpenRouter API key from https://openrouter.ai/keys |
-| `GROQ_API_KEY` | No | Groq API key for voice transcription from https://console.groq.com/keys |
+| Variable             | Required | Description |
+|----------------------|----------|-------------|
+| `OPENROUTER_API_KEY` | Yes      | Your OpenRouter API key from [https://openrouter.ai/keys](https://openrouter.ai/keys) |
+| `GROQ_API_KEY`       | No       | Groq API key for voice transcription from [https://console.groq.com/keys](https://console.groq.com/keys) |
 
 ## Ports
 
-| Port | Service | Description |
-|------|---------|-------------|
-| 5173 | Frontend | Web UI (React app) |
-| 8001 | Backend | API server (FastAPI) |
+| Port | Service  | Description           |
+|------|----------|-----------------------|
+| 5173 | Frontend | Web UI (React app)    |
+| 8001 | Backend  | API server (FastAPI)  |
 
 ## Volume Mounts
 
-| Container Path | Description |
-|----------------|-------------|
-| `/app/data` | Persistent conversation storage (JSON files) |
+| Container Path | Description                                  |
+|----------------|----------------------------------------------|
+| `/app/data`    | Persistent conversation storage (JSON files) |
 
 Recommended host path for Unraid: `/mnt/user/appdata/llm-council/data`
