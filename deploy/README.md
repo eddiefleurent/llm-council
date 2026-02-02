@@ -113,6 +113,18 @@ curl http://localhost:5173/
 ```
 
 ### Data not persisting
+```bash
+# Verify volume mount is correct
+docker inspect llm-council | grep -A5 Mounts
+
+# Check data directory permissions (adjust path for your setup)
+ls -la ./data/  # For Docker Compose
+# or
+ls -la /mnt/user/appdata/llm-council/data/  # Unraid example
+
+# Ensure container has write permissions
+docker exec llm-council ls -la /app/data
+
 ```
 
 ## Updating
