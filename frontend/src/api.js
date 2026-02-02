@@ -7,7 +7,8 @@
 // - In development: Use localhost:8001
 const getApiBase = () => {
   const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:8001`;
+  const host = hostname.includes(':') && !hostname.startsWith('[') ? `[${hostname}]` : hostname;
+  return `${protocol}//${host}:8001`;
 };
 
 const API_BASE = getApiBase();
