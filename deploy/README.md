@@ -57,7 +57,18 @@ docker run -d \
    cd /mnt/user/appdata/llm-council
    ```
 
-3. Create `docker-compose.yml`:
+3. Create `.env` file with your API keys:
+   ```bash
+   cat > .env << 'EOF'
+   # OpenRouter API Key (REQUIRED)
+   OPENROUTER_API_KEY=sk-or-v1-your-key-here
+
+   # Groq API Key (OPTIONAL - for voice transcription)
+   # GROQ_API_KEY=gsk_your-key-here
+   EOF
+   ```
+
+4. Create `docker-compose.yml`:
    ```yaml
    services:
      llm-council:
@@ -69,19 +80,18 @@ docker run -d \
          - "8001:8001"
        volumes:
          - ./data:/app/data
+       env_file:
+         - .env
        environment:
-         - OPENROUTER_API_KEY=sk-or-v1-your-key-here
-         # Optional: Groq API key for voice transcription
-         - GROQ_API_KEY=
          - PYTHONUNBUFFERED=1
    ```
 
-4. Start container:
+5. Start container:
    ```bash
    docker compose up -d
    ```
 
-5. Access at `http://your-unraid-ip:5173`
+6. Access at `http://your-unraid-ip:5173`
 
 For Unraid-specific details, see [unraid/README.md](../unraid/README.md).
 
