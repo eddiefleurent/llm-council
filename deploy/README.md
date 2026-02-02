@@ -113,12 +113,6 @@ curl http://localhost:5173/
 ```
 
 ### Data not persisting
-```bash
-# Check volume mount
-docker inspect llm-council | grep -A5 Mounts
-
-# Verify data directory exists
-ls -la /mnt/user/appdata/llm-council/data/
 ```
 
 ## Updating
