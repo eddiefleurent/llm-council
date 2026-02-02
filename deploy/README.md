@@ -27,12 +27,12 @@
 
 4. Start container:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 5. Access at `http://localhost:5173`
 
-### Using Docker Run
+### Using Docker Run (Alternative)
 
 ```bash
 docker run -d \
@@ -59,7 +59,6 @@ docker run -d \
 
 3. Create `docker-compose.yml`:
    ```yaml
-   version: '3.8'
    services:
      llm-council:
        image: g0dfather/llm-council:latest
@@ -78,7 +77,7 @@ docker run -d \
 
 4. Start container:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 5. Access at `http://your-unraid-ip:5173`
@@ -126,8 +125,8 @@ ls -la /mnt/user/appdata/llm-council/data/
 
 ### Pull latest image
 ```bash
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
 
 ### Or with docker run

@@ -23,12 +23,12 @@ See the main [deployment guide](../deploy/README.md) for docker-compose instruct
 ## Configuration
 
 ### Required Settings
-- **OpenRouter API Key**: Get from https://openrouter.ai/keys
+- **OpenRouter API Key**: Get from [openrouter.ai/keys](https://openrouter.ai/keys)
   - Used to query LLM models
   - Without this, the app won't function
 
 ### Optional Settings
-- **Groq API Key**: Get from https://console.groq.com/keys
+- **Groq API Key**: Get from [console.groq.com/keys](https://console.groq.com/keys)
   - Enables voice transcription feature
   - App works fine without it
 

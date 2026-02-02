@@ -32,5 +32,5 @@
 
   <Config Name="OpenRouter API Key" Target="OPENROUTER_API_KEY" Default="" Mode="" Description="REQUIRED: Your OpenRouter API key (get from openrouter.ai)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
 
-  <Config Name="Groq API Key" Target="GROQ_API_KEY" Default="" Mode="" Description="OPTIONAL: Groq API key for voice transcription (get from groq.com)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="Groq API Key" Target="GROQ_API_KEY" Default="" Mode="" Description="OPTIONAL: Groq API key for voice transcription (get from console.groq.com)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
 </Container>

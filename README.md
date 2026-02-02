@@ -72,7 +72,7 @@ cp deploy/.env.example deploy/.env
 nano deploy/.env  # Add your OPENROUTER_API_KEY
 
 # Start the container
-docker-compose up -d
+docker compose up -d
 
 # Access at http://localhost:5173
 ```
