@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.venv
+*.egg-info
+
+# Node.js
+node_modules
+npm-debug.log*
+.npm
+
+# Frontend build artifacts
+frontend/.vite
+frontend/dist
+
+# Development files
+.env
+.env.local
+*.log
+
+# Tests
+tests/
+pytest.ini
+.pytest_cache
+
+# Documentation
+*.md
+!README.md
+
+# Deployment configs (user-specific)
+deploy/*.conf
+deploy/.env
+deploy/*.sh
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Data directory (users mount their own)
+data/

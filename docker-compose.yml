@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  llm-council:
+    image: g0dfather/llm-council:latest
+    container_name: llm-council
+    restart: unless-stopped
+    ports:
+      - "5173:5173"  # Frontend
+      - "8001:8001"  # Backend API
+    volumes:
+      - ./data:/app/data  # Mount local data directory
+    environment:
+      # REQUIRED: OpenRouter API Key
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # OPTIONAL: Groq API Key for voice transcription
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - PYTHONUNBUFFERED=1
