@@ -56,7 +56,52 @@ This is an actively maintained fork of [karpathy/llm-council](https://github.com
 
 The original concept by @karpathy remains brilliant: it's nice and useful to see multiple responses side by side, and the cross-opinions of all LLMs on each other's outputs provide valuable insights when evaluating model quality.
 
-## Setup
+## Quick Start - Docker 🐳
+
+The easiest way to run LLM Council is via Docker. The app is available as a pre-built image on Docker Hub.
+
+### Using Docker Compose
+
+```bash
+# Clone the repository
+git clone https://github.com/eddiefleurent/llm-council.git
+cd llm-council
+
+# Create and configure .env file
+cp deploy/.env.example deploy/.env
+nano deploy/.env  # Add your OPENROUTER_API_KEY
+
+# Start the container
+docker compose up -d
+
+# Access at http://localhost:5173
+```
+
+### Using Docker Run
+
+```bash
+docker run -d \
+  --name llm-council \
+  -p 5173:5173 \
+  -p 8001:8001 \
+  -v ./data:/app/data \
+  -e OPENROUTER_API_KEY=sk-or-v1-your-key-here \
+  --restart unless-stopped \
+  g0dfather/llm-council:latest
+```
+
+**Required**: `OPENROUTER_API_KEY` from [openrouter.ai](https://openrouter.ai/)
+**Optional**: `GROQ_API_KEY` for voice transcription from [console.groq.com](https://console.groq.com/)
+
+### Unraid Users
+
+Install using the template or docker-compose. See [unraid/README.md](unraid/README.md) for detailed instructions.
+
+---
+
+For detailed deployment options, troubleshooting, and updates, see [deploy/README.md](deploy/README.md).
+
+## Local Development Setup
 
 ### 1. Install Dependencies
 

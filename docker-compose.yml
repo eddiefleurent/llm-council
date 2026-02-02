@@ -1,0 +1,14 @@
+services:
+  llm-council:
+    image: g0dfather/llm-council:latest
+    container_name: llm-council
+    restart: unless-stopped
+    ports:
+      - "5173:5173"  # Frontend
+      - "8001:8001"  # Backend API
+    volumes:
+      - ./data:/app/data  # Mount local data directory
+    env_file:
+      - deploy/.env
+    environment:
+      - PYTHONUNBUFFERED=1
