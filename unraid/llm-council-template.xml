@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>llm-council</Name>
+  <Repository>g0dfather/llm-council:latest</Repository>
+  <Registry>https://hub.docker.com/r/g0dfather/llm-council</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/eddiefleurent/llm-council/issues</Support>
+  <Project>https://github.com/eddiefleurent/llm-council</Project>
+  <Overview>
+    LLM Council - A 3-stage deliberation system where multiple LLMs collaboratively answer questions.
+    Features anonymized peer review to prevent bias.
+  </Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:5173]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/eddiefleurent/llm-council/main/unraid/llm-council-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/eddiefleurent/llm-council/main/unraid/icon.png</Icon>
+  <Description>
+    LLM Council is a 3-stage deliberation system:
+    1. Stage 1: Multiple LLMs independently respond to your question
+    2. Stage 2: Models anonymously rank each other's responses
+    3. Stage 3: A chairman synthesizes the best answer
+
+    Requires an OpenRouter API key. Optional Groq API key for voice transcription.
+  </Description>
+
+  <Config Name="Frontend Port" Target="5173" Default="5173" Mode="tcp" Description="Web UI port" Type="Port" Display="always" Required="true" Mask="false">5173</Config>
+
+  <Config Name="Backend API Port" Target="8001" Default="8001" Mode="tcp" Description="Backend API port" Type="Port" Display="always" Required="true" Mask="false">8001</Config>
+
+  <Config Name="Data Directory" Target="/app/data" Default="/mnt/user/appdata/llm-council/data" Mode="rw" Description="Persistent conversation storage" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/llm-council/data</Config>
+
+  <Config Name="OpenRouter API Key" Target="OPENROUTER_API_KEY" Default="" Mode="" Description="REQUIRED: Your OpenRouter API key (get from openrouter.ai)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <Config Name="Groq API Key" Target="GROQ_API_KEY" Default="" Mode="" Description="OPTIONAL: Groq API key for voice transcription (get from groq.com)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
+</Container>
