@@ -148,9 +148,19 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Theme toggle button**: Moon/sun icon to switch between light/dark modes
 - Receives `theme` prop and `onToggleTheme` callback from App.jsx
 
+**`presets.js`** - Model Preset Definitions
+- `MODEL_PRESETS`: Array of predefined council configurations
+- Each preset: `{ id, name, description, icon, council_models, chairman_model }`
+- Five presets: Flagship, Balanced, Budget, Large Council, Speed
+- Model IDs validated against OpenRouter API
+- Frontend-only constant — no backend changes needed
+
 **`components/CouncilConfig.jsx`**
 - Modal panel for configuring council models and chairman
 - Shows current config with model chips (color-coded by provider)
+- **Quick Presets**: One-click preset buttons at top of panel for fast configuration
+- `handleApplyPreset()`: Replaces council models + chairman (does not touch web search)
+- Active preset detection: highlights button when current config matches a preset exactly
 - Add/remove council members
 - Select chairman model
 - **Web Search toggle**: Enable/disable `:online` variant for real-time web search
@@ -206,6 +216,15 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Models auto-discovered from OpenRouter API with 5-minute cache
 - Priority providers (OpenAI, Anthropic, Google, xAI) shown first in UI
 - Validation ensures selected models exist before saving
+
+### Model Presets
+- Frontend-only feature — presets defined in `frontend/src/presets.js`
+- **Replace, not merge**: Clicking a preset replaces all council models and chairman (intuitive "start fresh")
+- **No auto-save**: Preset populates form state; user must click Save (consistent with existing UX)
+- **Web search untouched**: Presets only affect model selection, not the web search toggle
+- **Validation on save**: If a preset model no longer exists on OpenRouter, backend validation catches it
+- **Active detection**: Preset button highlights when current form state matches a preset exactly (order-sensitive)
+- Five presets: Flagship (top-tier), Balanced (quality/cost), Budget (cost-effective), Large Council (7 diverse models), Speed (lightweight)
 
 ### Web Search (`:online` variant)
 - Enabled via toggle in Council Configuration UI
