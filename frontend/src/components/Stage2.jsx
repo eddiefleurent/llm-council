@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getModelDisplayName, getErrorMessage } from '../utils';
 import './Stage2.css';
 
@@ -75,26 +76,26 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
           {rankings[activeTab].model}
         </div>
         <div className="ranking-content markdown-content">
-          <ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {deAnonymizeText(rankings[activeTab].ranking, labelToModel)}
           </ReactMarkdown>
         </div>
 
         {rankings[activeTab].parsed_ranking &&
-         rankings[activeTab].parsed_ranking.length > 0 && (
-          <div className="parsed-ranking">
-            <strong>Extracted Ranking:</strong>
-            <ol>
-              {rankings[activeTab].parsed_ranking.map((label, i) => (
-                <li key={i}>
-                  {labelToModel && labelToModel[label]
-                    ? getModelDisplayName(labelToModel[label])
-                    : label}
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+          rankings[activeTab].parsed_ranking.length > 0 && (
+            <div className="parsed-ranking">
+              <strong>Extracted Ranking:</strong>
+              <ol>
+                {rankings[activeTab].parsed_ranking.map((label, i) => (
+                  <li key={i}>
+                    {labelToModel && labelToModel[label]
+                      ? getModelDisplayName(labelToModel[label])
+                      : label}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
       </div>
 
       {aggregateRankings && aggregateRankings.length > 0 && (

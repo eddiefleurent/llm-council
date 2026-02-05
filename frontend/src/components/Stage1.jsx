@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import CopyButton from './CopyButton';
 import { getModelDisplayName, getErrorMessage } from '../utils';
 import './Stage1.css';
@@ -56,13 +57,13 @@ export default function Stage1({ responses, errors }) {
           <div className="model-name" title={responses[activeTab].model}>
             {getModelDisplayName(responses[activeTab].model)}
           </div>
-          <CopyButton 
-            text={responses[activeTab].response} 
+          <CopyButton
+            text={responses[activeTab].response}
             label="Copy markdown response"
           />
         </div>
         <div className="response-text markdown-content">
-          <ReactMarkdown>{responses[activeTab].response}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{responses[activeTab].response}</ReactMarkdown>
         </div>
       </div>
     </div>
