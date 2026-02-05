@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { MODEL_PRESETS } from '../presets';
 import ModelSelector from './ModelSelector';
 import { getModelDisplayName } from '../utils';
 import { getProviderColor } from '../providerColors';
@@ -180,6 +181,31 @@ export default function CouncilConfig({ isOpen, onClose }) {
     setCouncilModels(councilModels.filter(m => m !== modelId));
   };
 
+  const handleApplyPreset = (preset) => {
+    setCouncilModels([...preset.council_models]);
+    setChairmanModel(preset.chairman_model);
+    // Web search toggle is intentionally left unchanged
+  };
+
+  /**
+   * Determine which preset (if any) matches the current form state exactly.
+   * Returns the preset id or null.
+   */
+  const getActivePresetId = () => {
+    for (const preset of MODEL_PRESETS) {
+      if (
+        chairmanModel === preset.chairman_model &&
+        councilModels.length === preset.council_models.length &&
+        preset.council_models.every((m, i) => councilModels[i] === m)
+      ) {
+        return preset.id;
+      }
+    }
+    return null;
+  };
+
+  const activePresetId = getActivePresetId();
+
   if (!isOpen) return null;
 
   return (
@@ -198,6 +224,29 @@ export default function CouncilConfig({ isOpen, onClose }) {
               {error && (
                 <div className="error-banner">{error}</div>
               )}
+
+              {/* Quick Presets Section */}
+              <section className="config-section">
+                <div className="section-header">
+                  <h3>Quick Presets</h3>
+                  <span className="section-hint">
+                    One-click model configurations — click Save to apply
+                  </span>
+                </div>
+                <div className="presets-grid">
+                  {MODEL_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      className={`preset-btn${activePresetId === preset.id ? ' preset-active' : ''}`}
+                      onClick={() => handleApplyPreset(preset)}
+                      title={preset.description}
+                    >
+                      <span className="preset-icon">{preset.icon}</span>
+                      <span className="preset-name">{preset.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
 
               {/* Council Members Section */}
               <section className="config-section">
