@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
@@ -77,60 +78,60 @@ export default function ChatInterface({
               </div>
             )}
             {conversation.messages.map((msg, index) => (
-            <div key={index} className="message-group">
-              {msg.role === 'user' ? (
-                <div className="user-message">
-                  <div className="message-label">You</div>
-                  <div className="message-content">
-                    <div className="markdown-content">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <div key={index} className="message-group">
+                {msg.role === 'user' ? (
+                  <div className="user-message">
+                    <div className="message-label">You</div>
+                    <div className="message-content">
+                      <div className="markdown-content">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
                     </div>
-                  </div>
-                  <CopyButton 
-                    text={msg.content} 
-                    label="Copy message"
-                  />
-                </div>
-              ) : (
-                <div className="assistant-message">
-                  <div className="message-label">LLM Council</div>
-
-                  {/* Stage 1 */}
-                  {msg.loading?.stage1 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 1: Collecting individual responses...</span>
-                    </div>
-                  )}
-                  {msg.stage1 && <Stage1 responses={msg.stage1} errors={msg.errors?.stage1} />}
-
-                  {/* Stage 2 */}
-                  {msg.loading?.stage2 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 2: Peer rankings...</span>
-                    </div>
-                  )}
-                  {msg.stage2 && (
-                    <Stage2
-                      rankings={msg.stage2}
-                      labelToModel={msg.metadata?.label_to_model}
-                      aggregateRankings={msg.metadata?.aggregate_rankings}
-                      errors={msg.errors?.stage2}
+                    <CopyButton
+                      text={msg.content}
+                      label="Copy message"
                     />
-                  )}
+                  </div>
+                ) : (
+                  <div className="assistant-message">
+                    <div className="message-label">LLM Council</div>
 
-                  {/* Stage 3 */}
-                  {msg.loading?.stage3 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 3: Final synthesis...</span>
-                    </div>
-                  )}
-                  {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
-                </div>
-              )}
-            </div>
+                    {/* Stage 1 */}
+                    {msg.loading?.stage1 && (
+                      <div className="stage-loading">
+                        <div className="spinner"></div>
+                        <span>Running Stage 1: Collecting individual responses...</span>
+                      </div>
+                    )}
+                    {msg.stage1 && <Stage1 responses={msg.stage1} errors={msg.errors?.stage1} />}
+
+                    {/* Stage 2 */}
+                    {msg.loading?.stage2 && (
+                      <div className="stage-loading">
+                        <div className="spinner"></div>
+                        <span>Running Stage 2: Peer rankings...</span>
+                      </div>
+                    )}
+                    {msg.stage2 && (
+                      <Stage2
+                        rankings={msg.stage2}
+                        labelToModel={msg.metadata?.label_to_model}
+                        aggregateRankings={msg.metadata?.aggregate_rankings}
+                        errors={msg.errors?.stage2}
+                      />
+                    )}
+
+                    {/* Stage 3 */}
+                    {msg.loading?.stage3 && (
+                      <div className="stage-loading">
+                        <div className="spinner"></div>
+                        <span>Running Stage 3: Final synthesis...</span>
+                      </div>
+                    )}
+                    {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
+                  </div>
+                )}
+              </div>
             ))}
           </>
         )}
@@ -160,7 +161,7 @@ export default function ChatInterface({
           rows={3}
         />
         <div className="input-actions">
-          <VoiceButton 
+          <VoiceButton
             onTranscription={handleTranscription}
             disabled={isLoading}
           />

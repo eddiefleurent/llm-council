@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import CopyButton from './CopyButton';
 import { getModelDisplayName } from '../utils';
 import './Stage3.css';
@@ -16,10 +17,10 @@ export default function Stage3({ finalResponse }) {
           Chairman: {getModelDisplayName(finalResponse.model)}
         </div>
         <div className="final-text markdown-content">
-          <ReactMarkdown>{finalResponse.response}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalResponse.response}</ReactMarkdown>
         </div>
-        <CopyButton 
-          text={finalResponse.response} 
+        <CopyButton
+          text={finalResponse.response}
           label="Copy response"
         />
       </div>
