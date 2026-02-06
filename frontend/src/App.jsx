@@ -14,6 +14,9 @@ function App() {
   // Message mode: "council" (full 3-stage) or "chairman" (direct chairman only)
   const [messageMode, setMessageMode] = useState('council');
 
+  // Mobile sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // Theme state
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -77,6 +80,15 @@ function App() {
   const handleSelectConversation = (id) => {
     setIsDraftMode(false);
     setCurrentConversationId(id);
+    setIsSidebarOpen(false); // Close sidebar on mobile when conversation is selected
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const closeSidebar = () => {
+    setIsSidebarOpen(false);
   };
 
   const handleClearConversations = async () => {
@@ -340,6 +352,11 @@ function App() {
 
   return (
     <div className="app">
+      {/* Mobile sidebar overlay */}
+      <div
+        className={`sidebar-mobile-overlay ${isSidebarOpen ? 'active' : ''}`}
+        onClick={closeSidebar}
+      />
       <Sidebar
         conversations={conversations}
         currentConversationId={currentConversationId}
@@ -349,6 +366,8 @@ function App() {
         isLoading={isLoading}
         theme={theme}
         onToggleTheme={toggleTheme}
+        isMobileOpen={isSidebarOpen}
+        onCloseSidebar={closeSidebar}
       />
       <ChatInterface
         conversation={currentConversation}
@@ -356,6 +375,7 @@ function App() {
         isLoading={isLoading}
         messageMode={messageMode}
         onSetMessageMode={setMessageMode}
+        onToggleSidebar={toggleSidebar}
       />
     </div>
   );

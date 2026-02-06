@@ -157,3 +157,36 @@
   color: var(--text-tertiary);
   font-weight: 400;
 }
+
+@media (max-width: 768px) {
+  .aggregate-rankings {
+    padding: 12px;
+  }
+
+  .aggregate-item {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .rank-position {
+    font-size: 14px;
+    min-width: 30px;
+  }
+
+  .rank-model {
+    font-size: 12px;
+  }
+
+  .rank-score {
+    font-size: 11px;
+  }
+
+  .stage2 .tab {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .stage2 .tab-content {
+    padding: 12px;
+  }
+}
