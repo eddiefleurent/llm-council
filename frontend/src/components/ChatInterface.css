@@ -153,9 +153,10 @@
   font-family: inherit;
   line-height: 1.5;
   outline: none;
-  resize: vertical;
+  resize: none;
   min-height: 80px;
   max-height: 300px;
+  overflow-y: auto; /* show scrollbar when max-height reached */
 }
 
 .message-input:focus {

@@ -29,6 +29,10 @@ export default function ChatInterface({
     if (input.trim() && !isLoading) {
       onSendMessage(input);
       setInput('');
+      // Reset height after sending
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     }
   };
 
@@ -39,6 +43,16 @@ export default function ChatInterface({
       handleSubmit(e);
     }
   };
+
+  // Auto-resize textarea
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
 
   // Handle voice transcription - append to current input
   const handleTranscription = useCallback((text) => {
@@ -154,11 +168,12 @@ export default function ChatInterface({
               ? "Ask your question... (Shift+Enter for new line, Enter to send)"
               : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
           }
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isLoading}
-          rows={3}
+          rows={1}
         />
         <div className="input-actions">
           <VoiceButton
