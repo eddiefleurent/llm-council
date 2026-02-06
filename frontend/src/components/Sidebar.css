@@ -5,6 +5,24 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  transition: transform 0.3s ease;
+}
+
+/* Mobile: Sidebar becomes overlay */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 900;
+    transform: translateX(-100%);
+    box-shadow: 2px 0 8px var(--shadow-heavy);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
 }
 
 .sidebar-header {

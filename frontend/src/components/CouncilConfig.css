@@ -23,12 +23,26 @@
   box-shadow: 0 20px 60px var(--shadow-heavy);
 }
 
+@media (max-width: 768px) {
+  .council-config-panel {
+    width: 95%;
+    max-height: 90vh;
+    border-radius: 8px;
+  }
+}
+
 .council-config-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-primary);
+}
+
+@media (max-width: 768px) {
+  .council-config-header {
+    padding: 16px;
+  }
 }
 
 .council-config-header h2 {
@@ -57,6 +71,12 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .council-config-content {
+    padding: 16px;
+  }
 }
 
 .loading-state {
@@ -246,6 +266,25 @@
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--border-primary);
+}
+
+@media (max-width: 768px) {
+  .config-actions {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .action-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .reset-btn,
+  .cancel-btn,
+  .save-btn {
+    flex: 1;
+  }
 }
 
 .action-group {

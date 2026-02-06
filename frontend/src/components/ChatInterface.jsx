@@ -14,6 +14,7 @@ export default function ChatInterface({
   isLoading,
   messageMode,
   onSetMessageMode,
+  onToggleSidebar,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -70,6 +71,20 @@ export default function ChatInterface({
   if (!conversation) {
     return (
       <div className="chat-interface">
+        <div className="mobile-header">
+          <button
+            className="hamburger-btn"
+            onClick={onToggleSidebar}
+            aria-label="Toggle sidebar"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <h1>LLM Council</h1>
+        </div>
         <div className="empty-state">
           <h2>Welcome to LLM Council</h2>
           <p>Create a new conversation to get started</p>
@@ -80,6 +95,20 @@ export default function ChatInterface({
 
   return (
     <div className="chat-interface">
+      <div className="mobile-header">
+        <button
+          className="hamburger-btn"
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <h1>LLM Council</h1>
+      </div>
       <div className="messages-container">
         {conversation.messages.length === 0 ? (
           <div className="empty-state">

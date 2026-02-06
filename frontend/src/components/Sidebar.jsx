@@ -11,6 +11,7 @@ export default function Sidebar({
   isLoading = false,
   theme,
   onToggleTheme,
+  isMobileOpen = false,
 }) {
   const [showConfig, setShowConfig] = useState(false);
   const handleConversationClick = (id) => {
@@ -27,7 +28,7 @@ export default function Sidebar({
 
   return (
     <>
-    <div className="sidebar">
+    <div className={`sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
         <div className="header-title-row">
           <h1>LLM Council</h1>
