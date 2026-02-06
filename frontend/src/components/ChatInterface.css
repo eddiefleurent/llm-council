@@ -135,6 +135,51 @@
   background: var(--bg-tertiary);
 }
 
+.input-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 3px;
+  width: fit-content;
+}
+
+.mode-button {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+
+.mode-button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.mode-button.active {
+  background: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 1px 3px var(--shadow-medium);
+}
+
+.mode-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .input-actions {
   display: flex;
   flex-direction: column;
@@ -157,6 +202,11 @@
   min-height: 80px;
   max-height: 300px;
   overflow-y: auto; /* show scrollbar when max-height reached */
+}
+
+/* Chairman-direct message styling */
+.chairman-direct .message-label {
+  color: var(--stage3-text);
 }
 
 .message-input:focus {

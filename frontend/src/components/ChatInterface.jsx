@@ -12,6 +12,8 @@ export default function ChatInterface({
   conversation,
   onSendMessage,
   isLoading,
+  messageMode,
+  onSetMessageMode,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -106,6 +108,21 @@ export default function ChatInterface({
                       label="Copy message"
                     />
                   </div>
+                ) : msg.mode === 'chairman' ? (
+                  <div className="assistant-message chairman-direct">
+                    <div className="message-label">Chairman Direct</div>
+
+                    {/* Chairman loading */}
+                    {msg.loading?.chairman && (
+                      <div className="stage-loading">
+                        <div className="spinner"></div>
+                        <span>Chairman is responding...</span>
+                      </div>
+                    )}
+
+                    {/* Chairman response (reuse Stage3 component) */}
+                    {msg.stage3 && <Stage3 finalResponse={msg.stage3} chairmanOnly />}
+                  </div>
                 ) : (
                   <div className="assistant-message">
                     <div className="message-label">LLM Council</div>
@@ -161,20 +178,44 @@ export default function ChatInterface({
       </div>
 
       <form className="input-form" onSubmit={handleSubmit}>
-        <textarea
-          className="message-input"
-          placeholder={
-            conversation.messages.length === 0
-              ? "Ask your question... (Shift+Enter for new line, Enter to send)"
-              : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
-          }
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-          rows={1}
-        />
+        <div className="input-main">
+          <div className="mode-toggle">
+            <button
+              type="button"
+              className={`mode-button ${messageMode === 'council' ? 'active' : ''}`}
+              onClick={() => onSetMessageMode('council')}
+              disabled={isLoading}
+              title="Full council deliberation (all 3 stages)"
+            >
+              Council
+            </button>
+            <button
+              type="button"
+              className={`mode-button ${messageMode === 'chairman' ? 'active' : ''}`}
+              onClick={() => onSetMessageMode('chairman')}
+              disabled={isLoading}
+              title="Chat directly with the chairman model"
+            >
+              Chairman
+            </button>
+          </div>
+          <textarea
+            className="message-input"
+            placeholder={
+              messageMode === 'chairman'
+                ? "Chat with the chairman... (Shift+Enter for new line, Enter to send)"
+                : conversation.messages.length === 0
+                  ? "Ask your question... (Shift+Enter for new line, Enter to send)"
+                  : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
+            }
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            rows={1}
+          />
+        </div>
         <div className="input-actions">
           <VoiceButton
             onTranscription={handleTranscription}

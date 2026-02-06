@@ -4,17 +4,19 @@ import CopyButton from './CopyButton';
 import { getModelDisplayName } from '../utils';
 import './Stage3.css';
 
-export default function Stage3({ finalResponse }) {
+export default function Stage3({ finalResponse, chairmanOnly = false }) {
   if (!finalResponse) {
     return null;
   }
 
   return (
-    <div className="stage stage3">
-      <h3 className="stage-title">Stage 3: Final Council Answer</h3>
+    <div className={`stage stage3 ${chairmanOnly ? 'chairman-only' : ''}`}>
+      <h3 className="stage-title">
+        {chairmanOnly ? 'Chairman Response' : 'Stage 3: Final Council Answer'}
+      </h3>
       <div className="final-response">
         <div className="chairman-label">
-          Chairman: {getModelDisplayName(finalResponse.model)}
+          {chairmanOnly ? '' : 'Chairman: '}{getModelDisplayName(finalResponse.model)}
         </div>
         <div className="final-text markdown-content">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalResponse.response}</ReactMarkdown>

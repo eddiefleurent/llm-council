@@ -186,6 +186,7 @@ Both ranking methods appear in the metadata, and the Chairman sees both when syn
 
 Major improvements since forking from karpathy/llm-council:
 
+- **Chairman Direct Mode** - Toggle between full council deliberation and direct chairman chat for quick follow-up refinement
 - **Voice Transcription** - Microphone button for speech-to-text input using Groq Whisper API
 - **Dynamic Model Configuration** - Configure council/chairman via UI with auto-discovery from OpenRouter
 - **Web Search Toggle** - Enable `:online` variant for real-time information access
