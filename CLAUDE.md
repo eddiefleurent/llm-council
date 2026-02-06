@@ -115,7 +115,10 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Clear history**: Deletes all conversations with confirmation
 - Handles message sending and metadata storage
 - **Message mode state**: Manages `messageMode` ("council" or "chairman") passed to ChatInterface
+- **Mobile sidebar state**: Manages `isSidebarOpen` for hamburger menu toggle
 - `handleSendMessage(content, mode)`: Routes to council or chairman streaming based on mode
+- `toggleSidebar()`: Opens/closes mobile sidebar overlay
+- `closeSidebar()`: Closes sidebar (called when conversation selected or overlay clicked)
 
 **`api.js`**
 - `deleteAllConversations()`: API call to clear history
@@ -141,6 +144,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Voice dictation**: Microphone button to record and transcribe speech
 - **Mode toggle**: Council/Chairman toggle buttons above textarea
 - **Chairman-direct display**: Shows "Chairman Direct" label and simplified response (no stages 1/2)
+- **Mobile header**: Hamburger menu button and app title (visible on mobile only)
 
 **`components/VoiceButton.jsx`**
 - Records audio using MediaRecorder API (webm/opus format)
@@ -161,6 +165,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Config button**: Opens council configuration panel (gear icon)
 - **Theme toggle button**: Moon/sun icon to switch between light/dark modes
 - Receives `theme` prop and `onToggleTheme` callback from App.jsx
+- **Mobile overlay**: Receives `isMobileOpen` prop and applies `mobile-open` class
+- Slides in from left on mobile (< 768px), positioned as fixed overlay with z-index 900
 
 **`presets.js`** - Model Preset Definitions
 - `MODEL_PRESETS`: Array of predefined council configurations
@@ -221,6 +227,29 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Global markdown styling with `.markdown-content` class
 - Text overflow fixes for long content
 - Loading/disabled states for sidebar
+
+**Mobile Responsive Design**
+- **Breakpoint**: `@media (max-width: 768px)` for tablets/phones
+- **Sidebar**: Fixed overlay with slide-in animation (translateX transition)
+  - Desktop: 260px fixed width, always visible
+  - Mobile: Full-height overlay, slides from left, hidden by default
+  - `.mobile-open` class applied when `isSidebarOpen` is true
+  - z-index 900 to appear above content
+- **Mobile Header**: Hamburger menu + app title (visible on mobile only)
+  - 3-line hamburger icon (SVG) triggers sidebar overlay
+  - Positioned at top of ChatInterface
+- **Overlay Background**: Semi-transparent backdrop (z-index 800)
+  - Appears when sidebar is open on mobile
+  - Clicking overlay closes sidebar
+- **Responsive Adjustments**:
+  - Reduced padding throughout (24px → 12px/16px)
+  - Font size increased in textarea (15px → 16px) to prevent iOS auto-zoom
+  - User message max-width 80% → 100% on mobile
+  - Provider grid 2 columns → 1 column on mobile
+  - Model cards stack vertically with metadata below
+  - Config panel width 90% → 95% on mobile
+  - Tab buttons more compact (padding reduced)
+  - Touch-friendly tap targets maintained (minimum 44px)
 
 ## Key Design Decisions
 
