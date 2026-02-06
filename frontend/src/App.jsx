@@ -95,8 +95,8 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content, mode) => {
-    const effectiveMode = mode || messageMode;
+  const handleSendMessage = async (content) => {
+    const effectiveMode = messageMode;
     setIsLoading(true);
     try {
       let conversationId = currentConversationId;

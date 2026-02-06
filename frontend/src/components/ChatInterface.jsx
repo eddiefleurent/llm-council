@@ -170,7 +170,7 @@ export default function ChatInterface({
         {isLoading && (
           <div className="loading-indicator">
             <div className="spinner"></div>
-            <span>Consulting the council...</span>
+            <span>{messageMode === 'chairman' ? 'Chairman is responding...' : 'Consulting the council...'}</span>
           </div>
         )}
 
