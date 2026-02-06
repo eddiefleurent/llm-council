@@ -510,6 +510,13 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
     except Exception:
+        # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
+        if title_task and not title_task.done():
+            title_task.cancel()
+            try:
+                await title_task
+            except asyncio.CancelledError:
+                pass
         logger.exception("Error in chairman streaming process")
         yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
@@ -589,6 +596,13 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
     except Exception:
+        # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
+        if title_task and not title_task.done():
+            title_task.cancel()
+            try:
+                await title_task
+            except asyncio.CancelledError:
+                pass
         logger.exception("Error in streaming council process")
         # Send sanitized error event (don't leak internal details)
         yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"

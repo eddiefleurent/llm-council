@@ -173,7 +173,7 @@ function App() {
               break;
 
             case 'title_complete':
-              loadConversations();
+              // Title updated; conversations list will refresh on 'complete'
               break;
 
             case 'complete':
