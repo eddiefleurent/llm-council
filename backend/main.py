@@ -9,7 +9,7 @@ from anyio import to_thread
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 import uuid
 import json
 import asyncio
@@ -17,7 +17,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings
+from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings, chairman_direct_response
 from .context import build_context_messages
 from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_effective_models
 from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
@@ -61,6 +61,7 @@ class CreateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
+    mode: Literal["council", "chairman"] = "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
 
 
 class UpdateCouncilConfigRequest(BaseModel):
@@ -361,9 +362,16 @@ async def get_conversation(conversation_id: str):
 @app.post("/api/conversations/{conversation_id}/message")
 async def send_message(conversation_id: str, request: SendMessageRequest):
     """
-    Send a message and run the 3-stage council process.
-    Returns the complete response with all stages.
+    Send a message and get a response.
+
+    Supports two modes:
+    - "council" (default): Full 3-stage council process
+    - "chairman": Direct chairman-only response for follow-up refinement
     """
+    # Validate mode
+    if request.mode not in ("council", "chairman"):
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.")
+
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
@@ -388,7 +396,17 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         request.content
     )
 
-    # Run the 3-stage council process with context
+    if request.mode == "chairman":
+        # Chairman-only mode
+        result, errors = await chairman_direct_response(messages)
+        storage.add_chairman_message(conversation_id, result, errors if errors else None)
+        return {
+            "mode": "chairman",
+            "stage3": result,
+            "errors": errors if errors else []
+        }
+
+    # Full council mode
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
 
     # Extract structured errors directly from metadata
@@ -405,6 +423,7 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 
     # Return the complete response with metadata
     return {
+        "mode": "council",
         "stage1": stage1_results,
         "stage2": stage2_results,
         "stage3": stage3_result,
@@ -415,9 +434,18 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 @app.post("/api/conversations/{conversation_id}/message/stream")
 async def send_message_stream(conversation_id: str, request: SendMessageRequest):
     """
-    Send a message and stream the 3-stage council process.
+    Send a message and stream the response.
+
+    Supports two modes:
+    - "council" (default): Full 3-stage council process
+    - "chairman": Direct chairman-only response for follow-up refinement
+
     Returns Server-Sent Events as each stage completes.
     """
+    # Validate mode
+    if request.mode not in ("council", "chairman"):
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.")
+
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
@@ -426,92 +454,166 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
 
-    async def event_generator():
-        try:
-            # Add user message
-            storage.add_user_message(conversation_id, request.content)
-
-            # Start title generation in parallel (don't await yet)
-            title_task = None
-            if is_first_message:
-                title_task = asyncio.create_task(generate_conversation_title(request.content))
-
-            # Build context messages from conversation history
-            # Re-fetch conversation to get the user message we just added
-            conv = storage.get_conversation(conversation_id)
-            messages = await build_context_messages(
-                conv["messages"][:-1],  # Exclude the user message we just added
-                request.content
-            )
-
-            # Get effective models (applies :online suffix if web search enabled)
-            effective = get_effective_models()
-            council_models = effective["council_models"]
-            chairman_model = effective["chairman_model"]
-
-            # Stage 1: Collect responses with context
-            yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
-            yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
-
-            # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
-            if not stage1_results:
-                # Cancel title task if running
-                if title_task:
-                    title_task.cancel()
-                yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
-                return
-
-            # Stage 2: Collect rankings
-            yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(request.content, stage1_results, council_models)
-            aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
-            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
-
-            # Stage 3: Synthesize final answer
-            yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result, stage3_errors = await stage3_synthesize_final(request.content, stage1_results, stage2_results, chairman_model)
-            yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
-
-            # Wait for title generation if it was started
-            if title_task:
-                title = await title_task
-                storage.update_conversation_title(conversation_id, title)
-                yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
-
-            # Collect all errors for persistence
-            errors = {
-                "stage1": stage1_errors if stage1_errors else [],
-                "stage2": stage2_errors if stage2_errors else [],
-                "stage3": stage3_errors if stage3_errors else []
-            }
-
-            # Save complete assistant message with errors
-            storage.add_assistant_message(
-                conversation_id,
-                stage1_results,
-                stage2_results,
-                stage3_result,
-                errors
-            )
-
-            # Send completion event
-            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-
-        except Exception as e:
-            logger.exception("Error in streaming council process")
-            # Send sanitized error event (don't leak internal details)
-            yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
+    if request.mode == "chairman":
+        return StreamingResponse(
+            _chairman_stream(conversation_id, request.content, is_first_message),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     return StreamingResponse(
-        event_generator(),
+        _council_stream(conversation_id, request.content, is_first_message),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+async def _chairman_stream(conversation_id: str, content: str, is_first_message: bool):
+    """Stream a chairman-only response (no council stages)."""
+    # Initialize title_task before any operation that could raise
+    title_task = None
+    try:
+        # Add user message
+        storage.add_user_message(conversation_id, content)
+
+        # Start title generation in parallel (don't await yet)
+        if is_first_message:
+            title_task = asyncio.create_task(generate_conversation_title(content))
+
+        # Build context messages from conversation history
+        conv = storage.get_conversation(conversation_id)
+        messages = await build_context_messages(
+            conv["messages"][:-1],
+            content
+        )
+
+        # Signal chairman mode to frontend
+        yield f"data: {json.dumps({'type': 'chairman_start'})}\n\n"
+
+        # Query chairman directly
+        result, errors = await chairman_direct_response(messages)
+
+        yield f"data: {json.dumps({'type': 'chairman_complete', 'data': result, 'errors': errors if errors else None})}\n\n"
+
+        # Wait for title generation if it was started
+        if title_task:
+            title = await title_task
+            storage.update_conversation_title(conversation_id, title)
+            yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+
+        # Persist chairman message
+        storage.add_chairman_message(
+            conversation_id,
+            result,
+            errors if errors else None
+        )
+
+        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
+    except Exception:
+        # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
+        if title_task and not title_task.done():
+            title_task.cancel()
+            try:
+                await title_task
+            except asyncio.CancelledError:
+                pass
+        logger.exception("Error in chairman streaming process")
+        yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
+
+
+async def _council_stream(conversation_id: str, content: str, is_first_message: bool):
+    """Stream the full 3-stage council process."""
+    # Initialize title_task before any operation that could raise
+    title_task = None
+    try:
+        # Add user message
+        storage.add_user_message(conversation_id, content)
+
+        # Start title generation in parallel (don't await yet)
+        if is_first_message:
+            title_task = asyncio.create_task(generate_conversation_title(content))
+
+        # Build context messages from conversation history
+        # Re-fetch conversation to get the user message we just added
+        conv = storage.get_conversation(conversation_id)
+        messages = await build_context_messages(
+            conv["messages"][:-1],  # Exclude the user message we just added
+            content
+        )
+
+        # Get effective models (applies :online suffix if web search enabled)
+        effective = get_effective_models()
+        council_models = effective["council_models"]
+        chairman_model = effective["chairman_model"]
+
+        # Stage 1: Collect responses with context
+        yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
+        stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
+        yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
+
+        # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
+        if not stage1_results:
+            # Cancel title task if running and await it to prevent warnings
+            # Use broad exception handling to prevent title_task errors from masking the primary error
+            if title_task and not title_task.done():
+                title_task.cancel()
+                try:
+                    await title_task
+                except Exception:
+                    # Suppress any title generation errors to preserve short-circuit flow
+                    pass
+            yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
+            return
+
+        # Stage 2: Collect rankings
+        yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
+        stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(content, stage1_results, council_models)
+        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+        tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
+        yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
+
+        # Stage 3: Synthesize final answer
+        yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
+        stage3_result, stage3_errors = await stage3_synthesize_final(content, stage1_results, stage2_results, chairman_model)
+        yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
+
+        # Wait for title generation if it was started
+        if title_task:
+            title = await title_task
+            storage.update_conversation_title(conversation_id, title)
+            yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+
+        # Collect all errors for persistence
+        errors = {
+            "stage1": stage1_errors if stage1_errors else [],
+            "stage2": stage2_errors if stage2_errors else [],
+            "stage3": stage3_errors if stage3_errors else []
+        }
+
+        # Save complete assistant message with errors
+        storage.add_assistant_message(
+            conversation_id,
+            stage1_results,
+            stage2_results,
+            stage3_result,
+            errors
+        )
+
+        # Send completion event
+        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
+    except Exception:
+        # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
+        if title_task and not title_task.done():
+            title_task.cancel()
+            try:
+                await title_task
+            except asyncio.CancelledError:
+                pass
+        logger.exception("Error in streaming council process")
+        # Send sanitized error event (don't leak internal details)
+        yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
 
 if __name__ == "__main__":

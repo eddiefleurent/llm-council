@@ -471,6 +471,67 @@ def calculate_tournament_rankings(
     return results
 
 
+async def chairman_direct_response(
+    messages: List[Dict[str, str]],
+    chairman_model: Optional[str] = None
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Query the chairman model directly without the full council process.
+
+    Used for follow-up refinement where the user wants to iterate on the
+    answer with just the chairman, without running all 3 stages again.
+
+    Args:
+        messages: Full message history in OpenAI format
+        chairman_model: Optional model ID for chairman (defaults to configured chairman)
+
+    Returns:
+        Tuple of (result dict with 'model' and 'response' keys, errors list)
+    """
+    # Use provided model or fall back to configured/default
+    if chairman_model is None:
+        config = get_council_config()
+        chairman_model = config["chairman_model"]
+
+    # Apply :online suffix if web search is enabled
+    effective = get_effective_models(chairman_model=chairman_model)
+    chairman_model = effective["chairman_model"]
+
+    print(f"[Chairman Direct] Model: {chairman_model}")
+
+    # Query the chairman model directly with conversation context
+    response = await query_model(chairman_model, messages)
+
+    errors = []
+    if is_error(response):
+        if isinstance(response, ModelQueryError):
+            error_info = response.to_dict()
+            errors.append(error_info)
+            print(f"[Chairman Direct] ✗ Failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}")
+            return {
+                "model": chairman_model,
+                "response": f"Error: {error_info['message']}",
+                "error": error_info
+            }, errors
+        else:
+            errors.append({
+                'error_type': 'unknown',
+                'message': 'Unknown error occurred',
+                'model': chairman_model
+            })
+            print("[Chairman Direct] ✗ Failed: unknown error")
+            return {
+                "model": chairman_model,
+                "response": "Error: Unable to generate response."
+            }, errors
+
+    print("[Chairman Direct] ✓ Response complete")
+    return {
+        "model": chairman_model,
+        "response": response.get('content', '')
+    }, errors
+
+
 async def generate_conversation_title(user_query: str, chairman_model: Optional[str] = None) -> str:
     """
     Generate a short title for a conversation based on the first user message.

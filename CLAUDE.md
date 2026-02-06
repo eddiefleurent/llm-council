@@ -51,6 +51,11 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Chairman synthesizes from all responses + rankings
   - Optional `chairman_model` parameter
   - Returns tuple: (result, errors)
+- `chairman_direct_response(messages, chairman_model=None)`:
+  - Queries the chairman model directly with full conversation context
+  - Skips all 3 stages — just a direct LLM call for follow-up refinement
+  - Applies `:online` suffix if web search is enabled
+  - Returns tuple: (result, errors)
 - `run_full_council(messages, council_models=None, chairman_model=None, web_search_enabled=None)`: Full orchestration
   - Now accepts optional model parameters and web search flag
   - Metadata now includes `council_models`, `chairman_model`, and `web_search_enabled` used
@@ -70,6 +75,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Each conversation: `{id, created_at, title, messages[]}`
 - Messages now include optional `errors` field: `{stage1: [], stage2: [], stage3: []}`
 - `add_assistant_message()`: Accepts optional `errors` parameter for persistence
+- `add_chairman_message()`: Stores chairman-only responses (mode="chairman", stage3 only, no stage1/stage2)
 - `delete_all_conversations()`: Clear all history
 
 **`transcription.py`** - Voice Transcription (Optional)
@@ -82,7 +88,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
-- POST `/api/conversations/{id}/message` returns metadata in addition to stages
+- POST `/api/conversations/{id}/message` accepts `mode` param: "council" (default) or "chairman"
+- POST `/api/conversations/{id}/message/stream` accepts `mode` param: "council" (default) or "chairman"
+- Streaming endpoint delegates to `_council_stream()` or `_chairman_stream()` based on mode
 - DELETE `/api/conversations` clears all conversations
 - Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, web_search_enabled, errors
 
@@ -106,6 +114,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Draft mode**: Conversations created on first message (prevents empty convos)
 - **Clear history**: Deletes all conversations with confirmation
 - Handles message sending and metadata storage
+- **Message mode state**: Manages `messageMode` ("council" or "chairman") passed to ChatInterface
+- `handleSendMessage(content, mode)`: Routes to council or chairman streaming based on mode
 
 **`api.js`**
 - `deleteAllConversations()`: API call to clear history
@@ -116,6 +126,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled)`: Update configuration
 - `resetCouncilConfig()`: Reset to defaults
 - `transcribeAudio(audioBlob, filename)`: Send audio for transcription
+- `sendMessage(conversationId, content, mode)`: Now accepts `mode` parameter
+- `sendMessageStream(conversationId, content, onEvent, mode)`: Now accepts `mode` parameter
 
 **`utils.js`**
 - `getModelDisplayName()`: Safely extracts model name, handles arrays/null
@@ -125,8 +137,10 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Enter to send, Shift+Enter for new line
 - **Always visible input form** for follow-up questions
 - **Context indicator**: Shows when using conversation history (>6 messages)
-- Dynamic placeholder text for follow-ups
+- Dynamic placeholder text for follow-ups (changes based on mode)
 - **Voice dictation**: Microphone button to record and transcribe speech
+- **Mode toggle**: Council/Chairman toggle buttons above textarea
+- **Chairman-direct display**: Shows "Chairman Direct" label and simplified response (no stages 1/2)
 
 **`components/VoiceButton.jsx`**
 - Records audio using MediaRecorder API (webm/opus format)
@@ -194,6 +208,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Final synthesized answer from chairman
 - Green-tinted background (#f0fff0)
 - Copy button for response
+- Accepts `chairmanOnly` prop: adjusts title ("Chairman Response" vs "Stage 3: Final Council Answer")
 
 **Styling (`*.css`)**
 - Dual-theme support: Light (default) and dark modes with CSS variables
@@ -233,6 +248,18 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Provides real-time information access beyond model training data
 - Applied at query time via `get_effective_models()` - base model IDs stored in config
 - See: [OpenRouter :online variant docs](https://openrouter.ai/docs/guides/routing/model-variants/online)
+
+### Chairman Direct Mode
+- Users can toggle between "Council" and "Chairman" modes via buttons above the input
+- **Council mode** (default): Full 3-stage deliberation with all council models
+- **Chairman mode**: Sends message directly to the chairman model, skipping stages 1-3
+- Useful for iterating on an answer without the overhead of a full council round
+- Users can freely switch between modes mid-conversation (e.g., council → chairman → council)
+- Chairman-only messages are stored with `mode: "chairman"` in the conversation JSON
+- Chairman messages have `stage3` (the response) but `stage1` and `stage2` are `null`
+- `format_assistant_message()` in `context.py` already handles both formats via `stage3.response`
+- SSE events for chairman mode: `chairman_start` → `chairman_complete` → `complete`
+- Frontend displays chairman-only messages with "Chairman Direct" label and green-tinted styling
 
 ### Stage 2 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
@@ -312,6 +339,7 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 
 ## Data Flow Summary
 
+### Council Mode (default)
 ```text
 User Query
     ↓
@@ -328,6 +356,19 @@ Stage 3: Chairman synthesis → [result, errors]
 Return: {stage1, stage2, stage3, metadata: {rankings, errors}}
     ↓
 Frontend: Display with tabs + copy buttons + validation UI
+```
+
+### Chairman Direct Mode
+```text
+User Query
+    ↓
+Build Context (summarize if long conversation)
+    ↓
+Chairman Direct: Query chairman with full context → [result, errors]
+    ↓
+Return: {stage3: result, mode: "chairman"}
+    ↓
+Frontend: Display chairman response (no stage 1/2 tabs)
 ```
 
 The entire flow is async/parallel where possible to minimize latency.

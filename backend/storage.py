@@ -232,6 +232,42 @@ def add_assistant_message(
     save_conversation(conversation)
 
 
+def add_chairman_message(
+    conversation_id: str,
+    response: Dict[str, Any],
+    errors: Optional[List[Dict[str, Any]]] = None
+):
+    """
+    Add a chairman-only message to a conversation.
+
+    These are direct responses from the chairman model without the full
+    3-stage council process. Used for follow-up refinement.
+
+    Args:
+        conversation_id: Conversation identifier
+        response: Chairman response dict with 'model' and 'response' keys
+        errors: Optional list of errors from the chairman query
+    """
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError(f"Conversation {conversation_id} not found")
+
+    message = {
+        "role": "assistant",
+        "mode": "chairman",
+        "stage3": response,
+        # No stage1/stage2 for chairman-only messages
+        "stage1": None,
+        "stage2": None,
+    }
+
+    if errors:
+        message["errors"] = {"chairman": errors}
+
+    conversation["messages"].append(message)
+    save_conversation(conversation)
+
+
 def update_conversation_title(conversation_id: str, title: str):
     """
     Update the title of a conversation.
