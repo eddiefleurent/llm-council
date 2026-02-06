@@ -9,7 +9,7 @@ from anyio import to_thread
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 import uuid
 import json
 import asyncio
@@ -61,7 +61,7 @@ class CreateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
-    mode: str = "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
+    mode: Literal["council", "chairman"] = "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
 
 
 class UpdateCouncilConfigRequest(BaseModel):
@@ -552,9 +552,13 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
 
         # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
         if not stage1_results:
-            # Cancel title task if running
+            # Cancel title task if running and await it to prevent warnings
             if title_task:
                 title_task.cancel()
+                try:
+                    await title_task
+                except asyncio.CancelledError:
+                    pass
             yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
             return
 
