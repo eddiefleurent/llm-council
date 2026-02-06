@@ -470,12 +470,13 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
 async def _chairman_stream(conversation_id: str, content: str, is_first_message: bool):
     """Stream a chairman-only response (no council stages)."""
+    # Initialize title_task before any operation that could raise
+    title_task = None
     try:
         # Add user message
         storage.add_user_message(conversation_id, content)
 
         # Start title generation in parallel (don't await yet)
-        title_task = None
         if is_first_message:
             title_task = asyncio.create_task(generate_conversation_title(content))
 
@@ -523,12 +524,13 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
 
 async def _council_stream(conversation_id: str, content: str, is_first_message: bool):
     """Stream the full 3-stage council process."""
+    # Initialize title_task before any operation that could raise
+    title_task = None
     try:
         # Add user message
         storage.add_user_message(conversation_id, content)
 
         # Start title generation in parallel (don't await yet)
-        title_task = None
         if is_first_message:
             title_task = asyncio.create_task(generate_conversation_title(content))
 
