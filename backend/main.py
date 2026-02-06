@@ -555,11 +555,13 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
         # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
         if not stage1_results:
             # Cancel title task if running and await it to prevent warnings
-            if title_task:
+            # Use broad exception handling to prevent title_task errors from masking the primary error
+            if title_task and not title_task.done():
                 title_task.cancel()
                 try:
                     await title_task
-                except asyncio.CancelledError:
+                except Exception:
+                    # Suppress any title generation errors to preserve short-circuit flow
                     pass
             yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
             return
