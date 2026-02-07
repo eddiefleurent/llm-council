@@ -166,7 +166,9 @@ export const api = {
       `${API_BASE}/api/conversations/${conversationId}`
     );
     if (!response.ok) {
-      throw new Error('Failed to get conversation');
+      const error = new Error('Failed to get conversation');
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   },

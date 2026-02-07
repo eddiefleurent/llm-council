@@ -67,16 +67,34 @@ function App() {
             setCurrentConversationId(lastId);
             setIsDraftMode(false);
           })
-          .catch(() => {
-            // Conversation doesn't exist, start fresh
-            setIsDraftMode(true);
-            setCurrentConversationId(null);
-            setCurrentConversation({
-              id: null,
-              created_at: new Date().toISOString(),
-              title: 'New Conversation',
-              messages: [],
-            });
+          .catch((error) => {
+            console.error('Failed to restore conversation:', error);
+
+            // Only clear state for 404 (conversation not found)
+            // For network errors or 5xx errors, keep existing state
+            if (error.status === 404) {
+              // Conversation was deleted, start fresh
+              setIsDraftMode(true);
+              setCurrentConversationId(null);
+              setCurrentConversation({
+                id: null,
+                created_at: new Date().toISOString(),
+                title: 'New Conversation',
+                messages: [],
+              });
+            } else {
+              // Network error or server error - show user a message but keep state
+              console.warn('Could not restore last conversation due to network/server error');
+              // Fall back to draft mode for safety
+              setIsDraftMode(true);
+              setCurrentConversationId(null);
+              setCurrentConversation({
+                id: null,
+                created_at: new Date().toISOString(),
+                title: 'New Conversation',
+                messages: [],
+              });
+            }
           });
       } else {
         // No last conversation, start fresh

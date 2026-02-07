@@ -398,6 +398,30 @@ async def create_conversation(request: CreateConversationRequest):
     they will be stored as this conversation's configuration.
     Otherwise, the conversation will use the global config.
     """
+    # Validate per-conversation config if provided
+    if request.council_models is not None and (
+        not request.council_models
+        or not all(isinstance(m, str) and m.strip() for m in request.council_models)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="council_models must be a non-empty list of non-empty strings",
+        )
+
+    if request.chairman_model is not None and (
+        not request.chairman_model or not request.chairman_model.strip()
+    ):
+        raise HTTPException(
+            status_code=400, detail="chairman_model must be a non-empty string"
+        )
+
+    if request.web_search_enabled is not None and not isinstance(
+        request.web_search_enabled, bool
+    ):
+        raise HTTPException(
+            status_code=400, detail="web_search_enabled must be a boolean"
+        )
+
     conversation_id = str(uuid.uuid4())
     conversation = storage.create_conversation(
         conversation_id,

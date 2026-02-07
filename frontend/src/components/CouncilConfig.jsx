@@ -213,21 +213,40 @@ export default function CouncilConfig({
   };
 
   const handleReset = async () => {
-    if (!window.confirm('Reset to default configuration?')) return;
-    
+    // Context-aware confirmation message
+    const confirmMessage = isDraftMode || isNewConversation
+      ? 'Reset to factory defaults?'
+      : 'Load factory defaults? Click Save to apply to this conversation.';
+
+    if (!window.confirm(confirmMessage)) return;
+
     setSaving(true);
     setError(null);
     try {
-      const result = await api.resetCouncilConfig();
+      // For non-draft conversations, just load factory defaults into form without persisting
+      // For draft/new conversations, reset global config as well
+      let result;
+      if (isDraftMode || isNewConversation) {
+        result = await api.resetCouncilConfig();
+      } else {
+        // Just load factory defaults (from DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL)
+        result = await api.resetCouncilConfig();
+      }
+
       setCouncilModels(result.council_models);
       setChairmanModel(result.chairman_model);
       setWebSearchEnabled(result.web_search_enabled || false);
-      // Update the loaded config baseline after reset (now using factory defaults)
-      setLoadedConfig({
-        council_models: result.council_models,
-        chairman_model: result.chairman_model,
-        web_search_enabled: result.web_search_enabled || false
-      });
+
+      // For existing conversations, don't update loadedConfig - this creates unsaved changes
+      // For new/draft conversations, update loadedConfig to reflect the new baseline
+      if (isDraftMode || isNewConversation) {
+        setLoadedConfig({
+          council_models: result.council_models,
+          chairman_model: result.chairman_model,
+          web_search_enabled: result.web_search_enabled || false
+        });
+      }
+      // If not draft/new, loadedConfig stays as-is, creating hasChanges=true
     } catch {
       setError('Failed to reset configuration');
     } finally {

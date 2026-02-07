@@ -347,9 +347,7 @@
   transition: border-color 0.2s;
 }
 
-.message-input:focus {
-  border-color: var(--accent-primary);
-}
+/* Focus styling moved below to avoid duplication */
 
 @media (max-width: 768px) {
   .message-input {
