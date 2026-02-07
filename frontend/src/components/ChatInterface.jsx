@@ -6,6 +6,9 @@ import Stage2 from './Stage2';
 import Stage3 from './Stage3';
 import CopyButton from './CopyButton';
 import VoiceButton from './VoiceButton';
+import CouncilConfig from './CouncilConfig';
+import { api } from '../api';
+import { getModelDisplayName } from '../utils';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -15,8 +18,14 @@ export default function ChatInterface({
   messageMode,
   onSetMessageMode,
   onToggleSidebar,
+  isDraftMode = false,
+  draftConfig = null,
+  onDraftConfigChange,
 }) {
   const [input, setInput] = useState('');
+  const [showConfig, setShowConfig] = useState(false);
+  const [conversationConfig, setConversationConfig] = useState(null);
+  const [loadingConfig, setLoadingConfig] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -26,6 +35,57 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [conversation]);
+
+  const loadConversationConfig = useCallback(async () => {
+    if (!conversation?.id) return;
+
+    // Clear stale config before loading
+    setConversationConfig(null);
+    setLoadingConfig(true);
+    try {
+      const config = await api.getConversationConfig(conversation.id);
+      setConversationConfig(config);
+    } catch (error) {
+      console.error('Failed to load conversation config:', error);
+      setConversationConfig(null); // Clear on error
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, [conversation?.id]);
+
+  const loadGlobalConfigForDraft = useCallback(async () => {
+    // Clear stale config before loading
+    setConversationConfig(null);
+    setLoadingConfig(true);
+    try {
+      const config = await api.getCouncilConfig();
+      setConversationConfig({
+        council_models: config.council_models,
+        chairman_model: config.chairman_model,
+        web_search_enabled: config.web_search_enabled,
+      });
+    } catch (error) {
+      console.error('Failed to load global config:', error);
+      setConversationConfig(null); // Clear on error
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, []);
+
+  // Load conversation config when conversation changes
+  useEffect(() => {
+    if (conversation?.id) {
+      loadConversationConfig();
+    } else if (isDraftMode && draftConfig) {
+      // Use draft config for display
+      setConversationConfig(draftConfig);
+    } else if (isDraftMode) {
+      // Load global config for draft mode
+      loadGlobalConfigForDraft();
+    } else {
+      setConversationConfig(null);
+    }
+  }, [conversation?.id, isDraftMode, draftConfig, loadConversationConfig, loadGlobalConfigForDraft]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -207,7 +267,7 @@ export default function ChatInterface({
       </div>
 
       <form className="input-form" onSubmit={handleSubmit}>
-        <div className="input-main">
+        <div className="input-header">
           <div className="mode-toggle">
             <button
               type="button"
@@ -228,37 +288,84 @@ export default function ChatInterface({
               Chairman
             </button>
           </div>
-          <textarea
-            className="message-input"
-            placeholder={
-              messageMode === 'chairman'
-                ? "Chat with the chairman... (Shift+Enter for new line, Enter to send)"
-                : conversation.messages.length === 0
-                  ? "Ask your question... (Shift+Enter for new line, Enter to send)"
-                  : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
-            }
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            rows={1}
-          />
-        </div>
-        <div className="input-actions">
-          <VoiceButton
-            onTranscription={handleTranscription}
-            disabled={isLoading}
-          />
           <button
-            type="submit"
-            className="send-button"
-            disabled={!input.trim() || isLoading}
+            type="button"
+            className="config-btn-chat"
+            onClick={() => setShowConfig(true)}
+            disabled={isLoading}
+            title="Configure models for this conversation"
+            aria-label="Configure models"
           >
-            Send
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
           </button>
         </div>
+        <div className="input-row">
+          <div className="input-main">
+            <textarea
+              className="message-input"
+              placeholder={
+                messageMode === 'chairman'
+                  ? "Chat with the chairman... (Shift+Enter for new line, Enter to send)"
+                  : conversation.messages.length === 0
+                    ? "Ask your question... (Shift+Enter for new line, Enter to send)"
+                    : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
+              }
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+              rows={1}
+            />
+            {conversationConfig && !loadingConfig && (
+              <div className="model-indicator">
+                <span className="indicator-label">
+                  {conversationConfig.web_search_enabled && '🌐 '}
+                  Council: {conversationConfig.council_models.length} models
+                </span>
+                <span className="indicator-separator">•</span>
+                <span className="indicator-label">
+                  Chairman: {getModelDisplayName(conversationConfig.chairman_model)}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="input-actions">
+            <VoiceButton
+              onTranscription={handleTranscription}
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!input.trim() || isLoading}
+            >
+              Send
+            </button>
+          </div>
+        </div>
       </form>
+
+      <CouncilConfig
+        isOpen={showConfig}
+        onClose={() => {
+          setShowConfig(false);
+          if (conversation?.id) {
+            loadConversationConfig(); // Reload config after closing
+          } else if (isDraftMode && !draftConfig) {
+            // Only reload global config if no custom draft config exists
+            loadGlobalConfigForDraft();
+          }
+        }}
+        conversationId={conversation?.id}
+        isNewConversation={conversation?.messages?.length === 0 || isDraftMode}
+        isDraftMode={isDraftMode}
+        draftConfig={draftConfig}
+        onDraftConfigChange={onDraftConfigChange}
+      />
     </div>
   );
 }

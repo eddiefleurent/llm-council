@@ -20,7 +20,6 @@ from .config import (
     DEFAULT_CHAIRMAN_MODEL,
     DEFAULT_COUNCIL_MODELS,
     get_council_config,
-    get_effective_models,
     save_council_config,
 )
 from .context import build_context_messages
@@ -77,7 +76,9 @@ app.add_middleware(
 class CreateConversationRequest(BaseModel):
     """Request to create a new conversation."""
 
-    pass
+    council_models: list[str] | None = None
+    chairman_model: str | None = None
+    web_search_enabled: bool | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -257,6 +258,82 @@ async def transcribe_voice(audio: UploadFile = File(...)):
 # ============================================================================
 
 
+async def _validate_and_dedupe_models(
+    council_models: list[str], chairman_model: str
+) -> tuple[list[str], list[str]]:
+    """
+    Shared validation helper for model configuration.
+
+    Validates non-empty requirements, deduplicates council models,
+    checks format (provider/model), and verifies existence in OpenRouter.
+
+    Args:
+        council_models: List of council model IDs
+        chairman_model: Chairman model ID
+
+    Returns:
+        Tuple of (deduplicated_council_models, invalid_formats)
+
+    Raises:
+        HTTPException: If validation fails (empty list, invalid formats, or unknown models)
+    """
+    # Validate non-empty
+    if not council_models:
+        raise HTTPException(
+            status_code=400, detail="At least one council model is required"
+        )
+    if not chairman_model:
+        raise HTTPException(status_code=400, detail="Chairman model is required")
+
+    # Deduplicate council models while preserving order
+    seen = set()
+    deduped_council_models = []
+    for model_id in council_models:
+        if model_id not in seen:
+            seen.add(model_id)
+            deduped_council_models.append(model_id)
+
+    # Validate model ID format (provider/model)
+    def validate_model_id_format(model_id: str) -> bool:
+        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
+
+    invalid_formats = []
+    for model_id in deduped_council_models:
+        if not validate_model_id_format(model_id):
+            invalid_formats.append(model_id)
+    if not validate_model_id_format(chairman_model):
+        invalid_formats.append(chairman_model)
+
+    if invalid_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
+        )
+
+    # Validate models exist in OpenRouter
+    try:
+        cache = await get_available_models()
+        all_models_to_validate = [*deduped_council_models, chairman_model]
+        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
+
+        if invalid_models:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Could not validate models against OpenRouter: {e}")
+        # If we can't reach OpenRouter, at least ensure format is correct
+        if invalid_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
+            ) from None
+
+    return deduped_council_models, invalid_formats
+
+
 @app.get("/api/council/config")
 async def get_council_configuration():
     """
@@ -284,65 +361,10 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
 
     Validates that all model IDs exist in OpenRouter before saving.
     """
-    # Pre-validation: require council_models and chairman_model
-    if not request.council_models:
-        raise HTTPException(
-            status_code=400, detail="At least one council model is required"
-        )
-    if not request.chairman_model:
-        raise HTTPException(status_code=400, detail="Chairman model is required")
-
-    # Deduplicate council models while preserving order
-    seen = set()
-    deduped_council_models = []
-    for model_id in request.council_models:
-        if model_id not in seen:
-            seen.add(model_id)
-            deduped_council_models.append(model_id)
-
-    # Lightweight ID format validation helper
-    def validate_model_id_format(model_id: str) -> bool:
-        """Validate model ID matches 'provider/model' format."""
-        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
-
-    # Validate model ID formats before OpenRouter validation
-    invalid_formats = []
-    for model_id in deduped_council_models:
-        if not validate_model_id_format(model_id):
-            invalid_formats.append(model_id)
-    if not validate_model_id_format(request.chairman_model):
-        invalid_formats.append(request.chairman_model)
-
-    if invalid_formats:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-        )
-
-    # Validate models exist in OpenRouter
-    try:
-        cache = await get_available_models()
-
-        # Combine all models to validate
-        all_models_to_validate = [*deduped_council_models, request.chairman_model]
-        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
-
-        if invalid_models:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        # If we can't validate (e.g., OpenRouter is down), still apply format validation
-        logger.warning(f"Could not validate models against OpenRouter: {e}")
-
-        # Re-check format validation in fallback path
-        if invalid_formats:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-            ) from None
+    # Use shared validation helper
+    deduped_council_models, _ = await _validate_and_dedupe_models(
+        request.council_models, request.chairman_model
+    )
 
     # Save the configuration (use deduplicated list)
     save_council_config(
@@ -390,9 +412,54 @@ async def delete_conversations(confirm: bool = False):
 
 @app.post("/api/conversations", response_model=Conversation)
 async def create_conversation(request: CreateConversationRequest):
-    """Create a new conversation."""
+    """
+    Create a new conversation.
+
+    If council_models, chairman_model, or web_search_enabled are provided,
+    they will be stored as this conversation's configuration.
+    Otherwise, the conversation will use the global config.
+    """
+    # Validate per-conversation config if provided (using same strict validation as update endpoints)
+    validated_council_models = None
+    validated_chairman_model = None
+
+    # If both council_models and chairman_model are provided, validate them together
+    if request.council_models is not None and request.chairman_model is not None:
+        validated_council_models, _ = await _validate_and_dedupe_models(
+            request.council_models, request.chairman_model
+        )
+        validated_chairman_model = request.chairman_model  # Already validated by helper
+    # If only council_models provided (without chairman), validate council_models alone
+    elif request.council_models is not None:
+        # Need a chairman to validate - use global default
+        config = get_council_config()
+        validated_council_models, _ = await _validate_and_dedupe_models(
+            request.council_models, config["chairman_model"]
+        )
+    # If only chairman_model provided (without council), validate chairman alone
+    elif request.chairman_model is not None:
+        # Need council models to validate - use global default
+        config = get_council_config()
+        _, _ = await _validate_and_dedupe_models(
+            config["council_models"], request.chairman_model
+        )
+        validated_chairman_model = request.chairman_model  # Already validated by helper
+
+    # Validate web_search_enabled
+    if request.web_search_enabled is not None and not isinstance(
+        request.web_search_enabled, bool
+    ):
+        raise HTTPException(
+            status_code=400, detail="web_search_enabled must be a boolean"
+        )
+
     conversation_id = str(uuid.uuid4())
-    conversation = storage.create_conversation(conversation_id)
+    conversation = storage.create_conversation(
+        conversation_id,
+        council_models=validated_council_models,
+        chairman_model=validated_chairman_model,
+        web_search_enabled=request.web_search_enabled,
+    )
     return conversation
 
 
@@ -403,6 +470,53 @@ async def get_conversation(conversation_id: str):
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+@app.get("/api/conversations/{conversation_id}/config")
+async def get_conversation_configuration(conversation_id: str):
+    """
+    Get the configuration for a specific conversation.
+
+    Returns the conversation's persisted config if available,
+    otherwise falls back to global config.
+    """
+    try:
+        config = storage.get_conversation_config(conversation_id)
+        return config
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@app.put("/api/conversations/{conversation_id}/config")
+async def update_conversation_configuration(
+    conversation_id: str, request: UpdateCouncilConfigRequest
+):
+    """
+    Update the configuration for a specific conversation.
+
+    This will be used for all future queries within this conversation.
+    """
+    # Use shared validation helper
+    deduped_council_models, _ = await _validate_and_dedupe_models(
+        request.council_models, request.chairman_model
+    )
+
+    # Update the conversation's config
+    try:
+        storage.update_conversation_config(
+            conversation_id,
+            deduped_council_models,
+            request.chairman_model,
+            request.web_search_enabled,
+        )
+        return {
+            "status": "ok",
+            "council_models": deduped_council_models,
+            "chairman_model": request.chairman_model,
+            "web_search_enabled": request.web_search_enabled,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.post("/api/conversations/{conversation_id}/message")
@@ -445,9 +559,19 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         request.content,
     )
 
+    # Get conversation-specific config
+    conv_config = storage.get_conversation_config(conversation_id)
+    council_models = conv_config["council_models"]
+    chairman_model = conv_config["chairman_model"]
+    web_search_enabled = conv_config.get("web_search_enabled", False)
+
     if request.mode == "chairman":
         # Chairman-only mode
-        result, errors = await chairman_direct_response(messages)
+        result, errors = await chairman_direct_response(
+            messages,
+            chairman_model=chairman_model,
+            web_search_enabled=web_search_enabled,
+        )
         storage.add_chairman_message(
             conversation_id, result, errors if errors else None
         )
@@ -459,7 +583,10 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 
     # Full council mode
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        messages
+        messages,
+        council_models=council_models,
+        chairman_model=chairman_model,
+        web_search_enabled=web_search_enabled,
     )
 
     # Extract structured errors directly from metadata
@@ -536,11 +663,20 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
         conv = storage.get_conversation(conversation_id)
         messages = await build_context_messages(conv["messages"][:-1], content)
 
+        # Get conversation-specific config
+        conv_config = storage.get_conversation_config(conversation_id)
+        chairman_model = conv_config["chairman_model"]
+        web_search_enabled = conv_config.get("web_search_enabled", False)
+
         # Signal chairman mode to frontend
         yield f"data: {json.dumps({'type': 'chairman_start'})}\n\n"
 
         # Query chairman directly
-        result, errors = await chairman_direct_response(messages)
+        result, errors = await chairman_direct_response(
+            messages,
+            chairman_model=chairman_model,
+            web_search_enabled=web_search_enabled,
+        )
 
         yield f"data: {json.dumps({'type': 'chairman_complete', 'data': result, 'errors': errors if errors else None})}\n\n"
 
@@ -587,10 +723,18 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
             content,
         )
 
-        # Get effective models (applies :online suffix if web search enabled)
-        effective = get_effective_models()
-        council_models = effective["council_models"]
-        chairman_model = effective["chairman_model"]
+        # Get conversation-specific config
+        conv_config = storage.get_conversation_config(conversation_id)
+        council_models = conv_config["council_models"]
+        chairman_model = conv_config["chairman_model"]
+        web_search_enabled = conv_config.get("web_search_enabled", False)
+
+        # Apply :online suffix if web search is enabled
+        if web_search_enabled:
+            from .config import apply_online_variant
+
+            council_models = [apply_online_variant(m) for m in council_models]
+            chairman_model = apply_online_variant(chairman_model)
 
         # Stage 1: Collect responses with context
         yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"

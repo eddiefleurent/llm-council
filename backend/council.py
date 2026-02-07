@@ -514,7 +514,9 @@ def calculate_tournament_rankings(
 
 
 async def chairman_direct_response(
-    messages: list[dict[str, str]], chairman_model: str | None = None
+    messages: list[dict[str, str]],
+    chairman_model: str | None = None,
+    web_search_enabled: bool | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Query the chairman model directly without the full council process.
@@ -525,6 +527,7 @@ async def chairman_direct_response(
     Args:
         messages: Full message history in OpenAI format
         chairman_model: Optional model ID for chairman (defaults to configured chairman)
+        web_search_enabled: Whether to enable web search via :online variant (defaults to configured)
 
     Returns:
         Tuple of (result dict with 'model' and 'response' keys, errors list)
@@ -535,7 +538,9 @@ async def chairman_direct_response(
         chairman_model = config["chairman_model"]
 
     # Apply :online suffix if web search is enabled
-    effective = get_effective_models(chairman_model=chairman_model)
+    effective = get_effective_models(
+        chairman_model=chairman_model, web_search_enabled=web_search_enabled
+    )
     chairman_model = effective["chairman_model"]
 
     print(f"[Chairman Direct] Model: {chairman_model}")
