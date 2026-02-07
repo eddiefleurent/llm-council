@@ -50,6 +50,8 @@ def _is_retriable_error(exception: Exception) -> bool:
     - Network/connection errors
     - Timeouts
     - Rate limits (429)
+    - Request timeout (408)
+    - Conflict (409)
     - Server errors (5xx)
 
     Does NOT retry on permanent failures:
@@ -64,10 +66,11 @@ def _is_retriable_error(exception: Exception) -> bool:
             APITimeoutError,
             RateLimitError,
             InternalServerError,
+            APIStatusError,
         )
 
-        # Retry on transient errors
-        return isinstance(
+        # Retry on known transient error types
+        if isinstance(
             exception,
             (
                 APIConnectionError,
@@ -75,7 +78,17 @@ def _is_retriable_error(exception: Exception) -> bool:
                 RateLimitError,
                 InternalServerError,
             ),
-        )
+        ):
+            return True
+
+        # Check status code for APIStatusError
+        if isinstance(exception, APIStatusError):
+            status_code = getattr(exception, "status_code", None)
+            if status_code is not None:
+                # Retry on: 408 (Request Timeout), 409 (Conflict), 429 (Rate Limit), 5xx (Server Errors)
+                return status_code in {408, 409, 429} or (500 <= status_code < 600)
+
+        return False
     except ImportError:
         # If groq is not installed, don't retry
         return False
@@ -83,8 +96,8 @@ def _is_retriable_error(exception: Exception) -> bool:
 
 @retry(
     retry=retry_if_exception(_is_retriable_error),
-    stop=stop_after_attempt(4),  # 1 initial attempt + 3 retries
-    wait=wait_exponential(multiplier=1, min=1, max=10),  # 1s, 2s, 4s, 8s (capped at 10s)
+    stop=stop_after_attempt(4),  # 4 total attempts with 3 retries
+    wait=wait_exponential(multiplier=1, min=1, max=10),  # 1s, 2s, 4s between attempts (max cap 10s)
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
