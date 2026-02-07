@@ -242,25 +242,34 @@ Both ranking methods appear in the metadata, and the Chairman sees both when syn
 
 ## Changelog
 
-Major improvements since forking from karpathy/llm-council:
+Major improvements since forking from [karpathy/llm-council](https://github.com/karpathy/llm-council):
 
-- **Mobile Support** - Fully responsive design with hamburger menu navigation for phones and tablets
-- **Chairman Direct Mode** - Toggle between full council deliberation and direct chairman chat for quick follow-up refinement
-- **Voice Transcription** - Microphone button for speech-to-text input using Groq Whisper API
-- **Dynamic Model Configuration** - Configure council/chairman via UI with auto-discovery from OpenRouter
-- **Web Search Toggle** - Enable `:online` variant for real-time information access
-- **Multi-turn Conversations** - Full conversation context with smart summarization
-- **Error Handling** - Graceful degradation when models fail, detailed error reporting
-- **Tournament Rankings** - Condorcet voting algorithm alongside mean position averaging
-- **Model Pricing Display** - See pricing and context limits in model selector
-- **DeepWiki Integration** - AI-powered codebase Q&A for understanding architecture and implementation
-- **Copy to Clipboard** - One-click copy for responses across all stages
-- **Context Indicator** - Visual feedback when using conversation history
-- **Conversation Management** - Clear history, delete conversations, draft mode
-- **Comprehensive Tests** - Unit and integration tests with pytest
-- **Dark Mode** - Dark theme with toggle button
-- **Ruff Linter** - Fast Python linting and formatting with pre-commit hooks
-- **Make Commands** - Convenient Makefile for common development tasks
+### 🎨 UI/UX Enhancements
+- 📱 **Mobile Support** - Fully responsive design with hamburger menu navigation for phones and tablets
+- 🌙 **Dark Mode** - Dark theme with toggle button
+- 📋 **Copy to Clipboard** - One-click copy for responses across all stages
+- 📊 **Context Indicator** - Visual feedback when using conversation history
+- 💰 **Model Pricing Display** - See pricing and context limits in model selector
+
+### 🤖 Model Configuration & Integration
+- ⚙️ **Dynamic Model Configuration** - Configure council/chairman via UI with auto-discovery from OpenRouter
+- 🌐 **Web Search Toggle** - Enable `:online` variant for real-time information access
+- 🎤 **Voice Transcription** - Microphone button for speech-to-text input using Groq Whisper API
+- 📚 **DeepWiki Integration** - AI-powered codebase Q&A for understanding architecture and implementation
+
+### 🚀 Core Features
+- 👔 **Chairman Direct Mode** - Toggle between full council deliberation and direct chairman chat for quick follow-up refinement
+- 💬 **Multi-turn Conversations** - Full conversation context with smart summarization
+- 🏆 **Tournament Rankings** - Condorcet voting algorithm alongside mean position averaging
+- ⚠️ **Error Handling** - Graceful degradation when models fail, detailed error reporting
+
+### 💾 Conversation Management
+- 🗂️ **Conversation Management** - Clear history, delete conversations, draft mode
+
+### 🛠️ Development Tools
+- ✅ **Ruff Linter** - Fast Python linting and formatting with pre-commit hooks
+- 📦 **Make Commands** - Convenient Makefile for common development tasks
+- 🧪 **Comprehensive Tests** - Unit and integration tests with pytest
 
 ## Tech Stack
 
