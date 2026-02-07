@@ -83,8 +83,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Optional**: `GROQ_API_KEY` environment variable (voice feature disabled without it)
 - `GroqNotConfiguredError`: Raised when API key is missing
 - `get_groq_client()`: Lazy initialization of Groq client (imports groq only when needed)
-- `transcribe_audio()`: Synchronous function to transcribe audio bytes
+- `transcribe_audio()`: Synchronous function to transcribe audio bytes with automatic retries
+  - Retries up to 3 times (4 total attempts) with exponential backoff (1s, 2s, 4s, 8s max)
+  - Retries on transient failures: network errors, timeouts, rate limits (429), server errors (5xx)
+  - Does NOT retry on permanent failures: auth (401), bad request (400), payment (402), permission (403)
+  - Uses `tenacity` library for retry logic with logging
+- `_is_retriable_error()`: Helper to determine if an exception should trigger a retry
 - Uses `whisper-large-v3-turbo` model for fast, accurate transcription
+- Audio never written to disk - handled entirely in memory during request lifecycle
 
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
