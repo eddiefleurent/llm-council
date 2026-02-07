@@ -253,6 +253,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 
 ### 🤖 Model Configuration & Integration
 - ⚙️ **Dynamic Model Configuration** - Configure council/chairman via UI with auto-discovery from OpenRouter
+- 🎛️ **Model Presets** - One-click preset configurations (Flagship, Balanced, Budget, Large Council, Speed)
 - 🌐 **Web Search Toggle** - Enable `:online` variant for real-time information access
 - 🎤 **Voice Transcription** - Microphone button for speech-to-text input using Groq Whisper API
 - 📚 **DeepWiki Integration** - AI-powered codebase Q&A for understanding architecture and implementation
