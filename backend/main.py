@@ -419,23 +419,33 @@ async def create_conversation(request: CreateConversationRequest):
     they will be stored as this conversation's configuration.
     Otherwise, the conversation will use the global config.
     """
-    # Validate per-conversation config if provided
-    if request.council_models is not None and (
-        not request.council_models
-        or not all(isinstance(m, str) and m.strip() for m in request.council_models)
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="council_models must be a non-empty list of non-empty strings",
-        )
+    # Validate per-conversation config if provided (using same strict validation as update endpoints)
+    validated_council_models = None
+    validated_chairman_model = None
 
-    if request.chairman_model is not None and (
-        not request.chairman_model or not request.chairman_model.strip()
-    ):
-        raise HTTPException(
-            status_code=400, detail="chairman_model must be a non-empty string"
+    # If both council_models and chairman_model are provided, validate them together
+    if request.council_models is not None and request.chairman_model is not None:
+        validated_council_models, _ = await _validate_and_dedupe_models(
+            request.council_models, request.chairman_model
         )
+        validated_chairman_model = request.chairman_model  # Already validated by helper
+    # If only council_models provided (without chairman), validate council_models alone
+    elif request.council_models is not None:
+        # Need a chairman to validate - use global default
+        config = get_council_config()
+        validated_council_models, _ = await _validate_and_dedupe_models(
+            request.council_models, config["chairman_model"]
+        )
+    # If only chairman_model provided (without council), validate chairman alone
+    elif request.chairman_model is not None:
+        # Need council models to validate - use global default
+        config = get_council_config()
+        _, _ = await _validate_and_dedupe_models(
+            config["council_models"], request.chairman_model
+        )
+        validated_chairman_model = request.chairman_model  # Already validated by helper
 
+    # Validate web_search_enabled
     if request.web_search_enabled is not None and not isinstance(
         request.web_search_enabled, bool
     ):
@@ -446,8 +456,8 @@ async def create_conversation(request: CreateConversationRequest):
     conversation_id = str(uuid.uuid4())
     conversation = storage.create_conversation(
         conversation_id,
-        council_models=request.council_models,
-        chairman_model=request.chairman_model,
+        council_models=validated_council_models,
+        chairman_model=validated_chairman_model,
         web_search_enabled=request.web_search_enabled,
     )
     return conversation

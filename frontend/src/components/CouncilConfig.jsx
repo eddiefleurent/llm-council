@@ -224,9 +224,22 @@ export default function CouncilConfig({
     setError(null);
     try {
       let result;
+      let didPersist = false; // Track whether we actually persisted changes
+
       if (isDraftMode || isNewConversation) {
-        // For draft/new conversations, reset global config (persists defaults)
-        result = await api.resetCouncilConfig();
+        // Only persist global defaults when "Set as default" is checked
+        if (setAsDefault) {
+          result = await api.resetCouncilConfig();
+          didPersist = true;
+        } else {
+          // Just load defaults without persisting
+          const globalConfig = await api.getCouncilConfig();
+          result = globalConfig.defaults || {
+            council_models: globalConfig.council_models,
+            chairman_model: globalConfig.chairman_model,
+            web_search_enabled: globalConfig.web_search_enabled || false
+          };
+        }
       } else {
         // For existing conversations, load global config WITHOUT persisting
         // This loads factory defaults into the form but doesn't mutate global config
@@ -242,16 +255,16 @@ export default function CouncilConfig({
       setChairmanModel(result.chairman_model);
       setWebSearchEnabled(result.web_search_enabled || false);
 
-      // For existing conversations, don't update loadedConfig - this creates unsaved changes
-      // For new/draft conversations, update loadedConfig to reflect the new baseline
-      if (isDraftMode || isNewConversation) {
+      // Only update loadedConfig if we actually persisted changes
+      // Otherwise, leave loadedConfig unchanged to show unsaved changes
+      if (didPersist) {
         setLoadedConfig({
           council_models: result.council_models,
           chairman_model: result.chairman_model,
           web_search_enabled: result.web_search_enabled || false
         });
       }
-      // If not draft/new, loadedConfig stays as-is, creating hasChanges=true
+      // If not persisted, loadedConfig stays as-is, creating hasChanges=true
     } catch {
       setError('Failed to reset configuration');
     } finally {
