@@ -70,13 +70,18 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `format_assistant_message()`: Extracts stage3 response for context
 - Keeps last 5 exchanges verbatim, summarizes older ones
 
-**`storage.py`**
+**`storage.py`** - Per-Conversation Config Storage
 - JSON-based conversation storage in `data/conversations/`
-- Each conversation: `{id, created_at, title, messages[]}`
+- Each conversation: `{id, created_at, title, messages[], council_models?, chairman_model?, web_search_enabled?}`
+- **Per-conversation config fields** (optional): `council_models`, `chairman_model`, `web_search_enabled`
 - Messages now include optional `errors` field: `{stage1: [], stage2: [], stage3: []}`
+- `create_conversation()`: Now accepts optional config parameters (council_models, chairman_model, web_search_enabled)
+- `get_conversation_config()`: Returns conversation config (or falls back to global config if not persisted)
+- `update_conversation_config()`: Updates a conversation's model configuration
 - `add_assistant_message()`: Accepts optional `errors` parameter for persistence
 - `add_chairman_message()`: Stores chairman-only responses (mode="chairman", stage3 only, no stage1/stage2)
 - `delete_all_conversations()`: Clear all history
+- **Backward compatibility**: Old conversations without config fields fall back to global config
 
 **`transcription.py`** - Voice Transcription (Optional)
 - Uses Groq's Whisper API for speech-to-text
@@ -94,9 +99,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **`main.py`**
 - FastAPI app with CORS enabled for localhost:5173 and localhost:3000
-- POST `/api/conversations/{id}/message` accepts `mode` param: "council" (default) or "chairman"
-- POST `/api/conversations/{id}/message/stream` accepts `mode` param: "council" (default) or "chairman"
-- Streaming endpoint delegates to `_council_stream()` or `_chairman_stream()` based on mode
+- POST `/api/conversations` - Create conversation (accepts optional config: council_models, chairman_model, web_search_enabled)
+- POST `/api/conversations/{id}/message` - Send message (uses conversation-specific config)
+- POST `/api/conversations/{id}/message/stream` - Stream message (uses conversation-specific config)
 - DELETE `/api/conversations` clears all conversations
 - Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, web_search_enabled, errors
 
@@ -105,10 +110,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - GET `/api/models/{provider_id}` - List models for a specific provider
 - POST `/api/models/refresh` - Force refresh the models cache
 
-**Council Configuration Endpoints:**
-- GET `/api/council/config` - Get current config (with defaults)
-- PUT `/api/council/config` - Update council models, chairman, and web search setting
-- POST `/api/council/config/reset` - Reset to defaults
+**Global Council Configuration Endpoints:**
+- GET `/api/council/config` - Get global config (defaults for new conversations)
+- PUT `/api/council/config` - Update global config
+- POST `/api/council/config/reset` - Reset to factory defaults
+
+**Per-Conversation Configuration Endpoints:**
+- GET `/api/conversations/{id}/config` - Get conversation-specific config (falls back to global if not set)
+- PUT `/api/conversations/{id}/config` - Update conversation's config (only affects this conversation)
 
 **Voice Transcription Endpoint:**
 - POST `/api/transcribe` - Transcribe audio file using Groq Whisper
@@ -118,11 +127,15 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **`App.jsx`**
 - Main orchestration: manages conversations list and current conversation
 - **Draft mode**: Conversations created on first message (prevents empty convos)
+- **Fresh load vs refresh detection**: Uses sessionStorage to detect fresh page loads vs browser refreshes
+  - Fresh load: Starts with new draft conversation
+  - Refresh: Attempts to restore last conversation from localStorage
+- **Per-conversation config**: Creates conversations with current global config as starting point
 - **Clear history**: Deletes all conversations with confirmation
 - Handles message sending and metadata storage
 - **Message mode state**: Manages `messageMode` ("council" or "chairman") passed to ChatInterface
 - **Mobile sidebar state**: Manages `isSidebarOpen` for hamburger menu toggle
-- `handleSendMessage(content, mode)`: Routes to council or chairman streaming based on mode
+- `handleSendMessage(content, mode)`: Routes to council or chairman streaming based on mode, inherits global config on conversation creation
 - `toggleSidebar()`: Opens/closes mobile sidebar overlay
 - `closeSidebar()`: Closes sidebar (called when conversation selected or overlay clicked)
 
@@ -148,9 +161,12 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Context indicator**: Shows when using conversation history (>6 messages)
 - Dynamic placeholder text for follow-ups (changes based on mode)
 - **Voice dictation**: Microphone button to record and transcribe speech
-- **Mode toggle**: Council/Chairman toggle buttons above textarea
+- **Mode toggle**: Council/Chairman toggle buttons in input header
+- **Config button**: Gear icon button in input header to open per-conversation config
+- **Model indicator**: Shows council model count, chairman model, and web search status below textarea
 - **Chairman-direct display**: Shows "Chairman Direct" label and simplified response (no stages 1/2)
 - **Mobile header**: Hamburger menu button and app title (visible on mobile only)
+- Loads conversation-specific config on mount and displays it
 
 **`components/VoiceButton.jsx`**
 - Records audio using MediaRecorder API (webm/opus format)
@@ -168,11 +184,11 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Loading state**: Disables switching during response generation
 - **Clear History button**: Red-styled, with confirmation
 - Shows "Response in progress" warning
-- **Config button**: Opens council configuration panel (gear icon)
 - **Theme toggle button**: Moon/sun icon to switch between light/dark modes
 - Receives `theme` prop and `onToggleTheme` callback from App.jsx
 - **Mobile overlay**: Receives `isMobileOpen` prop and applies `mobile-open` class
 - Slides in from left on mobile (< 768px), positioned as fixed overlay with z-index 900
+- **Note**: Config button removed from Sidebar (moved to ChatInterface for per-conversation config)
 
 **`presets.js`** - Model Preset Definitions
 - `MODEL_PRESETS`: Array of predefined council configurations
@@ -181,17 +197,22 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Model IDs validated against OpenRouter API
 - Frontend-only constant — no backend changes needed
 
-**`components/CouncilConfig.jsx`**
-- Modal panel for configuring council models and chairman
-- Shows current config with model chips (color-coded by provider)
+**`components/CouncilConfig.jsx`** - Per-Conversation Configuration
+- Modal panel for configuring conversation-specific models and chairman (750px wide, 88vh tall)
+- Receives `conversationId`, `isNewConversation`, `isDraftMode`, `draftConfig`, and `onDraftConfigChange` props
+- Shows current conversation's config with model chips (color-coded by provider)
+- **Draft mode support**: Works before conversation is created, storing config in App state
+- **Config scope indicator**: Shows notice that changes only affect this conversation (unless new conversation)
 - **Quick Presets**: One-click preset buttons at top of panel for fast configuration
 - `handleApplyPreset()`: Replaces council models + chairman (does not touch web search)
 - Active preset detection: highlights button when current config matches a preset exactly
 - Add/remove council members
 - Select chairman model
 - **Web Search toggle**: Enable/disable `:online` variant for real-time web search
-- Reset to defaults button
+- **"Set as default" checkbox** (new/draft conversations only): When checked, updates both conversation AND global config
+- Reset to defaults button (resets to global config)
 - Validates configuration before saving
+- Saves to conversation-specific config via `/api/conversations/{id}/config` or draft state
 
 **`components/ModelSelector.jsx`**
 - Two-step model selection: providers → models
@@ -259,13 +280,28 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 ## Key Design Decisions
 
-### Dynamic Model Configuration
-- Council models and chairman are now configurable via UI
-- Defaults maintained in `config.py` for backward compatibility
-- Config persisted to `data/council_config.json`
+### Per-Conversation Model Configuration
+- **Each conversation stores its own model configuration** (council_models, chairman_model, web_search_enabled)
+- **Global config serves as template** for new conversations (stored in `data/council_config.json`)
+- **Backward compatibility**: Old conversations without config fall back to global config at runtime
+- **UI architecture**: Config button moved from Sidebar to ChatInterface (per-conversation scope)
+- **Fresh load behavior**: App opens with new draft conversation (not last conversation)
+- **Refresh behavior**: Browser refresh preserves current conversation (via localStorage)
+- **New conversation flow**:
+  1. User starts typing in draft mode
+  2. On first message send: Create conversation with current global config
+  3. Config is now frozen for this conversation
+  4. User can change this conversation's config without affecting others
+- **"Set as default" checkbox**: For new conversations, optionally update global config when saving
 - Models auto-discovered from OpenRouter API with 5-minute cache
 - Priority providers (OpenAI, Anthropic, Google, xAI) shown first in UI
 - Validation ensures selected models exist before saving
+
+### Dynamic Model Configuration (Legacy - kept for global defaults)
+- Global config maintained in `data/council_config.json`
+- Defaults maintained in `config.py` for factory reset
+- Global config is the template for NEW conversations only
+- Changing global config does NOT affect existing conversations
 
 ### Model Presets
 - Frontend-only feature — presets defined in `frontend/src/presets.js`

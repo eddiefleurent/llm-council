@@ -142,14 +142,15 @@ export const api = {
 
   /**
    * Create a new conversation.
+   * @param {Object} config - Optional config {council_models, chairman_model, web_search_enabled}
    */
-  async createConversation() {
+  async createConversation(config = null) {
     const response = await fetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(config || {}),
     });
     if (!response.ok) {
       throw new Error('Failed to create conversation');
@@ -241,6 +242,60 @@ export const api = {
     }
   },
   
+  /**
+   * Get the configuration for a specific conversation.
+   * @param {string} conversationId - The conversation ID
+   * @returns {Promise<{council_models: string[], chairman_model: string, web_search_enabled: boolean}>}
+   */
+  async getConversationConfig(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/config`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to get conversation config');
+    }
+    return response.json();
+  },
+
+  /**
+   * Update the configuration for a specific conversation.
+   * @param {string} conversationId - The conversation ID
+   * @param {string[]} councilModels - List of council model IDs
+   * @param {string} chairmanModel - Chairman model ID
+   * @param {boolean} webSearchEnabled - Whether web search is enabled
+   */
+  async updateConversationConfig(conversationId, councilModels, chairmanModel, webSearchEnabled = false) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/config`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          council_models: councilModels,
+          chairman_model: chairmanModel,
+          web_search_enabled: webSearchEnabled,
+        }),
+      }
+    );
+    if (!response.ok) {
+      let errorMessage = 'Failed to update conversation config';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        try {
+          errorMessage = await response.text() || response.statusText || errorMessage;
+        } catch {
+          errorMessage = response.statusText || errorMessage;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    return response.json();
+  },
+
   /**
    * Delete all conversations from the backend.
    * Requires confirm=true query parameter to prevent accidental deletion.

@@ -91,12 +91,20 @@ def _safe_path_exists(conversation_id: str) -> bool:
     return os.path.exists(fullpath)
 
 
-def create_conversation(conversation_id: str) -> dict[str, Any]:
+def create_conversation(
+    conversation_id: str,
+    council_models: list[str] | None = None,
+    chairman_model: str | None = None,
+    web_search_enabled: bool | None = None,
+) -> dict[str, Any]:
     """
     Create a new conversation.
 
     Args:
         conversation_id: Unique identifier for the conversation
+        council_models: Optional list of council model IDs (inherits from global if None)
+        chairman_model: Optional chairman model ID (inherits from global if None)
+        web_search_enabled: Optional web search setting (inherits from global if None)
 
     Returns:
         New conversation dict
@@ -109,6 +117,14 @@ def create_conversation(conversation_id: str) -> dict[str, Any]:
         "title": "New Conversation",
         "messages": [],
     }
+
+    # Add per-conversation config if provided
+    if council_models is not None:
+        conversation["council_models"] = council_models
+    if chairman_model is not None:
+        conversation["chairman_model"] = chairman_model
+    if web_search_enabled is not None:
+        conversation["web_search_enabled"] = web_search_enabled
 
     # Save to file with path validation
     with _safe_open_write(conversation_id) as f:
@@ -281,6 +297,62 @@ def update_conversation_title(conversation_id: str, title: str):
         raise ValueError(f"Conversation {conversation_id} not found")
 
     conversation["title"] = title
+    save_conversation(conversation)
+
+
+def get_conversation_config(conversation_id: str) -> dict[str, Any]:
+    """
+    Get the configuration for a specific conversation.
+
+    If the conversation doesn't have persisted config, falls back to global config.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        Dict with council_models, chairman_model, and web_search_enabled
+    """
+    from .config import get_council_config
+
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError(f"Conversation {conversation_id} not found")
+
+    # If conversation has its own config, use it
+    if "council_models" in conversation and "chairman_model" in conversation:
+        return {
+            "council_models": conversation["council_models"],
+            "chairman_model": conversation["chairman_model"],
+            "web_search_enabled": conversation.get("web_search_enabled", False),
+        }
+
+    # Otherwise, fall back to global config
+    return get_council_config()
+
+
+def update_conversation_config(
+    conversation_id: str,
+    council_models: list[str],
+    chairman_model: str,
+    web_search_enabled: bool = False,
+):
+    """
+    Update the configuration for a specific conversation.
+
+    Args:
+        conversation_id: Conversation identifier
+        council_models: List of council model IDs
+        chairman_model: Chairman model ID
+        web_search_enabled: Whether web search is enabled
+    """
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError(f"Conversation {conversation_id} not found")
+
+    conversation["council_models"] = council_models
+    conversation["chairman_model"] = chairman_model
+    conversation["web_search_enabled"] = web_search_enabled
+
     save_conversation(conversation)
 
 

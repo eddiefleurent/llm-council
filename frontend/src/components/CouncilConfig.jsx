@@ -51,15 +51,29 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
 
 /**
  * Council configuration panel.
- * 
+ *
  * @param {Object} props
  * @param {boolean} props.isOpen - Whether the config panel is open
  * @param {Function} props.onClose - Called when panel is closed
+ * @param {string} props.conversationId - The conversation ID (for per-conversation config)
+ * @param {boolean} props.isNewConversation - Whether this is a new conversation (no messages yet)
+ * @param {boolean} props.isDraftMode - Whether this is a draft conversation (not yet created)
+ * @param {Object} props.draftConfig - Draft config object (for draft mode)
+ * @param {Function} props.onDraftConfigChange - Callback to update draft config
  */
-export default function CouncilConfig({ isOpen, onClose }) {
+export default function CouncilConfig({
+  isOpen,
+  onClose,
+  conversationId,
+  isNewConversation = false,
+  isDraftMode = false,
+  draftConfig = null,
+  onDraftConfigChange
+}) {
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [setAsDefault, setSetAsDefault] = useState(true); // For new conversations only
   // loadedConfig is the baseline for detecting changes (the persisted/saved state)
   const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '', web_search_enabled: false });
   const [loading, setLoading] = useState(false);
@@ -89,7 +103,20 @@ export default function CouncilConfig({ isOpen, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const config = await api.getCouncilConfig();
+      let config;
+      if (isDraftMode && draftConfig) {
+        // Use draft config if available
+        config = draftConfig;
+      } else if (isDraftMode) {
+        // Load global config for new draft
+        config = await api.getCouncilConfig();
+      } else if (conversationId) {
+        // Load conversation-specific config
+        config = await api.getConversationConfig(conversationId);
+      } else {
+        // Fall back to global config
+        config = await api.getCouncilConfig();
+      }
       const currentCouncil = config.council_models || [];
       const currentChairman = config.chairman_model || '';
       const currentWebSearch = config.web_search_enabled || false;
@@ -99,7 +126,7 @@ export default function CouncilConfig({ isOpen, onClose }) {
       // Set the loaded config as the baseline for change detection
       setLoadedConfig({ council_models: currentCouncil, chairman_model: currentChairman, web_search_enabled: currentWebSearch });
     } catch (err) {
-      setError('Failed to load council configuration');
+      setError('Failed to load configuration');
       console.error('Failed to load config:', err);
     } finally {
       setLoading(false);
@@ -119,13 +146,64 @@ export default function CouncilConfig({ isOpen, onClose }) {
     setSaving(true);
     setError(null);
     try {
-      const result = await api.updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled);
-      // Update the loaded config baseline after successful save
-      setLoadedConfig({ 
-        council_models: result.council_models, 
-        chairman_model: result.chairman_model,
-        web_search_enabled: result.web_search_enabled
-      });
+      if (isDraftMode) {
+        // Save to draft config (will be used when conversation is created)
+        const newDraftConfig = {
+          council_models: councilModels,
+          chairman_model: chairmanModel,
+          web_search_enabled: webSearchEnabled,
+        };
+        onDraftConfigChange(newDraftConfig);
+
+        // Update loaded config baseline
+        setLoadedConfig({
+          council_models: councilModels,
+          chairman_model: chairmanModel,
+          web_search_enabled: webSearchEnabled
+        });
+
+        // If "Set as default" is checked, also update global
+        if (setAsDefault) {
+          try {
+            await api.updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled);
+          } catch (err) {
+            console.warn('Failed to update global config:', err);
+            // Don't fail the whole save if global update fails
+          }
+        }
+      } else if (conversationId) {
+        // Save to conversation-specific config
+        const result = await api.updateConversationConfig(
+          conversationId,
+          councilModels,
+          chairmanModel,
+          webSearchEnabled
+        );
+        // Update the loaded config baseline after successful save
+        setLoadedConfig({
+          council_models: result.council_models,
+          chairman_model: result.chairman_model,
+          web_search_enabled: result.web_search_enabled
+        });
+
+        // If "Set as default" is checked for new conversations, also update global
+        if (isNewConversation && setAsDefault) {
+          try {
+            await api.updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled);
+          } catch (err) {
+            console.warn('Failed to update global config:', err);
+            // Don't fail the whole save if global update fails
+          }
+        }
+      } else {
+        // Fall back to global config update (shouldn't happen in normal flow)
+        const result = await api.updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled);
+        setLoadedConfig({
+          council_models: result.council_models,
+          chairman_model: result.chairman_model,
+          web_search_enabled: result.web_search_enabled
+        });
+      }
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save configuration');
@@ -213,7 +291,7 @@ export default function CouncilConfig({ isOpen, onClose }) {
       <div className="council-config-overlay" onClick={onClose}>
         <div className="council-config-panel" onClick={(e) => e.stopPropagation()}>
           <div className="council-config-header">
-            <h2>Council Configuration</h2>
+            <h2>{isDraftMode || isNewConversation ? 'Configure New Conversation' : 'Conversation Settings'}</h2>
             <button className="close-btn" aria-label="Close" onClick={onClose}>×</button>
           </div>
 
@@ -221,6 +299,11 @@ export default function CouncilConfig({ isOpen, onClose }) {
             <div className="loading-state">Loading configuration...</div>
           ) : (
             <div className="council-config-content">
+              {!isNewConversation && !isDraftMode && (
+                <div className="config-notice">
+                  Changes will only affect this conversation, not other conversations or future ones.
+                </div>
+              )}
               {error && (
                 <div className="error-banner">{error}</div>
               )}
@@ -326,9 +409,29 @@ export default function CouncilConfig({ isOpen, onClose }) {
                 )}
               </section>
 
+              {/* Set as Default (only for new/draft conversations) */}
+              {(isNewConversation || isDraftMode) && (
+                <section className="config-section">
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={setAsDefault}
+                      onChange={(e) => setSetAsDefault(e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span className="checkbox-label">
+                      Set as default for future conversations
+                    </span>
+                  </label>
+                  <div className="checkbox-description">
+                    When checked, this configuration will be saved as the global default for all new conversations.
+                  </div>
+                </section>
+              )}
+
               {/* Actions */}
               <div className="config-actions">
-                <button 
+                <button
                   className="reset-btn"
                   onClick={handleReset}
                   disabled={saving}
@@ -336,14 +439,14 @@ export default function CouncilConfig({ isOpen, onClose }) {
                   Reset to Defaults
                 </button>
                 <div className="action-group">
-                  <button 
+                  <button
                     className="cancel-btn"
                     onClick={onClose}
                     disabled={saving}
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     className="save-btn"
                     onClick={handleSave}
                     disabled={saving || !hasChanges}

@@ -11,6 +11,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDraftMode, setIsDraftMode] = useState(false);
 
+  // Draft conversation config (used before conversation is created)
+  const [draftConfig, setDraftConfig] = useState(null);
+
   // Message mode: "council" (full 3-stage) or "chairman" (direct chairman only)
   const [messageMode, setMessageMode] = useState('council');
 
@@ -37,6 +40,65 @@ function App() {
   useEffect(() => {
     loadConversations();
   }, []);
+
+  // Fresh-load vs refresh detection
+  useEffect(() => {
+    const isRefresh = sessionStorage.getItem('appLoaded');
+
+    if (!isRefresh) {
+      // Fresh page load - start with new draft conversation
+      sessionStorage.setItem('appLoaded', 'true');
+      // Set draft mode directly instead of calling handleNewConversation
+      setIsDraftMode(true);
+      setCurrentConversationId(null);
+      setCurrentConversation({
+        id: null,
+        created_at: new Date().toISOString(),
+        title: 'New Conversation',
+        messages: [],
+      });
+    } else {
+      // Browser refresh - try to restore last conversation
+      const lastId = localStorage.getItem('lastConversationId');
+      if (lastId) {
+        // Check if conversation still exists
+        api.getConversation(lastId)
+          .then(() => {
+            setCurrentConversationId(lastId);
+            setIsDraftMode(false);
+          })
+          .catch(() => {
+            // Conversation doesn't exist, start fresh
+            setIsDraftMode(true);
+            setCurrentConversationId(null);
+            setCurrentConversation({
+              id: null,
+              created_at: new Date().toISOString(),
+              title: 'New Conversation',
+              messages: [],
+            });
+          });
+      } else {
+        // No last conversation, start fresh
+        setIsDraftMode(true);
+        setCurrentConversationId(null);
+        setCurrentConversation({
+          id: null,
+          created_at: new Date().toISOString(),
+          title: 'New Conversation',
+          messages: [],
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps intentional - run once on mount
+
+  // Save current conversation ID to localStorage for refresh recovery
+  useEffect(() => {
+    if (currentConversationId && !isDraftMode) {
+      localStorage.setItem('lastConversationId', currentConversationId);
+    }
+  }, [currentConversationId, isDraftMode]);
 
   // Load conversation details when selected
   // IMPORTANT: Skip loading if isLoading is true - prevents race condition where
@@ -115,10 +177,22 @@ function App() {
 
       // If in draft mode, create the conversation first
       if (isDraftMode) {
-        const newConv = await api.createConversation();
+        // Use draft config if set, otherwise inherit global config
+        let config = draftConfig;
+        if (!config) {
+          const globalConfig = await api.getCouncilConfig();
+          config = {
+            council_models: globalConfig.council_models,
+            chairman_model: globalConfig.chairman_model,
+            web_search_enabled: globalConfig.web_search_enabled,
+          };
+        }
+
+        const newConv = await api.createConversation(config);
         conversationId = newConv.id;
         setCurrentConversationId(conversationId);
         setIsDraftMode(false);
+        setDraftConfig(null); // Clear draft config
 
         // Update conversations list using functional updater to avoid stale state
         setConversations((prev) => [
@@ -376,6 +450,9 @@ function App() {
         messageMode={messageMode}
         onSetMessageMode={setMessageMode}
         onToggleSidebar={toggleSidebar}
+        isDraftMode={isDraftMode}
+        draftConfig={draftConfig}
+        onDraftConfigChange={setDraftConfig}
       />
     </div>
   );
