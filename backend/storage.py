@@ -3,8 +3,9 @@
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any
+
 from .config import DATA_DIR
 
 
@@ -16,81 +17,81 @@ def ensure_data_dir():
 def _get_safe_path(conversation_id: str) -> str:
     """
     Construct and validate a safe file path for a conversation.
-    
+
     This function validates that the resulting path stays within DATA_DIR,
     preventing path traversal attacks.
-    
+
     Args:
         conversation_id: The conversation identifier
-        
+
     Returns:
         Validated absolute path within DATA_DIR
-        
+
     Raises:
         ValueError: If the path would escape DATA_DIR
     """
     base_dir = os.path.realpath(DATA_DIR)
     # Construct and normalize the path
     fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
-    
+
     # Ensure the resulting path is within the data directory (path traversal protection)
     if not fullpath.startswith(base_dir + os.sep):
         raise ValueError("Invalid conversation_id: path traversal detected")
-    
+
     return fullpath
 
 
 def _safe_open_read(conversation_id: str):
     """
     Safely open a conversation file for reading with path validation.
-    
+
     Validates the path is within DATA_DIR before opening.
     Following CodeQL's recommended pattern for path injection prevention.
     """
     base_dir = os.path.realpath(DATA_DIR)
     fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
-    
+
     # GOOD: Verify path is within base directory before any file operation
     if not fullpath.startswith(base_dir + os.sep):
         raise ValueError("Invalid conversation_id: path traversal detected")
-    
-    return open(fullpath, 'r')
+
+    return open(fullpath)
 
 
 def _safe_open_write(conversation_id: str):
     """
     Safely open a conversation file for writing with path validation.
-    
+
     Validates the path is within DATA_DIR before opening.
     Following CodeQL's recommended pattern for path injection prevention.
     """
     base_dir = os.path.realpath(DATA_DIR)
     fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
-    
+
     # GOOD: Verify path is within base directory before any file operation
     if not fullpath.startswith(base_dir + os.sep):
         raise ValueError("Invalid conversation_id: path traversal detected")
-    
-    return open(fullpath, 'w')
+
+    return open(fullpath, "w")
 
 
 def _safe_path_exists(conversation_id: str) -> bool:
     """
     Safely check if a conversation file exists with path validation.
-    
+
     Validates the path is within DATA_DIR before checking existence.
     """
     base_dir = os.path.realpath(DATA_DIR)
     fullpath = os.path.realpath(os.path.join(base_dir, f"{conversation_id}.json"))
-    
+
     # GOOD: Verify path is within base directory before any file operation
     if not fullpath.startswith(base_dir + os.sep):
         raise ValueError("Invalid conversation_id: path traversal detected")
-    
+
     return os.path.exists(fullpath)
 
 
-def create_conversation(conversation_id: str) -> Dict[str, Any]:
+def create_conversation(conversation_id: str) -> dict[str, Any]:
     """
     Create a new conversation.
 
@@ -106,7 +107,7 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
         "id": conversation_id,
         "created_at": datetime.utcnow().isoformat(),
         "title": "New Conversation",
-        "messages": []
+        "messages": [],
     }
 
     # Save to file with path validation
@@ -116,7 +117,7 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
     return conversation
 
 
-def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
+def get_conversation(conversation_id: str) -> dict[str, Any] | None:
     """
     Load a conversation from storage.
 
@@ -133,7 +134,7 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
         return json.load(f)
 
 
-def save_conversation(conversation: Dict[str, Any]):
+def save_conversation(conversation: dict[str, Any]):
     """
     Save a conversation to storage.
 
@@ -142,11 +143,11 @@ def save_conversation(conversation: Dict[str, Any]):
     """
     ensure_data_dir()
 
-    with _safe_open_write(conversation['id']) as f:
+    with _safe_open_write(conversation["id"]) as f:
         json.dump(conversation, f, indent=2)
 
 
-def list_conversations() -> List[Dict[str, Any]]:
+def list_conversations() -> list[dict[str, Any]]:
     """
     List all conversations (metadata only).
 
@@ -157,17 +158,19 @@ def list_conversations() -> List[Dict[str, Any]]:
 
     conversations = []
     for filename in os.listdir(DATA_DIR):
-        if filename.endswith('.json'):
+        if filename.endswith(".json"):
             path = os.path.join(DATA_DIR, filename)
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = json.load(f)
                 # Return metadata only
-                conversations.append({
-                    "id": data["id"],
-                    "created_at": data["created_at"],
-                    "title": data.get("title", "New Conversation"),
-                    "message_count": len(data["messages"])
-                })
+                conversations.append(
+                    {
+                        "id": data["id"],
+                        "created_at": data["created_at"],
+                        "title": data.get("title", "New Conversation"),
+                        "message_count": len(data["messages"]),
+                    }
+                )
 
     # Sort by creation time, newest first
     conversations.sort(key=lambda x: x["created_at"], reverse=True)
@@ -187,20 +190,17 @@ def add_user_message(conversation_id: str, content: str):
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
-    conversation["messages"].append({
-        "role": "user",
-        "content": content
-    })
+    conversation["messages"].append({"role": "user", "content": content})
 
     save_conversation(conversation)
 
 
 def add_assistant_message(
     conversation_id: str,
-    stage1: List[Dict[str, Any]],
-    stage2: List[Dict[str, Any]],
-    stage3: Dict[str, Any],
-    errors: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    stage1: list[dict[str, Any]],
+    stage2: list[dict[str, Any]],
+    stage3: dict[str, Any],
+    errors: dict[str, list[dict[str, Any]]] | None = None,
 ):
     """
     Add an assistant message with all 3 stages to a conversation.
@@ -220,7 +220,7 @@ def add_assistant_message(
         "role": "assistant",
         "stage1": stage1,
         "stage2": stage2,
-        "stage3": stage3
+        "stage3": stage3,
     }
 
     # Add errors if any exist
@@ -234,8 +234,8 @@ def add_assistant_message(
 
 def add_chairman_message(
     conversation_id: str,
-    response: Dict[str, Any],
-    errors: Optional[List[Dict[str, Any]]] = None
+    response: dict[str, Any],
+    errors: list[dict[str, Any]] | None = None,
 ):
     """
     Add a chairman-only message to a conversation.
@@ -284,10 +284,10 @@ def update_conversation_title(conversation_id: str, title: str):
     save_conversation(conversation)
 
 
-def delete_all_conversations() -> List[Dict[str, str]]:
+def delete_all_conversations() -> list[dict[str, str]]:
     """
     Delete all conversation files from the data directory.
-    
+
     Returns:
         List of dicts with 'filename' and 'error' for any files that failed to delete.
         Empty list if all deletions succeeded.
@@ -295,13 +295,10 @@ def delete_all_conversations() -> List[Dict[str, str]]:
     ensure_data_dir()
     failures = []
     for filename in os.listdir(DATA_DIR):
-        if filename.endswith('.json'):
+        if filename.endswith(".json"):
             path = os.path.join(DATA_DIR, filename)
             try:
                 os.remove(path)
             except OSError as e:
-                failures.append({
-                    'filename': filename,
-                    'error': str(e)
-                })
+                failures.append({"filename": filename, "error": str(e)})
     return failures

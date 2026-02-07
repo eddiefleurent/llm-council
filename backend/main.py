@@ -1,27 +1,48 @@
 """FastAPI backend for LLM Council."""
 
+import asyncio
+import json
 import logging
 import os
 import re
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File
+import uuid
+from contextlib import asynccontextmanager, suppress
+from typing import Any, Literal
+
 from anyio import to_thread
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, Literal
-import uuid
-import json
-import asyncio
-
-logger = logging.getLogger(__name__)
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings, calculate_tournament_rankings, chairman_direct_response
+from .config import (
+    DEFAULT_CHAIRMAN_MODEL,
+    DEFAULT_COUNCIL_MODELS,
+    get_council_config,
+    get_effective_models,
+    save_council_config,
+)
 from .context import build_context_messages
-from .config import get_council_config, save_council_config, DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_effective_models
-from .models import get_models_grouped_by_provider, get_models_for_provider, get_available_models, validate_model_ids
-from .transcription import transcribe_audio, GroqNotConfiguredError
+from .council import (
+    calculate_aggregate_rankings,
+    calculate_tournament_rankings,
+    chairman_direct_response,
+    generate_conversation_title,
+    run_full_council,
+    stage1_collect_responses,
+    stage2_collect_rankings,
+    stage3_synthesize_final,
+)
+from .models import (
+    get_available_models,
+    get_models_for_provider,
+    get_models_grouped_by_provider,
+    validate_model_ids,
+)
+from .transcription import GroqNotConfiguredError, transcribe_audio
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -29,14 +50,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown events."""
     # Startup: Log configuration
     config = get_council_config()
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("LLM Council Configuration")
-    print("="*60)
+    print("=" * 60)
     print(f"Council Models ({len(config['council_models'])} members):")
-    for i, model in enumerate(config['council_models'], 1):
+    for i, model in enumerate(config["council_models"], 1):
         print(f"  {i}. {model}")
     print(f"\nChairman Model: {config['chairman_model']}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
     yield
     # Shutdown: Nothing to clean up currently
 
@@ -55,24 +76,30 @@ app.add_middleware(
 
 class CreateConversationRequest(BaseModel):
     """Request to create a new conversation."""
+
     pass
 
 
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
+
     content: str
-    mode: Literal["council", "chairman"] = "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
+    mode: Literal["council", "chairman"] = (
+        "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
+    )
 
 
 class UpdateCouncilConfigRequest(BaseModel):
     """Request to update council configuration."""
-    council_models: List[str]
+
+    council_models: list[str]
     chairman_model: str
     web_search_enabled: bool = False
 
 
 class ConversationMetadata(BaseModel):
     """Conversation metadata for list view."""
+
     id: str
     created_at: str
     title: str
@@ -81,10 +108,11 @@ class ConversationMetadata(BaseModel):
 
 class Conversation(BaseModel):
     """Full conversation with all messages."""
+
     id: str
     created_at: str
     title: str
-    messages: List[Dict[str, Any]]
+    messages: list[dict[str, Any]]
 
 
 @app.get("/")
@@ -101,7 +129,7 @@ async def debug_config():
         "council_models": config["council_models"],
         "chairman_model": config["chairman_model"],
         "model_count": len(config["council_models"]),
-        "config_file_exists": os.path.exists("data/council_config.json")
+        "config_file_exists": os.path.exists("data/council_config.json"),
     }
 
 
@@ -109,11 +137,12 @@ async def debug_config():
 # Model Discovery Endpoints
 # ============================================================================
 
+
 @app.get("/api/models")
 async def list_models():
     """
     Get all available models from OpenRouter, grouped by provider.
-    
+
     Returns providers sorted with priority providers first (OpenAI, Anthropic, etc.),
     with models within each provider sorted by creation date (newest first).
     """
@@ -121,50 +150,60 @@ async def list_models():
         return await get_models_grouped_by_provider()
     except Exception as e:
         logger.exception("Failed to fetch models from OpenRouter")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch models: {e!s}"
+        ) from e
 
 
 @app.get("/api/models/{provider_id}")
 async def list_models_for_provider(provider_id: str):
     """
     Get models for a specific provider.
-    
+
     Args:
         provider_id: Provider identifier (e.g., "anthropic", "openai")
-        
+
     Returns list of models sorted by creation date (newest first).
     """
     try:
         models = await get_models_for_provider(provider_id)
         if not models:
-            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Provider '{provider_id}' not found"
+            )
         return {"provider": provider_id, "models": models}
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Failed to fetch models for provider {provider_id}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e!s}") from e
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch models: {e!s}"
+        ) from e
 
 
 @app.post("/api/models/refresh")
 async def refresh_models():
     """
     Force refresh the models cache from OpenRouter.
-    
+
     Useful when new models are added to OpenRouter.
     """
     try:
         from .models import get_available_models
+
         cache = await get_available_models(force_refresh=True)
         return {"status": "ok", "total_models": len(cache.models)}
     except Exception as e:
         logger.exception("Failed to refresh models cache")
-        raise HTTPException(status_code=502, detail=f"Failed to refresh models: {e!s}") from e
+        raise HTTPException(
+            status_code=502, detail=f"Failed to refresh models: {e!s}"
+        ) from e
 
 
 # ============================================================================
 # Voice Transcription Endpoint
 # ============================================================================
+
 
 @app.post("/api/transcribe")
 async def transcribe_voice(audio: UploadFile = File(...)):
@@ -176,7 +215,7 @@ async def transcribe_voice(audio: UploadFile = File(...)):
     """
     try:
         # Limit file size (Groq's limit is 25MB) while reading
-        MAX_SIZE = 25 * 1024 * 1024
+        max_size = 25 * 1024 * 1024
         chunks: list[bytes] = []
         size = 0
         while True:
@@ -184,8 +223,10 @@ async def transcribe_voice(audio: UploadFile = File(...)):
             if not chunk:
                 break
             size += len(chunk)
-            if size > MAX_SIZE:
-                raise HTTPException(status_code=413, detail="Audio file too large (max 25MB)")
+            if size > max_size:
+                raise HTTPException(
+                    status_code=413, detail="Audio file too large (max 25MB)"
+                )
             chunks.append(chunk)
 
         audio_data = b"".join(chunks)
@@ -206,18 +247,21 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.exception("Failed to transcribe audio")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {e!s}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Transcription failed: {e!s}"
+        ) from e
 
 
 # ============================================================================
 # Council Configuration Endpoints
 # ============================================================================
 
+
 @app.get("/api/council/config")
 async def get_council_configuration():
     """
     Get the current council configuration.
-    
+
     Returns the list of council models, chairman model, and web search setting.
     """
     config = get_council_config()
@@ -228,8 +272,8 @@ async def get_council_configuration():
         "defaults": {
             "council_models": DEFAULT_COUNCIL_MODELS,
             "chairman_model": DEFAULT_CHAIRMAN_MODEL,
-            "web_search_enabled": False
-        }
+            "web_search_enabled": False,
+        },
     }
 
 
@@ -242,7 +286,9 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
     """
     # Pre-validation: require council_models and chairman_model
     if not request.council_models:
-        raise HTTPException(status_code=400, detail="At least one council model is required")
+        raise HTTPException(
+            status_code=400, detail="At least one council model is required"
+        )
     if not request.chairman_model:
         raise HTTPException(status_code=400, detail="Chairman model is required")
 
@@ -257,7 +303,7 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
     # Lightweight ID format validation helper
     def validate_model_id_format(model_id: str) -> bool:
         """Validate model ID matches 'provider/model' format."""
-        return bool(model_id and re.match(r'^[^/]+/[^/]+$', model_id))
+        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
 
     # Validate model ID formats before OpenRouter validation
     invalid_formats = []
@@ -270,7 +316,7 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
     if invalid_formats:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
+            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
         )
 
     # Validate models exist in OpenRouter
@@ -278,13 +324,12 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
         cache = await get_available_models()
 
         # Combine all models to validate
-        all_models_to_validate = deduped_council_models + [request.chairman_model]
+        all_models_to_validate = [*deduped_council_models, request.chairman_model]
         _, invalid_models = validate_model_ids(all_models_to_validate, cache)
 
         if invalid_models:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid model(s): {', '.join(invalid_models)}"
+                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
             )
     except HTTPException:
         raise
@@ -296,17 +341,19 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
         if invalid_formats:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}"
-            )
+                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
+            ) from None
 
     # Save the configuration (use deduplicated list)
-    save_council_config(deduped_council_models, request.chairman_model, request.web_search_enabled)
+    save_council_config(
+        deduped_council_models, request.chairman_model, request.web_search_enabled
+    )
 
     return {
         "status": "ok",
         "council_models": deduped_council_models,
         "chairman_model": request.chairman_model,
-        "web_search_enabled": request.web_search_enabled
+        "web_search_enabled": request.web_search_enabled,
     }
 
 
@@ -320,11 +367,11 @@ async def reset_council_configuration():
         "status": "ok",
         "council_models": DEFAULT_COUNCIL_MODELS,
         "chairman_model": DEFAULT_CHAIRMAN_MODEL,
-        "web_search_enabled": False
+        "web_search_enabled": False,
     }
 
 
-@app.get("/api/conversations", response_model=List[ConversationMetadata])
+@app.get("/api/conversations", response_model=list[ConversationMetadata])
 async def list_conversations():
     """List all conversations (metadata only)."""
     return storage.list_conversations()
@@ -335,8 +382,7 @@ async def delete_conversations(confirm: bool = False):
     """Delete all conversations from storage. Requires confirm=true query param."""
     if not confirm:
         raise HTTPException(
-            status_code=400,
-            detail="Pass ?confirm=true to delete all conversations"
+            status_code=400, detail="Pass ?confirm=true to delete all conversations"
         )
     storage.delete_all_conversations()
     return {"status": "ok"}
@@ -370,7 +416,10 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     """
     # Validate mode
     if request.mode not in ("council", "chairman"):
-        raise HTTPException(status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
+        )
 
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
@@ -393,32 +442,32 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     conversation = storage.get_conversation(conversation_id)
     messages = await build_context_messages(
         conversation["messages"][:-1],  # Exclude the user message we just added
-        request.content
+        request.content,
     )
 
     if request.mode == "chairman":
         # Chairman-only mode
         result, errors = await chairman_direct_response(messages)
-        storage.add_chairman_message(conversation_id, result, errors if errors else None)
+        storage.add_chairman_message(
+            conversation_id, result, errors if errors else None
+        )
         return {
             "mode": "chairman",
             "stage3": result,
-            "errors": errors if errors else []
+            "errors": errors if errors else [],
         }
 
     # Full council mode
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
+    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+        messages
+    )
 
     # Extract structured errors directly from metadata
     errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
 
     # Add assistant message with all stages and errors
     storage.add_assistant_message(
-        conversation_id,
-        stage1_results,
-        stage2_results,
-        stage3_result,
-        errors
+        conversation_id, stage1_results, stage2_results, stage3_result, errors
     )
 
     # Return the complete response with metadata
@@ -427,7 +476,7 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         "stage1": stage1_results,
         "stage2": stage2_results,
         "stage3": stage3_result,
-        "metadata": metadata
+        "metadata": metadata,
     }
 
 
@@ -444,7 +493,10 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     """
     # Validate mode
     if request.mode not in ("council", "chairman"):
-        raise HTTPException(status_code=400, detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
+        )
 
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
@@ -482,10 +534,7 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
 
         # Build context messages from conversation history
         conv = storage.get_conversation(conversation_id)
-        messages = await build_context_messages(
-            conv["messages"][:-1],
-            content
-        )
+        messages = await build_context_messages(conv["messages"][:-1], content)
 
         # Signal chairman mode to frontend
         yield f"data: {json.dumps({'type': 'chairman_start'})}\n\n"
@@ -503,9 +552,7 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
 
         # Persist chairman message
         storage.add_chairman_message(
-            conversation_id,
-            result,
-            errors if errors else None
+            conversation_id, result, errors if errors else None
         )
 
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
@@ -514,10 +561,8 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await title_task
-            except asyncio.CancelledError:
-                pass
         logger.exception("Error in chairman streaming process")
         yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
@@ -539,7 +584,7 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
         conv = storage.get_conversation(conversation_id)
         messages = await build_context_messages(
             conv["messages"][:-1],  # Exclude the user message we just added
-            content
+            content,
         )
 
         # Get effective models (applies :online suffix if web search enabled)
@@ -549,7 +594,9 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
 
         # Stage 1: Collect responses with context
         yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-        stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
+        stage1_results, stage1_errors = await stage1_collect_responses(
+            messages, council_models
+        )
         yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
 
         # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
@@ -558,24 +605,30 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
             # Use broad exception handling to prevent title_task errors from masking the primary error
             if title_task and not title_task.done():
                 title_task.cancel()
-                try:
+                # Suppress any title generation errors to preserve short-circuit flow
+                with suppress(Exception):
                     await title_task
-                except Exception:
-                    # Suppress any title generation errors to preserve short-circuit flow
-                    pass
             yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
             return
 
         # Stage 2: Collect rankings
         yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-        stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(content, stage1_results, council_models)
-        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-        tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
+        stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
+            content, stage1_results, council_models
+        )
+        aggregate_rankings = calculate_aggregate_rankings(
+            stage2_results, label_to_model
+        )
+        tournament_rankings = calculate_tournament_rankings(
+            stage2_results, label_to_model
+        )
         yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
 
         # Stage 3: Synthesize final answer
         yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-        stage3_result, stage3_errors = await stage3_synthesize_final(content, stage1_results, stage2_results, chairman_model)
+        stage3_result, stage3_errors = await stage3_synthesize_final(
+            content, stage1_results, stage2_results, chairman_model
+        )
         yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
 
         # Wait for title generation if it was started
@@ -588,16 +641,12 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
         errors = {
             "stage1": stage1_errors if stage1_errors else [],
             "stage2": stage2_errors if stage2_errors else [],
-            "stage3": stage3_errors if stage3_errors else []
+            "stage3": stage3_errors if stage3_errors else [],
         }
 
         # Save complete assistant message with errors
         storage.add_assistant_message(
-            conversation_id,
-            stage1_results,
-            stage2_results,
-            stage3_result,
-            errors
+            conversation_id, stage1_results, stage2_results, stage3_result, errors
         )
 
         # Send completion event
@@ -607,10 +656,8 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await title_task
-            except asyncio.CancelledError:
-                pass
         logger.exception("Error in streaming council process")
         # Send sanitized error event (don't leak internal details)
         yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
@@ -618,4 +665,5 @@ async def _council_stream(conversation_id: str, content: str, is_first_message: 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8001)

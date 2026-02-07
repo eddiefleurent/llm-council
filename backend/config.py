@@ -1,7 +1,7 @@
 """Configuration for the LLM Council."""
 
 import os
-from typing import List, Optional
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,16 +41,19 @@ DATA_DIR = "data/conversations"
 COUNCIL_CONFIG_FILE = "data/council_config.json"
 
 
-def _normalize_council_models(value) -> List[str]:
+def _normalize_council_models(value) -> list[str]:
     """
     Normalize and validate council models value.
     Returns a defensive copy to prevent mutation of defaults.
     Treats empty lists or lists with non-string/blank entries as invalid.
     """
-    if isinstance(value, list) and value:  # Must be non-empty list
-        # Ensure all entries are non-empty strings
-        if all(isinstance(m, str) and m.strip() for m in value):
-            return list(value)  # Return a copy
+    # Must be non-empty list with all non-empty strings
+    if (
+        isinstance(value, list)
+        and value
+        and all(isinstance(m, str) and m.strip() for m in value)
+    ):
+        return list(value)  # Return a copy
     return list(DEFAULT_COUNCIL_MODELS)  # Return a copy of defaults
 
 
@@ -68,7 +71,7 @@ def get_council_config() -> dict:
     # Try to load from config file
     if os.path.exists(COUNCIL_CONFIG_FILE):
         try:
-            with open(COUNCIL_CONFIG_FILE, "r") as f:
+            with open(COUNCIL_CONFIG_FILE) as f:
                 config = json.load(f)
 
                 # Validate chairman_model - must be non-empty string
@@ -82,31 +85,33 @@ def get_council_config() -> dict:
                     web_search_enabled = False
 
                 return {
-                    "council_models": _normalize_council_models(config.get("council_models")),
+                    "council_models": _normalize_council_models(
+                        config.get("council_models")
+                    ),
                     "chairman_model": chairman,
-                    "web_search_enabled": web_search_enabled
+                    "web_search_enabled": web_search_enabled,
                 }
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     # Return defaults (defensive copies)
     return {
         "council_models": list(DEFAULT_COUNCIL_MODELS),
         "chairman_model": DEFAULT_CHAIRMAN_MODEL,
-        "web_search_enabled": False
+        "web_search_enabled": False,
     }
 
 
 def apply_online_variant(model_id: str) -> str:
     """
     Apply the :online variant to a model ID for web search capability.
-    
+
     According to OpenRouter docs, append ':online' to any model ID to enable
     real-time web search capabilities.
-    
+
     Args:
         model_id: The base model ID (e.g., "openai/gpt-5.2")
-        
+
     Returns:
         Model ID with :online suffix (e.g., "openai/gpt-5.2:online")
     """
@@ -119,46 +124,44 @@ def apply_online_variant(model_id: str) -> str:
 
 
 def get_effective_models(
-    council_models: Optional[List[str]] = None,
-    chairman_model: Optional[str] = None,
-    web_search_enabled: Optional[bool] = None
+    council_models: list[str] | None = None,
+    chairman_model: str | None = None,
+    web_search_enabled: bool | None = None,
 ) -> dict:
     """
     Get effective model IDs with :online suffix applied if web search is enabled.
-    
+
     Args:
         council_models: List of council model IDs (uses config if None)
         chairman_model: Chairman model ID (uses config if None)
         web_search_enabled: Whether web search is enabled (uses config if None)
-        
+
     Returns:
         Dict with 'council_models' and 'chairman_model' keys, with :online suffix
         applied if web_search_enabled is True
     """
     config = get_council_config()
-    
+
     if council_models is None:
         council_models = config["council_models"]
     if chairman_model is None:
         chairman_model = config["chairman_model"]
     if web_search_enabled is None:
         web_search_enabled = config["web_search_enabled"]
-    
+
     if web_search_enabled:
         council_models = [apply_online_variant(m) for m in council_models]
         chairman_model = apply_online_variant(chairman_model)
-    
+
     return {
         "council_models": council_models,
         "chairman_model": chairman_model,
-        "web_search_enabled": web_search_enabled
+        "web_search_enabled": web_search_enabled,
     }
 
 
 def save_council_config(
-    council_models: List[str],
-    chairman_model: str,
-    web_search_enabled: bool = False
+    council_models: list[str], chairman_model: str, web_search_enabled: bool = False
 ) -> None:
     """
     Save council configuration to file.
@@ -178,7 +181,7 @@ def save_council_config(
     config = {
         "council_models": council_models,
         "chairman_model": chairman_model,
-        "web_search_enabled": web_search_enabled
+        "web_search_enabled": web_search_enabled,
     }
 
     # Use atomic write: temp file + replace to prevent corruption on crash
