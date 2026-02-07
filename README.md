@@ -164,6 +164,64 @@ pnpm run dev
 
 Then open <http://localhost:5173> in your browser.
 
+**Option 3: Use Make commands**
+```bash
+# Run both backend and frontend in parallel
+make run
+
+# Or run individually:
+make run-backend   # Start backend only
+make run-frontend  # Start frontend only
+```
+
+## Development Tools
+
+The project includes several tools to maintain code quality:
+
+### Make Commands
+
+Run `make help` to see all available commands:
+
+**Code Quality:**
+```bash
+make lint           # Check code with ruff linter
+make lint-fix       # Auto-fix linting issues
+make lint-unsafe    # Auto-fix including unsafe changes
+make format         # Format code with ruff
+make format-check   # Check formatting without changes
+```
+
+**Testing:**
+```bash
+make test           # Run pytest tests
+make test-cov       # Run tests with coverage report
+```
+
+**Setup:**
+```bash
+make dev-install          # Install dev dependencies
+make pre-commit-install   # Install pre-commit hooks
+```
+
+**Cleanup:**
+```bash
+make clean          # Remove cache and build artifacts
+```
+
+### Ruff Linter & Formatter
+
+The project uses [Ruff](https://docs.astral.sh/ruff/) (v0.15.0) for fast Python linting and formatting:
+- **Line length**: 88 characters (Black/Ruff standard)
+- **Target**: Python 3.10+
+- **Replaces**: flake8, black, isort, pyupgrade, and more
+- **Configuration**: `pyproject.toml` under `[tool.ruff]`
+- **Pre-commit hooks**: Automatically run linter and formatter before commits
+
+To enable pre-commit hooks:
+```bash
+make pre-commit-install
+```
+
 ## How Ranking Works
 
 In **Stage 2**, council members rank each other's responses using two algorithms:
@@ -201,6 +259,8 @@ Major improvements since forking from karpathy/llm-council:
 - **Conversation Management** - Clear history, delete conversations, draft mode
 - **Comprehensive Tests** - Unit and integration tests with pytest
 - **Dark Mode** - Dark theme with toggle button
+- **Ruff Linter** - Fast Python linting and formatting with pre-commit hooks
+- **Make Commands** - Convenient Makefile for common development tasks
 
 ## Tech Stack
 

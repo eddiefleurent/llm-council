@@ -1,11 +1,9 @@
 """Unit tests for council orchestration logic."""
 
-import pytest
-from unittest.mock import AsyncMock, patch
 from backend.council import (
-    parse_ranking_from_text,
     calculate_aggregate_rankings,
     calculate_tournament_rankings,
+    parse_ranking_from_text,
 )
 
 

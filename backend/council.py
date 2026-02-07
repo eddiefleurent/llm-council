@@ -1,14 +1,17 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any, Tuple, Optional
-from .openrouter import query_models_parallel, query_model, ModelQueryError, is_error
-from .config import DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL, get_council_config, get_effective_models
+from typing import Any
+
+from .config import (
+    get_council_config,
+    get_effective_models,
+)
+from .openrouter import ModelQueryError, is_error, query_model, query_models_parallel
 
 
 async def stage1_collect_responses(
-    messages: List[Dict[str, str]],
-    council_models: Optional[List[str]] = None
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    messages: list[dict[str, str]], council_models: list[str] | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Stage 1: Collect individual responses from all council models.
 
@@ -25,7 +28,9 @@ async def stage1_collect_responses(
         council_models = config["council_models"]
 
     # Log which models are being queried
-    print(f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}")
+    print(
+        f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}"
+    )
 
     # Query all models in parallel with full conversation context
     responses = await query_models_parallel(council_models, messages)
@@ -38,31 +43,36 @@ async def stage1_collect_responses(
             if isinstance(response, ModelQueryError):
                 stage1_errors.append(response.to_dict())
             else:
-                stage1_errors.append({
-                    'error_type': 'unknown',
-                    'message': 'Unknown error occurred',
-                    'model': model
-                })
+                stage1_errors.append(
+                    {
+                        "error_type": "unknown",
+                        "message": "Unknown error occurred",
+                        "model": model,
+                    }
+                )
         else:
-            stage1_results.append({
-                "model": model,
-                "response": response.get('content', '')
-            })
+            stage1_results.append(
+                {"model": model, "response": response.get("content", "")}
+            )
 
     # Log results
-    print(f"[Stage 1] Results: {len(stage1_results)} successful, {len(stage1_errors)} failed")
+    print(
+        f"[Stage 1] Results: {len(stage1_results)} successful, {len(stage1_errors)} failed"
+    )
     if stage1_errors:
         for error in stage1_errors:
-            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
+            print(
+                f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}"
+            )
 
     return stage1_results, stage1_errors
 
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]],
-    council_models: Optional[List[str]] = None
-) -> Tuple[List[Dict[str, Any]], Dict[str, str], List[Dict[str, Any]]]:
+    stage1_results: list[dict[str, Any]],
+    council_models: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
     """
     Stage 2: Each model ranks the anonymized responses.
 
@@ -80,22 +90,26 @@ async def stage2_collect_rankings(
         council_models = config["council_models"]
 
     # Log which models are being queried
-    print(f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}")
-    
+    print(
+        f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}"
+    )
+
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
 
     # Create mapping from label to model name
     label_to_model = {
-        f"Response {label}": result['model']
-        for label, result in zip(labels, stage1_results)
+        f"Response {label}": result["model"]
+        for label, result in zip(labels, stage1_results, strict=False)
     }
 
     # Build the ranking prompt
-    responses_text = "\n\n".join([
-        f"Response {label}:\n{result['response']}"
-        for label, result in zip(labels, stage1_results)
-    ])
+    responses_text = "\n\n".join(
+        [
+            f"Response {label}:\n{result['response']}"
+            for label, result in zip(labels, stage1_results, strict=False)
+        ]
+    )
 
     ranking_prompt = f"""You are evaluating different responses to the following question:
 
@@ -141,35 +155,39 @@ Now provide your evaluation and ranking:"""
             if isinstance(response, ModelQueryError):
                 stage2_errors.append(response.to_dict())
             else:
-                stage2_errors.append({
-                    'error_type': 'unknown',
-                    'message': 'Unknown error occurred',
-                    'model': model
-                })
+                stage2_errors.append(
+                    {
+                        "error_type": "unknown",
+                        "message": "Unknown error occurred",
+                        "model": model,
+                    }
+                )
         else:
-            full_text = response.get('content', '')
+            full_text = response.get("content", "")
             parsed = parse_ranking_from_text(full_text)
-            stage2_results.append({
-                "model": model,
-                "ranking": full_text,
-                "parsed_ranking": parsed
-            })
+            stage2_results.append(
+                {"model": model, "ranking": full_text, "parsed_ranking": parsed}
+            )
 
     # Log results
-    print(f"[Stage 2] Results: {len(stage2_results)} successful, {len(stage2_errors)} failed")
+    print(
+        f"[Stage 2] Results: {len(stage2_results)} successful, {len(stage2_errors)} failed"
+    )
     if stage2_errors:
         for error in stage2_errors:
-            print(f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}")
+            print(
+                f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}"
+            )
 
     return stage2_results, label_to_model, stage2_errors
 
 
 async def stage3_synthesize_final(
     user_query: str,
-    stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]],
-    chairman_model: Optional[str] = None
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    stage1_results: list[dict[str, Any]],
+    stage2_results: list[dict[str, Any]],
+    chairman_model: str | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Stage 3: Chairman synthesizes final response.
 
@@ -191,15 +209,19 @@ async def stage3_synthesize_final(
     print(f"[Stage 3] Chairman model: {chairman_model}")
 
     # Build comprehensive context for chairman
-    stage1_text = "\n\n".join([
-        f"Model: {result['model']}\nResponse: {result['response']}"
-        for result in stage1_results
-    ])
+    stage1_text = "\n\n".join(
+        [
+            f"Model: {result['model']}\nResponse: {result['response']}"
+            for result in stage1_results
+        ]
+    )
 
-    stage2_text = "\n\n".join([
-        f"Model: {result['model']}\nRanking: {result['ranking']}"
-        for result in stage2_results
-    ])
+    stage2_text = "\n\n".join(
+        [
+            f"Model: {result['model']}\nRanking: {result['ranking']}"
+            for result in stage2_results
+        ]
+    )
 
     chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
@@ -228,32 +250,36 @@ Provide a clear, well-reasoned final answer that represents the council's collec
         if isinstance(response, ModelQueryError):
             error_info = response.to_dict()
             stage3_errors.append(error_info)
-            print(f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}")
+            print(
+                f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
+            )
             return {
                 "model": chairman_model,
                 "response": f"Error: {error_info['message']}",
-                "error": error_info
+                "error": error_info,
             }, stage3_errors
         else:
-            stage3_errors.append({
-                'error_type': 'unknown',
-                'message': 'Unknown error occurred',
-                'model': chairman_model
-            })
+            stage3_errors.append(
+                {
+                    "error_type": "unknown",
+                    "message": "Unknown error occurred",
+                    "model": chairman_model,
+                }
+            )
             print("[Stage 3] ✗ Chairman failed: unknown error")
             return {
                 "model": chairman_model,
-                "response": "Error: Unable to generate final synthesis."
+                "response": "Error: Unable to generate final synthesis.",
             }, stage3_errors
 
     print("[Stage 3] ✓ Chairman synthesis complete")
     return {
         "model": chairman_model,
-        "response": response.get('content', '')
+        "response": response.get("content", ""),
     }, stage3_errors
 
 
-def parse_ranking_from_text(ranking_text: str) -> List[str]:
+def parse_ranking_from_text(ranking_text: str) -> list[str]:
     """
     Parse the FINAL RANKING section from the model's response.
 
@@ -273,24 +299,25 @@ def parse_ranking_from_text(ranking_text: str) -> List[str]:
             ranking_section = parts[1]
             # Try to extract numbered list format (e.g., "1. Response A")
             # This pattern looks for: number, period, optional space, "Response X"
-            numbered_matches = re.findall(r'\d+\.\s*Response [A-Z]', ranking_section)
+            numbered_matches = re.findall(r"\d+\.\s*Response [A-Z]", ranking_section)
             if numbered_matches:
                 # Extract just the "Response X" part
-                return [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
+                return [
+                    re.search(r"Response [A-Z]", m).group() for m in numbered_matches
+                ]
 
             # Fallback: Extract all "Response X" patterns in order
-            matches = re.findall(r'Response [A-Z]', ranking_section)
+            matches = re.findall(r"Response [A-Z]", ranking_section)
             return matches
 
     # Fallback: try to find any "Response X" patterns in order
-    matches = re.findall(r'Response [A-Z]', ranking_text)
+    matches = re.findall(r"Response [A-Z]", ranking_text)
     return matches
 
 
 def calculate_aggregate_rankings(
-    stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, str]
-) -> List[Dict[str, Any]]:
+    stage2_results: list[dict[str, Any]], label_to_model: dict[str, str]
+) -> list[dict[str, Any]]:
     """
     Calculate aggregate rankings across all models.
 
@@ -307,7 +334,7 @@ def calculate_aggregate_rankings(
     model_positions = defaultdict(list)
 
     for ranking in stage2_results:
-        ranking_text = ranking['ranking']
+        ranking_text = ranking["ranking"]
 
         # Parse the ranking from the structured format
         parsed_ranking = parse_ranking_from_text(ranking_text)
@@ -322,22 +349,23 @@ def calculate_aggregate_rankings(
     for model, positions in model_positions.items():
         if positions:
             avg_rank = sum(positions) / len(positions)
-            aggregate.append({
-                "model": model,
-                "average_rank": round(avg_rank, 2),
-                "rankings_count": len(positions)
-            })
+            aggregate.append(
+                {
+                    "model": model,
+                    "average_rank": round(avg_rank, 2),
+                    "rankings_count": len(positions),
+                }
+            )
 
     # Sort by average rank (lower is better)
-    aggregate.sort(key=lambda x: x['average_rank'])
+    aggregate.sort(key=lambda x: x["average_rank"])
 
     return aggregate
 
 
 def calculate_tournament_rankings(
-    stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, str]
-) -> List[Dict[str, Any]]:
+    stage2_results: list[dict[str, Any]], label_to_model: dict[str, str]
+) -> list[dict[str, Any]]:
     """
     Calculate rankings using tournament-style pairwise comparison.
 
@@ -370,7 +398,17 @@ def calculate_tournament_rankings(
 
     if len(models) < 2:
         # Need at least 2 models for pairwise comparison
-        return [{"model": m, "wins": 0, "losses": 0, "ties": 0, "win_percentage": 0.0, "total_matchups": 0} for m in models]
+        return [
+            {
+                "model": m,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "win_percentage": 0.0,
+                "total_matchups": 0,
+            }
+            for m in models
+        ]
 
     # Track pairwise wins: pairwise_wins[(model_a, model_b)] = count of times a ranked above b
     pairwise_wins = defaultdict(int)
@@ -378,11 +416,13 @@ def calculate_tournament_rankings(
     # Process each ranker's parsed ranking
     # Use pre-parsed ranking if available, otherwise parse from text
     for ranking in stage2_results:
-        parsed_ranking = ranking.get('parsed_ranking')
+        parsed_ranking = ranking.get("parsed_ranking")
         if not parsed_ranking:
             # Fallback: parse from raw ranking text (consistent with calculate_aggregate_rankings)
-            ranking_text = ranking.get('ranking', '')
-            parsed_ranking = parse_ranking_from_text(ranking_text) if ranking_text else []
+            ranking_text = ranking.get("ranking", "")
+            parsed_ranking = (
+                parse_ranking_from_text(ranking_text) if ranking_text else []
+            )
 
         if not parsed_ranking:
             continue
@@ -409,9 +449,9 @@ def calculate_tournament_rankings(
                     pos_a, pos_b = pos_b, pos_a
 
                 if pos_a < pos_b:
-                    pairwise_wins[(model_a, model_b, 'a')] += 1
+                    pairwise_wins[(model_a, model_b, "a")] += 1
                 elif pos_b < pos_a:
-                    pairwise_wins[(model_a, model_b, 'b')] += 1
+                    pairwise_wins[(model_a, model_b, "b")] += 1
                 # Equal positions would be a tie (shouldn't happen with rankings)
 
     # Calculate wins, losses, and ties for each model
@@ -430,8 +470,8 @@ def calculate_tournament_rankings(
                 continue
             processed_pairs.add(pair_key)
 
-            a_wins = pairwise_wins.get((model_a, model_b, 'a'), 0)
-            b_wins = pairwise_wins.get((model_a, model_b, 'b'), 0)
+            a_wins = pairwise_wins.get((model_a, model_b, "a"), 0)
+            b_wins = pairwise_wins.get((model_a, model_b, "b"), 0)
 
             if a_wins > b_wins:
                 model_stats[model_a]["wins"] += 1
@@ -456,25 +496,26 @@ def calculate_tournament_rankings(
         else:
             win_pct = 0.0
 
-        results.append({
-            "model": model,
-            "wins": stats["wins"],
-            "losses": stats["losses"],
-            "ties": stats["ties"],
-            "win_percentage": round(win_pct, 3),
-            "total_matchups": int(total_matchups)
-        })
+        results.append(
+            {
+                "model": model,
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+                "ties": stats["ties"],
+                "win_percentage": round(win_pct, 3),
+                "total_matchups": int(total_matchups),
+            }
+        )
 
     # Sort by win percentage (higher is better)
-    results.sort(key=lambda x: (-x['win_percentage'], x['losses']))
+    results.sort(key=lambda x: (-x["win_percentage"], x["losses"]))
 
     return results
 
 
 async def chairman_direct_response(
-    messages: List[Dict[str, str]],
-    chairman_model: Optional[str] = None
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    messages: list[dict[str, str]], chairman_model: str | None = None
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Query the chairman model directly without the full council process.
 
@@ -507,32 +548,35 @@ async def chairman_direct_response(
         if isinstance(response, ModelQueryError):
             error_info = response.to_dict()
             errors.append(error_info)
-            print(f"[Chairman Direct] ✗ Failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}")
+            print(
+                f"[Chairman Direct] ✗ Failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
+            )
             return {
                 "model": chairman_model,
                 "response": f"Error: {error_info['message']}",
-                "error": error_info
+                "error": error_info,
             }, errors
         else:
-            errors.append({
-                'error_type': 'unknown',
-                'message': 'Unknown error occurred',
-                'model': chairman_model
-            })
+            errors.append(
+                {
+                    "error_type": "unknown",
+                    "message": "Unknown error occurred",
+                    "model": chairman_model,
+                }
+            )
             print("[Chairman Direct] ✗ Failed: unknown error")
             return {
                 "model": chairman_model,
-                "response": "Error: Unable to generate response."
+                "response": "Error: Unable to generate response.",
             }, errors
 
     print("[Chairman Direct] ✓ Response complete")
-    return {
-        "model": chairman_model,
-        "response": response.get('content', '')
-    }, errors
+    return {"model": chairman_model, "response": response.get("content", "")}, errors
 
 
-async def generate_conversation_title(user_query: str, chairman_model: Optional[str] = None) -> str:
+async def generate_conversation_title(
+    user_query: str, chairman_model: str | None = None
+) -> str:
     """
     Generate a short title for a conversation based on the first user message.
 
@@ -547,7 +591,7 @@ async def generate_conversation_title(user_query: str, chairman_model: Optional[
     if chairman_model is None:
         config = get_council_config()
         chairman_model = config["chairman_model"]
-    
+
     title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
 
@@ -564,10 +608,10 @@ Title:"""
         # Fallback to a generic title
         return "New Conversation"
 
-    title = response.get('content', 'New Conversation').strip()
+    title = response.get("content", "New Conversation").strip()
 
     # Clean up the title - remove quotes, limit length
-    title = title.strip('"\'')
+    title = title.strip("\"'")
 
     # Truncate if too long
     if len(title) > 50:
@@ -577,11 +621,11 @@ Title:"""
 
 
 async def run_full_council(
-    messages: List[Dict[str, str]],
-    council_models: Optional[List[str]] = None,
-    chairman_model: Optional[str] = None,
-    web_search_enabled: Optional[bool] = None
-) -> Tuple[List, List, Dict, Dict]:
+    messages: list[dict[str, str]],
+    council_models: list[str] | None = None,
+    chairman_model: str | None = None,
+    web_search_enabled: bool | None = None,
+) -> tuple[list, list, dict, dict]:
     """
     Run the complete 3-stage council process with conversation context.
 
@@ -596,34 +640,50 @@ async def run_full_council(
         metadata includes 'errors' list with any failures from all stages
     """
     all_errors = []
-    
+
     # Defensive check: ensure messages is not empty
     if not messages:
-        return [], [], {
-            "model": "error",
-            "response": "No messages provided. Please enter a query."
-        }, {"errors": [{"error_type": "validation", "message": "Empty messages list"}]}
-    
+        return (
+            [],
+            [],
+            {
+                "model": "error",
+                "response": "No messages provided. Please enter a query.",
+            },
+            {
+                "errors": [
+                    {"error_type": "validation", "message": "Empty messages list"}
+                ]
+            },
+        )
+
     # Get effective models (applies :online suffix if web search enabled)
     effective = get_effective_models(council_models, chairman_model, web_search_enabled)
     council_models = effective["council_models"]
     chairman_model = effective["chairman_model"]
     web_search_enabled = effective["web_search_enabled"]
-    
+
     # Extract current query from messages
     current_query = messages[-1]["content"]
 
     # Stage 1: Collect individual responses (with full context)
-    stage1_results, stage1_errors = await stage1_collect_responses(messages, council_models)
+    stage1_results, stage1_errors = await stage1_collect_responses(
+        messages, council_models
+    )
     all_errors.extend(stage1_errors)
 
     # If no models responded successfully, return error with details
     if not stage1_results:
         error_summary = _summarize_errors(stage1_errors)
-        return [], [], {
-            "model": "error",
-            "response": f"All models failed to respond. {error_summary}"
-        }, {"errors": all_errors}
+        return (
+            [],
+            [],
+            {
+                "model": "error",
+                "response": f"All models failed to respond. {error_summary}",
+            },
+            {"errors": all_errors},
+        )
 
     # Stage 2: Collect rankings (uses current query only for ranking prompt)
     stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
@@ -637,10 +697,7 @@ async def run_full_council(
 
     # Stage 3: Synthesize final answer
     stage3_result, stage3_errors = await stage3_synthesize_final(
-        current_query,
-        stage1_results,
-        stage2_results,
-        chairman_model
+        current_query, stage1_results, stage2_results, chairman_model
     )
     all_errors.extend(stage3_errors)
 
@@ -655,8 +712,10 @@ async def run_full_council(
         "errors": {
             "stage1": stage1_errors,
             "stage2": stage2_errors,
-            "stage3": stage3_errors
-        } if any([stage1_errors, stage2_errors, stage3_errors]) else None
+            "stage3": stage3_errors,
+        }
+        if any([stage1_errors, stage2_errors, stage3_errors])
+        else None,
     }
 
     # Final summary
@@ -668,7 +727,7 @@ async def run_full_council(
     return stage1_results, stage2_results, stage3_result, metadata
 
 
-def _summarize_errors(errors: List[Dict[str, Any]]) -> str:
+def _summarize_errors(errors: list[dict[str, Any]]) -> str:
     """Create a human-readable summary of errors."""
     if not errors:
         return "Please try again."
@@ -676,24 +735,24 @@ def _summarize_errors(errors: List[Dict[str, Any]]) -> str:
     # Group by error type
     by_type = {}
     for error in errors:
-        error_type = error.get('error_type', 'unknown')
+        error_type = error.get("error_type", "unknown")
         if error_type not in by_type:
             by_type[error_type] = []
         by_type[error_type].append(error)
 
     summaries = []
-    if 'auth' in by_type:
+    if "auth" in by_type:
         summaries.append("API key issue - please check your OPENROUTER_API_KEY")
-    if 'payment' in by_type:
+    if "payment" in by_type:
         summaries.append("Payment required - please add credits to OpenRouter")
-    if 'rate_limit' in by_type:
+    if "rate_limit" in by_type:
         summaries.append(f"{len(by_type['rate_limit'])} model(s) rate limited")
-    if 'not_found' in by_type:
-        models = [e.get('model', 'unknown') for e in by_type['not_found']]
+    if "not_found" in by_type:
+        models = [e.get("model", "unknown") for e in by_type["not_found"]]
         summaries.append(f"Model(s) not found: {', '.join(models)}")
-    if 'timeout' in by_type:
+    if "timeout" in by_type:
         summaries.append(f"{len(by_type['timeout'])} model(s) timed out")
-    if 'server' in by_type:
+    if "server" in by_type:
         summaries.append("OpenRouter server error")
 
     return "; ".join(summaries) if summaries else "Please try again."

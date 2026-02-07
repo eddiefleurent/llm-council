@@ -1,19 +1,22 @@
 """Unit tests for storage module."""
 
-import pytest
 import os
-import json
 import tempfile
 from unittest.mock import patch
+
+import pytest
+
 from backend import storage
 
 
 @pytest.fixture
 def temp_data_dir():
     """Create a temporary data directory for tests."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch.object(storage, 'DATA_DIR', tmpdir):
-            yield tmpdir
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch.object(storage, "DATA_DIR", tmpdir),
+    ):
+        yield tmpdir
 
 
 def test_create_conversation(temp_data_dir):
@@ -129,17 +132,17 @@ def test_path_traversal_protection():
     """Test that path traversal attacks are blocked."""
     # These path traversal attacks would escape the data directory
     malicious_ids = [
-        "../etc/passwd",           # Simple parent directory escape
-        "/etc/passwd",             # Absolute path (os.path.join returns this as-is)
+        "../etc/passwd",  # Simple parent directory escape
+        "/etc/passwd",  # Absolute path (os.path.join returns this as-is)
         "valid/../../../etc/passwd",  # Nested traversal
     ]
-    
+
     for malicious_id in malicious_ids:
         with pytest.raises(ValueError, match="path traversal"):
             storage.create_conversation(malicious_id)
-        
+
         with pytest.raises(ValueError, match="path traversal"):
             storage.get_conversation(malicious_id)
-        
+
         with pytest.raises(ValueError, match="path traversal"):
             storage.save_conversation({"id": malicious_id})

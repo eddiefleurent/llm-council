@@ -1,13 +1,14 @@
 """Audio transcription using Groq's Whisper API."""
 
-import os
 import logging
+import os
+
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception,
-    before_sleep_log,
 )
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ _client = None
 
 class GroqNotConfiguredError(Exception):
     """Raised when GROQ_API_KEY is not configured."""
+
     pass
 
 
@@ -34,6 +36,7 @@ def get_groq_client():
             )
         try:
             from groq import Groq
+
             _client = Groq(api_key=api_key)
         except ImportError as e:
             raise GroqNotConfiguredError(
@@ -63,10 +66,10 @@ def _is_retriable_error(exception: Exception) -> bool:
     try:
         from groq import (
             APIConnectionError,
-            APITimeoutError,
-            RateLimitError,
-            InternalServerError,
             APIStatusError,
+            APITimeoutError,
+            InternalServerError,
+            RateLimitError,
         )
 
         # Retry on known transient error types
@@ -97,7 +100,9 @@ def _is_retriable_error(exception: Exception) -> bool:
 @retry(
     retry=retry_if_exception(_is_retriable_error),
     stop=stop_after_attempt(4),  # 4 total attempts with 3 retries
-    wait=wait_exponential(multiplier=1, min=1, max=10),  # 1s, 2s, 4s between attempts (max cap 10s)
+    wait=wait_exponential(
+        multiplier=1, min=1, max=10
+    ),  # 1s, 2s, 4s between attempts (max cap 10s)
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
@@ -135,5 +140,7 @@ def transcribe_audio(
         response_format="verbose_json",
     )
 
-    logger.info(f"Transcribed audio: {len(audio_data)} bytes -> {len(transcription.text)} chars")
+    logger.info(
+        f"Transcribed audio: {len(audio_data)} bytes -> {len(transcription.text)} chars"
+    )
     return transcription.text

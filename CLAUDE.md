@@ -351,6 +351,49 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - `tests/integration/` for API tests
 - Run with: `uv run pytest` or `pytest`
 
+### Backend Code Quality (Ruff)
+- **Ruff**: Fast Python linter and formatter (v0.15.0)
+- Configuration in `pyproject.toml` under `[tool.ruff]`
+- **Line length**: 88 characters (Black/Ruff standard)
+- **Target**: Python 3.10+
+- **Rules enabled**: pyflakes, pycodestyle errors, isort, pep8-naming, pyupgrade, flake8-bugbear, flake8-comprehensions, flake8-simplify, Ruff-specific
+- **Key features**:
+  - Modern Python idioms (replaces `typing.List` with `list`, `Optional[X]` with `X | None`)
+  - Import sorting and organization
+  - Bug detection (flake8-bugbear)
+  - Code simplification suggestions
+- **Pre-commit hooks**: Configured in `.pre-commit-config.yaml` (run with `make pre-commit-install`)
+- See "Make Commands" section below for usage
+
+### Make Commands
+The project includes a `Makefile` with common development commands:
+
+**Setup & Installation:**
+- `make install` - Install production dependencies
+- `make dev-install` - Install dev dependencies (testing, linting)
+- `make pre-commit-install` - Install pre-commit hooks
+
+**Code Quality:**
+- `make lint` - Run ruff linter (check only)
+- `make lint-fix` - Run ruff linter with auto-fix
+- `make lint-unsafe` - Run ruff with unsafe auto-fixes
+- `make format` - Run ruff formatter
+- `make format-check` - Check formatting without changes
+- `make pre-commit-run` - Run all pre-commit hooks manually
+
+**Testing:**
+- `make test` - Run pytest tests
+- `make test-cov` - Run tests with coverage report (generates `htmlcov/`)
+
+**Development:**
+- `make run-backend` - Start FastAPI backend (http://localhost:8001)
+- `make run-frontend` - Start Vite frontend (http://localhost:5173)
+- `make run` - Run both servers in parallel
+
+**Cleanup:**
+- `make clean` - Remove cache files and build artifacts
+- `make help` - Show all available commands
+
 ### Frontend Quality Commands
 - **Lint all files**: `pnpm run lint` (from `frontend/` directory)
 - **Lint specific file**: `pnpm exec eslint src/components/ModelSelector.jsx`
