@@ -258,6 +258,82 @@ async def transcribe_voice(audio: UploadFile = File(...)):
 # ============================================================================
 
 
+async def _validate_and_dedupe_models(
+    council_models: list[str], chairman_model: str
+) -> tuple[list[str], list[str]]:
+    """
+    Shared validation helper for model configuration.
+
+    Validates non-empty requirements, deduplicates council models,
+    checks format (provider/model), and verifies existence in OpenRouter.
+
+    Args:
+        council_models: List of council model IDs
+        chairman_model: Chairman model ID
+
+    Returns:
+        Tuple of (deduplicated_council_models, invalid_formats)
+
+    Raises:
+        HTTPException: If validation fails (empty list, invalid formats, or unknown models)
+    """
+    # Validate non-empty
+    if not council_models:
+        raise HTTPException(
+            status_code=400, detail="At least one council model is required"
+        )
+    if not chairman_model:
+        raise HTTPException(status_code=400, detail="Chairman model is required")
+
+    # Deduplicate council models while preserving order
+    seen = set()
+    deduped_council_models = []
+    for model_id in council_models:
+        if model_id not in seen:
+            seen.add(model_id)
+            deduped_council_models.append(model_id)
+
+    # Validate model ID format (provider/model)
+    def validate_model_id_format(model_id: str) -> bool:
+        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
+
+    invalid_formats = []
+    for model_id in deduped_council_models:
+        if not validate_model_id_format(model_id):
+            invalid_formats.append(model_id)
+    if not validate_model_id_format(chairman_model):
+        invalid_formats.append(chairman_model)
+
+    if invalid_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
+        )
+
+    # Validate models exist in OpenRouter
+    try:
+        cache = await get_available_models()
+        all_models_to_validate = [*deduped_council_models, chairman_model]
+        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
+
+        if invalid_models:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Could not validate models against OpenRouter: {e}")
+        # If we can't reach OpenRouter, at least ensure format is correct
+        if invalid_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
+            ) from None
+
+    return deduped_council_models, invalid_formats
+
+
 @app.get("/api/council/config")
 async def get_council_configuration():
     """
@@ -285,65 +361,10 @@ async def update_council_configuration(request: UpdateCouncilConfigRequest):
 
     Validates that all model IDs exist in OpenRouter before saving.
     """
-    # Pre-validation: require council_models and chairman_model
-    if not request.council_models:
-        raise HTTPException(
-            status_code=400, detail="At least one council model is required"
-        )
-    if not request.chairman_model:
-        raise HTTPException(status_code=400, detail="Chairman model is required")
-
-    # Deduplicate council models while preserving order
-    seen = set()
-    deduped_council_models = []
-    for model_id in request.council_models:
-        if model_id not in seen:
-            seen.add(model_id)
-            deduped_council_models.append(model_id)
-
-    # Lightweight ID format validation helper
-    def validate_model_id_format(model_id: str) -> bool:
-        """Validate model ID matches 'provider/model' format."""
-        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
-
-    # Validate model ID formats before OpenRouter validation
-    invalid_formats = []
-    for model_id in deduped_council_models:
-        if not validate_model_id_format(model_id):
-            invalid_formats.append(model_id)
-    if not validate_model_id_format(request.chairman_model):
-        invalid_formats.append(request.chairman_model)
-
-    if invalid_formats:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-        )
-
-    # Validate models exist in OpenRouter
-    try:
-        cache = await get_available_models()
-
-        # Combine all models to validate
-        all_models_to_validate = [*deduped_council_models, request.chairman_model]
-        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
-
-        if invalid_models:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        # If we can't validate (e.g., OpenRouter is down), still apply format validation
-        logger.warning(f"Could not validate models against OpenRouter: {e}")
-
-        # Re-check format validation in fallback path
-        if invalid_formats:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-            ) from None
+    # Use shared validation helper
+    deduped_council_models, _ = await _validate_and_dedupe_models(
+        request.council_models, request.chairman_model
+    )
 
     # Save the configuration (use deduplicated list)
     save_council_config(
@@ -465,58 +486,10 @@ async def update_conversation_configuration(
 
     This will be used for all future queries within this conversation.
     """
-    # Validation (similar to global config update)
-    if not request.council_models:
-        raise HTTPException(
-            status_code=400, detail="At least one council model is required"
-        )
-    if not request.chairman_model:
-        raise HTTPException(status_code=400, detail="Chairman model is required")
-
-    # Deduplicate council models
-    seen = set()
-    deduped_council_models = []
-    for model_id in request.council_models:
-        if model_id not in seen:
-            seen.add(model_id)
-            deduped_council_models.append(model_id)
-
-    # Format validation
-    def validate_model_id_format(model_id: str) -> bool:
-        return bool(model_id and re.match(r"^[^/]+/[^/]+$", model_id))
-
-    invalid_formats = []
-    for model_id in deduped_council_models:
-        if not validate_model_id_format(model_id):
-            invalid_formats.append(model_id)
-    if not validate_model_id_format(request.chairman_model):
-        invalid_formats.append(request.chairman_model)
-
-    if invalid_formats:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-        )
-
-    # Validate models exist in OpenRouter
-    try:
-        cache = await get_available_models()
-        all_models_to_validate = [*deduped_council_models, request.chairman_model]
-        _, invalid_models = validate_model_ids(all_models_to_validate, cache)
-
-        if invalid_models:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid model(s): {', '.join(invalid_models)}"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Could not validate models against OpenRouter: {e}")
-        if invalid_formats:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid model ID format (must be 'provider/model'): {', '.join(invalid_formats)}",
-            ) from None
+    # Use shared validation helper
+    deduped_council_models, _ = await _validate_and_dedupe_models(
+        request.council_models, request.chairman_model
+    )
 
     # Update the conversation's config
     try:

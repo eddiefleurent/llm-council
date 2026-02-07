@@ -223,14 +223,19 @@ export default function CouncilConfig({
     setSaving(true);
     setError(null);
     try {
-      // For non-draft conversations, just load factory defaults into form without persisting
-      // For draft/new conversations, reset global config as well
       let result;
       if (isDraftMode || isNewConversation) {
+        // For draft/new conversations, reset global config (persists defaults)
         result = await api.resetCouncilConfig();
       } else {
-        // Just load factory defaults (from DEFAULT_COUNCIL_MODELS, DEFAULT_CHAIRMAN_MODEL)
-        result = await api.resetCouncilConfig();
+        // For existing conversations, load global config WITHOUT persisting
+        // This loads factory defaults into the form but doesn't mutate global config
+        const globalConfig = await api.getCouncilConfig();
+        result = globalConfig.defaults || {
+          council_models: globalConfig.council_models,
+          chairman_model: globalConfig.chairman_model,
+          web_search_enabled: globalConfig.web_search_enabled || false
+        };
       }
 
       setCouncilModels(result.council_models);
