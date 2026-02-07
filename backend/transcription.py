@@ -2,6 +2,13 @@
 
 import os
 import logging
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+    before_sleep_log,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +42,90 @@ def get_groq_client():
     return _client
 
 
+def _is_retriable_error(exception: Exception) -> bool:
+    """
+    Determine if an exception should trigger a retry.
+
+    Retries on transient failures:
+    - Network/connection errors
+    - Timeouts
+    - Rate limits (429)
+    - Request timeout (408)
+    - Conflict (409)
+    - Server errors (5xx)
+
+    Does NOT retry on permanent failures:
+    - Authentication errors (401)
+    - Bad request (400)
+    - Payment required (402)
+    - Permission denied (403)
+    """
+    try:
+        from groq import (
+            APIConnectionError,
+            APITimeoutError,
+            RateLimitError,
+            InternalServerError,
+            APIStatusError,
+        )
+
+        # Retry on known transient error types
+        if isinstance(
+            exception,
+            (
+                APIConnectionError,
+                APITimeoutError,
+                RateLimitError,
+                InternalServerError,
+            ),
+        ):
+            return True
+
+        # Check status code for APIStatusError
+        if isinstance(exception, APIStatusError):
+            status_code = getattr(exception, "status_code", None)
+            if status_code is not None:
+                # Retry on: 408 (Request Timeout), 409 (Conflict), 429 (Rate Limit), 5xx (Server Errors)
+                return status_code in {408, 409, 429} or (500 <= status_code < 600)
+
+        return False
+    except ImportError:
+        # If groq is not installed, don't retry
+        return False
+
+
+@retry(
+    retry=retry_if_exception(_is_retriable_error),
+    stop=stop_after_attempt(4),  # 4 total attempts with 3 retries
+    wait=wait_exponential(multiplier=1, min=1, max=10),  # 1s, 2s, 4s between attempts (max cap 10s)
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 def transcribe_audio(
     audio_data: bytes,
     filename: str = "audio.webm",
     language: str = "en",
 ) -> str:
     """
-    Transcribe audio using Groq's Whisper API.
-    
+    Transcribe audio using Groq's Whisper API with automatic retries.
+
+    Retries on transient failures (network errors, timeouts, rate limits, server errors)
+    with exponential backoff. Does not retry on permanent failures (auth, bad request).
+
     Args:
         audio_data: Raw audio bytes
         filename: Original filename (used for format detection)
         language: Language code (default: "en")
-        
+
     Returns:
         Transcribed text
-        
+
     Raises:
         GroqNotConfiguredError: If GROQ_API_KEY is not set
+        Various Groq exceptions: If transcription fails after retries
     """
     client = get_groq_client()
-    
+
     # Groq's API expects a file tuple: (filename, file_bytes)
     transcription = client.audio.transcriptions.create(
         file=(filename, audio_data),
@@ -64,6 +134,6 @@ def transcribe_audio(
         language=language,
         response_format="verbose_json",
     )
-    
+
     logger.info(f"Transcribed audio: {len(audio_data)} bytes -> {len(transcription.text)} chars")
     return transcription.text

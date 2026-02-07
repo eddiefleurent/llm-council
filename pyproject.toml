@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.9.0",
     "groq>=1.0.0",
     "python-multipart>=0.0.9",
+    "tenacity>=8.0.0",
 ]
 
 [project.optional-dependencies]
