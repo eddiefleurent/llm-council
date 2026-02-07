@@ -6,7 +6,7 @@ from tenacity import (
     retry,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
+    retry_if_exception,
     before_sleep_log,
 )
 
@@ -82,7 +82,7 @@ def _is_retriable_error(exception: Exception) -> bool:
 
 
 @retry(
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception(_is_retriable_error),
     stop=stop_after_attempt(4),  # 1 initial attempt + 3 retries
     wait=wait_exponential(multiplier=1, min=1, max=10),  # 1s, 2s, 4s, 8s (capped at 10s)
     before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -113,23 +113,14 @@ def transcribe_audio(
     """
     client = get_groq_client()
 
-    try:
-        # Groq's API expects a file tuple: (filename, file_bytes)
-        transcription = client.audio.transcriptions.create(
-            file=(filename, audio_data),
-            model="whisper-large-v3-turbo",
-            temperature=0,
-            language=language,
-            response_format="verbose_json",
-        )
+    # Groq's API expects a file tuple: (filename, file_bytes)
+    transcription = client.audio.transcriptions.create(
+        file=(filename, audio_data),
+        model="whisper-large-v3-turbo",
+        temperature=0,
+        language=language,
+        response_format="verbose_json",
+    )
 
-        logger.info(f"Transcribed audio: {len(audio_data)} bytes -> {len(transcription.text)} chars")
-        return transcription.text
-    except Exception as e:
-        # Check if this is a retriable error before allowing retry
-        if not _is_retriable_error(e):
-            logger.warning(f"Non-retriable error during transcription: {type(e).__name__}: {e}")
-            raise
-        # Retriable error - let tenacity handle the retry
-        logger.warning(f"Retriable error during transcription: {type(e).__name__}: {e}")
-        raise
+    logger.info(f"Transcribed audio: {len(audio_data)} bytes -> {len(transcription.text)} chars")
+    return transcription.text
