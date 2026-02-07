@@ -90,7 +90,6 @@ function App() {
         });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps intentional - run once on mount
 
   // Save current conversation ID to localStorage for refresh recovery
@@ -190,7 +189,10 @@ function App() {
 
         const newConv = await api.createConversation(config);
         conversationId = newConv.id;
+
+        // Set both conversation ID and full conversation object
         setCurrentConversationId(conversationId);
+        setCurrentConversation(newConv);
         setIsDraftMode(false);
         setDraftConfig(null); // Clear draft config
 

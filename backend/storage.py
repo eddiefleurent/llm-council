@@ -305,6 +305,7 @@ def get_conversation_config(conversation_id: str) -> dict[str, Any]:
     Get the configuration for a specific conversation.
 
     If the conversation doesn't have persisted config, falls back to global config.
+    Each field falls back independently - partial overrides are supported.
 
     Args:
         conversation_id: Conversation identifier
@@ -318,16 +319,21 @@ def get_conversation_config(conversation_id: str) -> dict[str, Any]:
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
-    # If conversation has its own config, use it
-    if "council_models" in conversation and "chairman_model" in conversation:
-        return {
-            "council_models": conversation["council_models"],
-            "chairman_model": conversation["chairman_model"],
-            "web_search_enabled": conversation.get("web_search_enabled", False),
-        }
+    # Start with global defaults
+    global_config = get_council_config()
 
-    # Otherwise, fall back to global config
-    return get_council_config()
+    # Overlay conversation-specific config (each field independently)
+    return {
+        "council_models": conversation.get(
+            "council_models", global_config["council_models"]
+        ),
+        "chairman_model": conversation.get(
+            "chairman_model", global_config["chairman_model"]
+        ),
+        "web_search_enabled": conversation.get(
+            "web_search_enabled", global_config["web_search_enabled"]
+        ),
+    }
 
 
 def update_conversation_config(

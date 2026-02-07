@@ -36,6 +36,42 @@ export default function ChatInterface({
     scrollToBottom();
   }, [conversation]);
 
+  const loadConversationConfig = useCallback(async () => {
+    if (!conversation?.id) return;
+
+    // Clear stale config before loading
+    setConversationConfig(null);
+    setLoadingConfig(true);
+    try {
+      const config = await api.getConversationConfig(conversation.id);
+      setConversationConfig(config);
+    } catch (error) {
+      console.error('Failed to load conversation config:', error);
+      setConversationConfig(null); // Clear on error
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, [conversation?.id]);
+
+  const loadGlobalConfigForDraft = useCallback(async () => {
+    // Clear stale config before loading
+    setConversationConfig(null);
+    setLoadingConfig(true);
+    try {
+      const config = await api.getCouncilConfig();
+      setConversationConfig({
+        council_models: config.council_models,
+        chairman_model: config.chairman_model,
+        web_search_enabled: config.web_search_enabled,
+      });
+    } catch (error) {
+      console.error('Failed to load global config:', error);
+      setConversationConfig(null); // Clear on error
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, []);
+
   // Load conversation config when conversation changes
   useEffect(() => {
     if (conversation?.id) {
@@ -49,37 +85,7 @@ export default function ChatInterface({
     } else {
       setConversationConfig(null);
     }
-  }, [conversation?.id, isDraftMode, draftConfig]);
-
-  const loadConversationConfig = async () => {
-    if (!conversation?.id) return;
-
-    setLoadingConfig(true);
-    try {
-      const config = await api.getConversationConfig(conversation.id);
-      setConversationConfig(config);
-    } catch (error) {
-      console.error('Failed to load conversation config:', error);
-    } finally {
-      setLoadingConfig(false);
-    }
-  };
-
-  const loadGlobalConfigForDraft = async () => {
-    setLoadingConfig(true);
-    try {
-      const config = await api.getCouncilConfig();
-      setConversationConfig({
-        council_models: config.council_models,
-        chairman_model: config.chairman_model,
-        web_search_enabled: config.web_search_enabled,
-      });
-    } catch (error) {
-      console.error('Failed to load global config:', error);
-    } finally {
-      setLoadingConfig(false);
-    }
-  };
+  }, [conversation?.id, isDraftMode, draftConfig, loadConversationConfig, loadGlobalConfigForDraft]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -349,8 +355,9 @@ export default function ChatInterface({
           setShowConfig(false);
           if (conversation?.id) {
             loadConversationConfig(); // Reload config after closing
-          } else if (isDraftMode) {
-            loadGlobalConfigForDraft(); // Reload for draft mode
+          } else if (isDraftMode && !draftConfig) {
+            // Only reload global config if no custom draft config exists
+            loadGlobalConfigForDraft();
           }
         }}
         conversationId={conversation?.id}

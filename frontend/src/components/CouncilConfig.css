@@ -401,6 +401,12 @@
   background: var(--accent-light);
 }
 
+.checkbox-row:focus-within {
+  border-color: var(--accent-primary);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
 .checkbox-row input[type="checkbox"] {
   width: 18px;
   height: 18px;

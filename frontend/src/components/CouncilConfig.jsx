@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import { MODEL_PRESETS } from '../presets';
 import ModelSelector from './ModelSelector';
@@ -84,22 +84,7 @@ export default function CouncilConfig({
   const [hasChanges, setHasChanges] = useState(false);
 
   // Load config when opened
-  useEffect(() => {
-    if (isOpen) {
-      loadConfig();
-    }
-  }, [isOpen]);
-
-  // Track changes against the loaded (persisted) config, not the factory defaults
-  useEffect(() => {
-    const configChanged = 
-      JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
-      chairmanModel !== loadedConfig.chairman_model ||
-      webSearchEnabled !== loadedConfig.web_search_enabled;
-    setHasChanges(configChanged);
-  }, [councilModels, chairmanModel, webSearchEnabled, loadedConfig]);
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -131,7 +116,22 @@ export default function CouncilConfig({
     } finally {
       setLoading(false);
     }
-  };
+  }, [isDraftMode, draftConfig, conversationId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadConfig();
+    }
+  }, [isOpen, loadConfig]);
+
+  // Track changes against the loaded (persisted) config, not the factory defaults
+  useEffect(() => {
+    const configChanged =
+      JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
+      chairmanModel !== loadedConfig.chairman_model ||
+      webSearchEnabled !== loadedConfig.web_search_enabled;
+    setHasChanges(configChanged);
+  }, [councilModels, chairmanModel, webSearchEnabled, loadedConfig]);
 
   const handleSave = async () => {
     if (councilModels.length === 0) {
