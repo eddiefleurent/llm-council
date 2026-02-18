@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-02-05.
+ * All model IDs were validated against the OpenRouter API on 2026-02-18.
  */
 export const MODEL_PRESETS = [
   {
@@ -33,7 +33,7 @@ export const MODEL_PRESETS = [
     description: 'Great quality at reasonable cost',
     icon: '⚖️',
     council_models: [
-      'anthropic/claude-sonnet-4.5',
+      'anthropic/claude-sonnet-4.6',
       'openai/gpt-5.2-chat',
       'google/gemini-3-pro-preview',
       'x-ai/grok-4.1-fast',
@@ -48,10 +48,11 @@ export const MODEL_PRESETS = [
     icon: '💰',
     council_models: [
       'anthropic/claude-haiku-4.5',
-      'z-ai/glm-4.7',
+      'z-ai/glm-5',
       'deepseek/deepseek-v3.2-speciale',
       'moonshotai/kimi-k2.5',
       'google/gemini-3-flash-preview',
+      'minimax/minimax-m2.5',
     ],
     chairman_model: 'deepseek/deepseek-v3.2-speciale',
   },
@@ -61,13 +62,13 @@ export const MODEL_PRESETS = [
     description: 'Seven diverse models for broad consensus',
     icon: '🏛️',
     council_models: [
-      'anthropic/claude-sonnet-4.5',
+      'anthropic/claude-sonnet-4.6',
       'openai/gpt-5.2-chat',
       'google/gemini-3-flash-preview',
       'x-ai/grok-4.1-fast',
       'moonshotai/kimi-k2.5',
       'deepseek/deepseek-v3.2-speciale',
-      'z-ai/glm-4.7',
+      'z-ai/glm-5',
     ],
     chairman_model: 'google/gemini-3-pro-preview',
   },
