@@ -27,6 +27,9 @@ export default function ChatInterface({
   const [conversationConfig, setConversationConfig] = useState(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const messagesEndRef = useRef(null);
+  const hasInlineLoading = conversation?.messages?.some(
+    (msg) => msg.role === 'assistant' && msg.loading && Object.values(msg.loading).some(Boolean)
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -256,7 +259,7 @@ export default function ChatInterface({
           </>
         )}
 
-        {isLoading && (
+        {isLoading && !hasInlineLoading && (
           <div className="loading-indicator">
             <div className="spinner"></div>
             <span>{messageMode === 'chairman' ? 'Chairman is responding...' : 'Consulting the council...'}</span>
