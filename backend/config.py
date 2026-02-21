@@ -19,13 +19,13 @@ if not OPENROUTER_API_KEY:
 # Default council members - list of OpenRouter model identifiers
 # These are used when no custom council is configured
 DEFAULT_COUNCIL_MODELS = [
-    "google/gemini-3-pro-preview",
+    "google/gemini-3.1-pro-preview",
     "anthropic/claude-opus-4.5",
     "x-ai/grok-4.1-fast",
 ]
 
 # Default chairman model - synthesizes final response
-DEFAULT_CHAIRMAN_MODEL = "google/gemini-3-pro-preview"
+DEFAULT_CHAIRMAN_MODEL = "google/gemini-3.1-pro-preview"
 
 # Legacy aliases for backward compatibility
 COUNCIL_MODELS = DEFAULT_COUNCIL_MODELS

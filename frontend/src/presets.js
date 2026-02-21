@@ -21,7 +21,7 @@ export const MODEL_PRESETS = [
     council_models: [
       'anthropic/claude-opus-4.6',
       'openai/gpt-5.2',
-      'google/gemini-3-pro-preview',
+      'google/gemini-3.1-pro-preview',
       'x-ai/grok-4',
       'deepseek/deepseek-v3.2-speciale',
     ],
@@ -35,11 +35,11 @@ export const MODEL_PRESETS = [
     council_models: [
       'anthropic/claude-sonnet-4.6',
       'openai/gpt-5.2-chat',
-      'google/gemini-3-pro-preview',
+      'google/gemini-3.1-pro-preview',
       'x-ai/grok-4.1-fast',
       'moonshotai/kimi-k2.5',
     ],
-    chairman_model: 'google/gemini-3-pro-preview',
+    chairman_model: 'google/gemini-3.1-pro-preview',
   },
   {
     id: 'budget',
@@ -70,7 +70,7 @@ export const MODEL_PRESETS = [
       'deepseek/deepseek-v3.2-speciale',
       'z-ai/glm-5',
     ],
-    chairman_model: 'google/gemini-3-pro-preview',
+    chairman_model: 'google/gemini-3.1-pro-preview',
   },
   {
     id: 'speed',
