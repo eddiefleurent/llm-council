@@ -6,6 +6,7 @@ export default function Sidebar({
   onSelectConversation,
   onNewConversation,
   onClearConversations,
+  onDeleteConversation,
   isLoading = false,
   theme,
   onToggleTheme,
@@ -21,6 +22,12 @@ export default function Sidebar({
     // Prevent creating new conversation while a response is being generated
     if (isLoading) return;
     onNewConversation();
+  };
+
+  const handleDeleteConversation = (event, id) => {
+    event.stopPropagation();
+    if (isLoading) return;
+    if (typeof onDeleteConversation === 'function') onDeleteConversation(id);
   };
 
   return (
@@ -94,8 +101,20 @@ export default function Sidebar({
               onClick={() => handleConversationClick(conv.id)}
               title={isLoading && conv.id !== currentConversationId ? 'Please wait for the current response to complete' : ''}
             >
-              <div className="conversation-title">
-                {conv.title || 'New Conversation'}
+              <div className="conversation-item-header">
+                <div className="conversation-title">
+                  {conv.title || 'New Conversation'}
+                </div>
+                <button
+                  type="button"
+                  className="delete-conversation-btn"
+                  onClick={(event) => handleDeleteConversation(event, conv.id)}
+                  aria-label={`Delete conversation ${conv.title || conv.id}`}
+                  title="Delete conversation"
+                  disabled={isLoading}
+                >
+                  ×
+                </button>
               </div>
               <div className="conversation-meta">
                 {conv.message_count} messages

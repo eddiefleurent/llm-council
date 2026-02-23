@@ -186,6 +186,46 @@ function App() {
     }
   };
 
+  const handleDeleteConversation = async (conversationId) => {
+    if (isLoading) return;
+
+    const conversationToDelete = conversations.find((conv) => conv.id === conversationId);
+    const conversationTitle = conversationToDelete?.title || 'this conversation';
+    if (!window.confirm(`Delete "${conversationTitle}"? This cannot be undone.`)) return;
+
+    setIsLoading(true);
+    try {
+      await api.deleteConversation(conversationId);
+
+      const remainingConversations = conversations.filter((conv) => conv.id !== conversationId);
+      setConversations(remainingConversations);
+
+      if (localStorage.getItem('lastConversationId') === conversationId) {
+        localStorage.removeItem('lastConversationId');
+      }
+
+      if (currentConversationId === conversationId) {
+        if (remainingConversations.length > 0) {
+          setIsDraftMode(false);
+          setCurrentConversationId(remainingConversations[0].id);
+        } else {
+          setIsDraftMode(true);
+          setCurrentConversationId(null);
+          setCurrentConversation({
+            id: null,
+            created_at: new Date().toISOString(),
+            title: 'New Conversation',
+            messages: [],
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = async (content) => {
     const effectiveMode = messageMode;
     setIsLoading(true);
@@ -457,6 +497,7 @@ function App() {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onClearConversations={handleClearConversations}
+        onDeleteConversation={handleDeleteConversation}
         isLoading={isLoading}
         theme={theme}
         onToggleTheme={toggleTheme}
