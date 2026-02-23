@@ -128,6 +128,26 @@ def test_delete_all_conversations():
 
 
 @pytest.mark.usefixtures("temp_data_dir")
+def test_delete_single_conversation():
+    """Test deleting one conversation leaves others intact."""
+    storage.create_conversation("conv-1")
+    storage.create_conversation("conv-2")
+
+    deleted = storage.delete_conversation("conv-1")
+
+    assert deleted is True
+    assert storage.get_conversation("conv-1") is None
+    assert storage.get_conversation("conv-2") is not None
+
+
+@pytest.mark.usefixtures("temp_data_dir")
+def test_delete_single_conversation_not_found():
+    """Test deleting non-existent conversation returns False."""
+    deleted = storage.delete_conversation("missing-conversation")
+    assert deleted is False
+
+
+@pytest.mark.usefixtures("temp_data_dir")
 def test_path_traversal_protection():
     """Test that path traversal attacks are blocked."""
     # These path traversal attacks would escape the data directory
@@ -146,3 +166,6 @@ def test_path_traversal_protection():
 
         with pytest.raises(ValueError, match="path traversal"):
             storage.save_conversation({"id": malicious_id})
+
+        with pytest.raises(ValueError, match="path traversal"):
+            storage.delete_conversation(malicious_id)

@@ -380,3 +380,21 @@ def delete_all_conversations() -> list[dict[str, str]]:
             except OSError as e:
                 failures.append({"filename": filename, "error": str(e)})
     return failures
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    """
+    Delete a single conversation file.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        True if deleted, False if the conversation did not exist.
+    """
+    if not _safe_path_exists(conversation_id):
+        return False
+
+    path = _get_safe_path(conversation_id)
+    os.remove(path)
+    return True

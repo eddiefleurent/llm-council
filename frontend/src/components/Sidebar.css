@@ -146,6 +146,10 @@
   color: var(--text-primary);
   font-size: 14px;
   margin-bottom: 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .conversation-meta {
@@ -169,6 +173,42 @@
 
 .conversation-item.disabled:hover {
   background: transparent;
+}
+
+.conversation-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.delete-conversation-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.conversation-item:hover .delete-conversation-btn,
+.conversation-item.active .delete-conversation-btn {
+  opacity: 1;
+}
+
+.delete-conversation-btn:hover {
+  color: var(--error-border);
+  background: var(--error-bg);
+}
+
+.delete-conversation-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .sidebar-loading-warning {

@@ -312,6 +312,23 @@ export const api = {
     return response.json();
   },
 
+  /**
+   * Delete a single conversation from the backend.
+   * @param {string} conversationId - The conversation ID
+   */
+  async deleteConversation(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to delete conversation');
+    }
+    return response.json();
+  },
+
   // ============================================================================
   // Voice Transcription
   // ============================================================================
