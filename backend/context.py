@@ -88,6 +88,19 @@ async def build_context_messages(
         return [{"role": "user", "content": current_query}]
 
     num_recent_messages = recent_message_limit * 2
+    if num_recent_messages <= 0:
+        formatted_messages = []
+        for msg in conversation_messages:
+            if msg["role"] == "user":
+                formatted_messages.append(
+                    {"role": "user", "content": format_user_message(msg)}
+                )
+            else:
+                content = format_assistant_message(msg)
+                formatted_messages.append({"role": "assistant", "content": content})
+
+        formatted_messages.append({"role": "user", "content": current_query})
+        return formatted_messages
 
     if len(conversation_messages) <= num_recent_messages:
         formatted_messages = []

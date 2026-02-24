@@ -44,7 +44,7 @@ def test_format_user_message_skips_invalid_attachment_payload():
 async def test_summarize_older_messages_truncates_and_keeps_most_recent_text(monkeypatch):
     captured = {}
 
-    async def fake_query_model(_model, messages, timeout):
+    async def fake_query_model(_model, messages, _timeout=None, **_kwargs):
         captured["prompt"] = messages[0]["content"]
         return {"content": "summary"}
 

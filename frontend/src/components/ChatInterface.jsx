@@ -85,6 +85,13 @@ export default function ChatInterface({
 
   // Load conversation config when conversation changes
   useEffect(() => {
+    setAttachment(null);
+    setAttachmentError('');
+    setIsUploadingAttachment(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
     if (conversation?.id) {
       loadConversationConfig();
     } else if (isDraftMode && draftConfig) {
@@ -160,6 +167,7 @@ export default function ChatInterface({
     const inputEl = event.target;
     const file = inputEl.files?.[0];
     if (!file) return;
+    const previousAttachment = attachment;
 
     try {
       setAttachmentError('');
@@ -168,7 +176,7 @@ export default function ChatInterface({
       const extracted = await api.extractFileContent(file);
       setAttachment(extracted);
     } catch (error) {
-      setAttachment(null);
+      setAttachment(previousAttachment);
       setAttachmentError(error.message || 'Failed to process attachment.');
     } finally {
       setIsUploadingAttachment(false);
@@ -396,10 +404,14 @@ export default function ChatInterface({
               </div>
             )}
             {isUploadingAttachment && (
-              <div className="attachment-status">Processing attachment...</div>
+              <div className="attachment-status" role="status" aria-live="polite">
+                Processing attachment...
+              </div>
             )}
             {attachmentError && (
-              <div className="attachment-error">{attachmentError}</div>
+              <div className="attachment-error" role="alert" aria-live="assertive">
+                {attachmentError}
+              </div>
             )}
             {conversationConfig && !loadingConfig && (
               <div className="model-indicator">
