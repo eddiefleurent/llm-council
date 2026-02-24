@@ -68,6 +68,25 @@ def test_add_user_message():
 
 
 @pytest.mark.usefixtures("temp_data_dir")
+def test_add_user_message_with_attachment():
+    """Test adding a user message with attachment payload."""
+    conv_id = "test-attachment"
+    storage.create_conversation(conv_id)
+
+    attachment = {
+        "filename": "doc.txt",
+        "content_type": "text/plain",
+        "size_bytes": 42,
+        "extracted_text": "Attachment text",
+    }
+    storage.add_user_message(conv_id, "See attachment", attachment)
+
+    conv = storage.get_conversation(conv_id)
+    assert len(conv["messages"]) == 1
+    assert conv["messages"][0]["attachment"] == attachment
+
+
+@pytest.mark.usefixtures("temp_data_dir")
 def test_add_assistant_message():
     """Test adding an assistant message with stages."""
     conv_id = "test-101"

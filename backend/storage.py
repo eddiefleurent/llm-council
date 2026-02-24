@@ -194,19 +194,26 @@ def list_conversations() -> list[dict[str, Any]]:
     return conversations
 
 
-def add_user_message(conversation_id: str, content: str):
+def add_user_message(
+    conversation_id: str, content: str, attachment: dict[str, Any] | None = None
+):
     """
     Add a user message to a conversation.
 
     Args:
         conversation_id: Conversation identifier
         content: User message content
+        attachment: Optional attachment metadata/payload
     """
     conversation = get_conversation(conversation_id)
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
-    conversation["messages"].append({"role": "user", "content": content})
+    message = {"role": "user", "content": content}
+    if attachment is not None:
+        message["attachment"] = attachment
+
+    conversation["messages"].append(message)
 
     save_conversation(conversation)
 

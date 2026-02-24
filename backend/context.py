@@ -3,6 +3,7 @@
 from typing import Any
 
 from .config import CHAIRMAN_MODEL
+from .file_ingestion import AttachmentPayload, build_attachment_context_block
 from .openrouter import is_error, query_model
 
 
@@ -46,6 +47,24 @@ def format_assistant_message(assistant_msg: dict[str, Any]) -> str:
     return "[Assistant response]"
 
 
+def format_user_message(user_msg: dict[str, Any]) -> str:
+    """Convert a user message into context text, including attachments."""
+    content = user_msg.get("content", "")
+    attachment_data = user_msg.get("attachment")
+    if not attachment_data:
+        return content
+
+    try:
+        attachment = AttachmentPayload.model_validate(attachment_data)
+        attachment_block = build_attachment_context_block(attachment)
+    except Exception:
+        return content
+
+    if content.strip():
+        return f"{content}\n\n{attachment_block}"
+    return attachment_block
+
+
 async def build_context_messages(
     conversation_messages: list[dict[str, Any]],
     current_query: str,
@@ -61,7 +80,9 @@ async def build_context_messages(
         formatted_messages = []
         for msg in conversation_messages:
             if msg["role"] == "user":
-                formatted_messages.append({"role": "user", "content": msg["content"]})
+                formatted_messages.append(
+                    {"role": "user", "content": format_user_message(msg)}
+                )
             else:
                 content = format_assistant_message(msg)
                 formatted_messages.append({"role": "assistant", "content": content})
@@ -84,7 +105,9 @@ async def build_context_messages(
 
     for msg in recent_messages:
         if msg["role"] == "user":
-            formatted_messages.append({"role": "user", "content": msg["content"]})
+            formatted_messages.append(
+                {"role": "user", "content": format_user_message(msg)}
+            )
         else:
             content = format_assistant_message(msg)
             formatted_messages.append({"role": "assistant", "content": content})

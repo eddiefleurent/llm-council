@@ -11,6 +11,9 @@ import { api } from '../api';
 import { getModelDisplayName } from '../utils';
 import './ChatInterface.css';
 
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const SUPPORTED_ATTACHMENT_EXTENSIONS = ['txt', 'md', 'pdf', 'json', 'csv'];
+
 export default function ChatInterface({
   conversation,
   onSendMessage,
@@ -24,9 +27,13 @@ export default function ChatInterface({
 }) {
   const [input, setInput] = useState('');
   const [showConfig, setShowConfig] = useState(false);
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [conversationConfig, setConversationConfig] = useState(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const hasInlineLoading = conversation?.messages?.some(
     (msg) => msg.role === 'assistant' && msg.loading && Object.values(msg.loading).some(Boolean)
   );
@@ -92,9 +99,14 @@ export default function ChatInterface({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSendMessage(input);
+    if ((input.trim() || attachment) && !isLoading && !isUploadingAttachment) {
+      onSendMessage(input, attachment);
       setInput('');
+      setAttachment(null);
+      setAttachmentError('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       // Reset height after sending
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -130,6 +142,44 @@ export default function ChatInterface({
       return text;
     });
   }, []);
+
+  const validateAttachmentFile = (file) => {
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!SUPPORTED_ATTACHMENT_EXTENSIONS.includes(extension)) {
+      throw new Error(
+        `Unsupported file type. Supported types: ${SUPPORTED_ATTACHMENT_EXTENSIONS.join(', ')}.`
+      );
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      throw new Error('File is too large (max 5MB).');
+    }
+  };
+
+  const handleAttachmentSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setAttachmentError('');
+      validateAttachmentFile(file);
+      setIsUploadingAttachment(true);
+      const extracted = await api.extractFileContent(file);
+      setAttachment(extracted);
+    } catch (error) {
+      setAttachment(null);
+      setAttachmentError(error.message || 'Failed to process attachment.');
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const removeAttachment = () => {
+    setAttachment(null);
+    setAttachmentError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   if (!conversation) {
     return (
@@ -194,6 +244,11 @@ export default function ChatInterface({
                       <div className="markdown-content">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                       </div>
+                      {msg.attachment && (
+                        <div className="attachment-indicator">
+                          Attached: {msg.attachment.filename}
+                        </div>
+                      )}
                     </div>
                     <CopyButton
                       text={msg.content}
@@ -323,6 +378,26 @@ export default function ChatInterface({
               disabled={isLoading}
               rows={1}
             />
+            {attachment && (
+              <div className="attachment-chip">
+                <span className="attachment-name">{attachment.filename}</span>
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  onClick={removeAttachment}
+                  disabled={isLoading || isUploadingAttachment}
+                  aria-label="Remove attachment"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+            {isUploadingAttachment && (
+              <div className="attachment-status">Processing attachment...</div>
+            )}
+            {attachmentError && (
+              <div className="attachment-error">{attachmentError}</div>
+            )}
             {conversationConfig && !loadingConfig && (
               <div className="model-indicator">
                 <span className="indicator-label">
@@ -337,14 +412,29 @@ export default function ChatInterface({
             )}
           </div>
           <div className="input-actions">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.md,.pdf,.json,.csv"
+              onChange={handleAttachmentSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              className="attach-button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading || isUploadingAttachment}
+            >
+              Attach
+            </button>
             <VoiceButton
               onTranscription={handleTranscription}
-              disabled={isLoading}
+              disabled={isLoading || isUploadingAttachment}
             />
             <button
               type="submit"
               className="send-button"
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment}
             >
               Send
             </button>

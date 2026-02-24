@@ -179,7 +179,7 @@ export const api = {
    * @param {string} content - The message content
    * @param {string} mode - "council" (full 3-stage) or "chairman" (direct chairman only)
    */
-  async sendMessage(conversationId, content, mode = 'council') {
+  async sendMessage(conversationId, content, mode = 'council', attachment = null) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
@@ -187,11 +187,18 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content, mode }),
+        body: JSON.stringify({ content, mode, attachment }),
       }
     );
     if (!response.ok) {
-      throw new Error('Failed to send message');
+      let errorMessage = 'Failed to send message';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        // Keep fallback
+      }
+      throw new Error(errorMessage);
     }
     return response.json();
   },
@@ -204,7 +211,13 @@ export const api = {
    * @param {string} mode - "council" (full 3-stage) or "chairman" (direct chairman only)
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, onEvent, mode = 'council') {
+  async sendMessageStream(
+    conversationId,
+    content,
+    onEvent,
+    mode = 'council',
+    attachment = null
+  ) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
@@ -212,12 +225,19 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content, mode }),
+        body: JSON.stringify({ content, mode, attachment }),
       }
     );
 
     if (!response.ok) {
-      throw new Error('Failed to send message');
+      let errorMessage = 'Failed to send message';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        // Keep fallback
+      }
+      throw new Error(errorMessage);
     }
 
     const reader = response.body.getReader();
@@ -256,6 +276,32 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to get conversation config');
     }
+    return response.json();
+  },
+
+  /**
+   * Upload an attachment and extract text content on the backend.
+   */
+  async extractFileContent(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/api/files/extract`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'Failed to process file';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        // Keep fallback
+      }
+      throw new Error(errorMessage);
+    }
+
     return response.json();
   },
 
