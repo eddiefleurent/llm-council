@@ -13,6 +13,7 @@ import './ChatInterface.css';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const SUPPORTED_ATTACHMENT_EXTENSIONS = ['txt', 'md', 'pdf', 'json', 'csv'];
+const ATTACHMENT_ACCEPT = SUPPORTED_ATTACHMENT_EXTENSIONS.map((extension) => `.${extension}`).join(',');
 
 export default function ChatInterface({
   conversation,
@@ -417,7 +418,7 @@ export default function ChatInterface({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".txt,.md,.pdf,.json,.csv"
+              accept={ATTACHMENT_ACCEPT}
               onChange={handleAttachmentSelect}
               style={{ display: 'none' }}
             />

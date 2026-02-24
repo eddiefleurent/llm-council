@@ -11,6 +11,9 @@ from .openrouter import is_error, query_model
 
 logger = logging.getLogger(__name__)
 
+MAX_SUMMARY_CHARS = 12_000
+TRUNCATION_PREFIX = "[truncated]\n"
+
 
 async def summarize_older_messages(messages: list[dict[str, Any]]) -> str:
     """Summarize older messages into a concise conversation summary."""
@@ -24,6 +27,10 @@ async def summarize_older_messages(messages: list[dict[str, Any]]) -> str:
                 conversation_text += f"{role}: {msg['stage3']['response']}\n\n"
             elif "content" in msg:
                 conversation_text += f"{role}: {msg['content']}\n\n"
+
+    if len(conversation_text) > MAX_SUMMARY_CHARS:
+        keep_chars = MAX_SUMMARY_CHARS - len(TRUNCATION_PREFIX)
+        conversation_text = f"{TRUNCATION_PREFIX}{conversation_text[-keep_chars:]}"
 
     summary_prompt = f"""Summarize the following conversation concisely in 2-3 sentences. Focus on key topics, questions asked, and important context that would be needed to understand follow-up questions.
 
