@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 MAX_EXTRACTED_CHARS = 30_000
+TRUNCATION_SUFFIX = "\n\n[File content truncated due to size limits.]"
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".json", ".csv"}
 SUPPORTED_TYPES_DISPLAY = ", ".join(sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS))
@@ -40,7 +41,11 @@ def _trim_extracted_text(text: str) -> str:
         return ""
     if len(stripped) <= MAX_EXTRACTED_CHARS:
         return stripped
-    return stripped[:MAX_EXTRACTED_CHARS].rstrip() + "\n\n[File content truncated due to size limits.]"
+
+    remaining = MAX_EXTRACTED_CHARS - len(TRUNCATION_SUFFIX)
+    if remaining <= 0:
+        return TRUNCATION_SUFFIX[:MAX_EXTRACTED_CHARS]
+    return stripped[:remaining].rstrip() + TRUNCATION_SUFFIX
 
 
 async def _read_upload_bytes(upload: UploadFile) -> bytes:

@@ -156,7 +156,8 @@ export default function ChatInterface({
   };
 
   const handleAttachmentSelect = async (event) => {
-    const file = event.target.files?.[0];
+    const inputEl = event.target;
+    const file = inputEl.files?.[0];
     if (!file) return;
 
     try {
@@ -170,6 +171,7 @@ export default function ChatInterface({
       setAttachmentError(error.message || 'Failed to process attachment.');
     } finally {
       setIsUploadingAttachment(false);
+      inputEl.value = '';
     }
   };
 

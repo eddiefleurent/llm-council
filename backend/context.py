@@ -1,19 +1,24 @@
 """Context management for multi-message conversations with smart summarization."""
 
+import logging
 from typing import Any
+
+from pydantic import ValidationError
 
 from .config import CHAIRMAN_MODEL
 from .file_ingestion import AttachmentPayload, build_attachment_context_block
 from .openrouter import is_error, query_model
 
+logger = logging.getLogger(__name__)
 
-async def summarize_older_messages(messages: list[dict[str, str]]) -> str:
+
+async def summarize_older_messages(messages: list[dict[str, Any]]) -> str:
     """Summarize older messages into a concise conversation summary."""
     conversation_text = ""
     for msg in messages:
         role = msg["role"].capitalize()
         if msg["role"] == "user":
-            conversation_text += f"{role}: {msg['content']}\n\n"
+            conversation_text += f"{role}: {format_user_message(msg)}\n\n"
         else:
             if "stage3" in msg and "response" in msg["stage3"]:
                 conversation_text += f"{role}: {msg['stage3']['response']}\n\n"
@@ -57,7 +62,8 @@ def format_user_message(user_msg: dict[str, Any]) -> str:
     try:
         attachment = AttachmentPayload.model_validate(attachment_data)
         attachment_block = build_attachment_context_block(attachment)
-    except Exception:
+    except (ValidationError, KeyError, TypeError):
+        logger.debug("Failed to parse attachment payload for context", exc_info=True)
         return content
 
     if content.strip():
