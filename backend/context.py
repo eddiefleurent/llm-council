@@ -1,23 +1,36 @@
 """Context management for multi-message conversations with smart summarization."""
 
+import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from .config import CHAIRMAN_MODEL
+from .file_ingestion import AttachmentPayload, build_attachment_context_block
 from .openrouter import is_error, query_model
 
+logger = logging.getLogger(__name__)
 
-async def summarize_older_messages(messages: list[dict[str, str]]) -> str:
+MAX_SUMMARY_CHARS = 12_000
+TRUNCATION_PREFIX = "[truncated]\n"
+
+
+async def summarize_older_messages(messages: list[dict[str, Any]]) -> str:
     """Summarize older messages into a concise conversation summary."""
     conversation_text = ""
     for msg in messages:
         role = msg["role"].capitalize()
         if msg["role"] == "user":
-            conversation_text += f"{role}: {msg['content']}\n\n"
+            conversation_text += f"{role}: {format_user_message(msg)}\n\n"
         else:
             if "stage3" in msg and "response" in msg["stage3"]:
                 conversation_text += f"{role}: {msg['stage3']['response']}\n\n"
             elif "content" in msg:
                 conversation_text += f"{role}: {msg['content']}\n\n"
+
+    if len(conversation_text) > MAX_SUMMARY_CHARS:
+        keep_chars = MAX_SUMMARY_CHARS - len(TRUNCATION_PREFIX)
+        conversation_text = f"{TRUNCATION_PREFIX}{conversation_text[-keep_chars:]}"
 
     summary_prompt = f"""Summarize the following conversation concisely in 2-3 sentences. Focus on key topics, questions asked, and important context that would be needed to understand follow-up questions.
 
@@ -46,6 +59,25 @@ def format_assistant_message(assistant_msg: dict[str, Any]) -> str:
     return "[Assistant response]"
 
 
+def format_user_message(user_msg: dict[str, Any]) -> str:
+    """Convert a user message into context text, including attachments."""
+    content = user_msg.get("content", "")
+    attachment_data = user_msg.get("attachment")
+    if not attachment_data:
+        return content
+
+    try:
+        attachment = AttachmentPayload.model_validate(attachment_data)
+        attachment_block = build_attachment_context_block(attachment)
+    except (ValidationError, KeyError, TypeError):
+        logger.debug("Failed to parse attachment payload for context", exc_info=True)
+        return content
+
+    if content.strip():
+        return f"{content}\n\n{attachment_block}"
+    return attachment_block
+
+
 async def build_context_messages(
     conversation_messages: list[dict[str, Any]],
     current_query: str,
@@ -56,12 +88,27 @@ async def build_context_messages(
         return [{"role": "user", "content": current_query}]
 
     num_recent_messages = recent_message_limit * 2
+    if num_recent_messages <= 0:
+        formatted_messages = []
+        for msg in conversation_messages:
+            if msg["role"] == "user":
+                formatted_messages.append(
+                    {"role": "user", "content": format_user_message(msg)}
+                )
+            else:
+                content = format_assistant_message(msg)
+                formatted_messages.append({"role": "assistant", "content": content})
+
+        formatted_messages.append({"role": "user", "content": current_query})
+        return formatted_messages
 
     if len(conversation_messages) <= num_recent_messages:
         formatted_messages = []
         for msg in conversation_messages:
             if msg["role"] == "user":
-                formatted_messages.append({"role": "user", "content": msg["content"]})
+                formatted_messages.append(
+                    {"role": "user", "content": format_user_message(msg)}
+                )
             else:
                 content = format_assistant_message(msg)
                 formatted_messages.append({"role": "assistant", "content": content})
@@ -84,7 +131,9 @@ async def build_context_messages(
 
     for msg in recent_messages:
         if msg["role"] == "user":
-            formatted_messages.append({"role": "user", "content": msg["content"]})
+            formatted_messages.append(
+                {"role": "user", "content": format_user_message(msg)}
+            )
         else:
             content = format_assistant_message(msg)
             formatted_messages.append({"role": "assistant", "content": content})

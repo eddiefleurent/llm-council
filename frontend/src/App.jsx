@@ -226,7 +226,7 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content) => {
+  const handleSendMessage = async (content, attachment = null) => {
     const effectiveMode = messageMode;
     setIsLoading(true);
     try {
@@ -265,6 +265,13 @@ function App() {
 
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
+      if (attachment) {
+        userMessage.attachment = {
+          filename: attachment.filename,
+          content_type: attachment.content_type,
+          size_bytes: attachment.size_bytes,
+        };
+      }
       setCurrentConversation((prev) => ({
         ...prev,
         messages: [...prev.messages, userMessage],
@@ -335,7 +342,7 @@ function App() {
             default:
               console.log('Unknown event type:', eventType);
           }
-        }, 'chairman');
+        }, 'chairman', attachment);
       } else {
         // Full council mode
         const assistantMessage = {
@@ -471,7 +478,7 @@ function App() {
             default:
               console.log('Unknown event type:', eventType);
           }
-        }, 'council');
+        }, 'council', attachment);
       }
     } catch (error) {
       console.error('Failed to send message:', error);

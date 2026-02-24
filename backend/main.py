@@ -13,7 +13,7 @@ from anyio import to_thread
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from . import storage
 from .config import (
@@ -32,6 +32,11 @@ from .council import (
     stage1_collect_responses,
     stage2_collect_rankings,
     stage3_synthesize_final,
+)
+from .file_ingestion import (
+    AttachmentPayload,
+    build_attachment_context_block,
+    extract_attachment_payload,
 )
 from .models import (
     get_available_models,
@@ -88,6 +93,13 @@ class SendMessageRequest(BaseModel):
     mode: Literal["council", "chairman"] = (
         "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
     )
+    attachment: AttachmentPayload | None = None
+
+    @model_validator(mode="after")
+    def validate_has_content_or_attachment(self):
+        if self.content.strip() or self.attachment is not None:
+            return self
+        raise ValueError("Message cannot be empty. Add text or attach a file.")
 
 
 class UpdateCouncilConfigRequest(BaseModel):
@@ -251,6 +263,12 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         raise HTTPException(
             status_code=500, detail=f"Transcription failed: {e!s}"
         ) from e
+
+
+@app.post("/api/files/extract")
+async def extract_file_content(file: UploadFile = File(...)):
+    """Extract text content from a supported uploaded file."""
+    return (await extract_attachment_payload(file)).model_dump()
 
 
 # ============================================================================
@@ -557,12 +575,25 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
 
+    user_content_for_context = request.content
+    attachment_payload = request.attachment.model_dump() if request.attachment else None
+    if request.attachment:
+        attachment_block = build_attachment_context_block(request.attachment)
+        if request.content.strip():
+            user_content_for_context = f"{request.content}\n\n{attachment_block}"
+        else:
+            user_content_for_context = attachment_block
+
     # Add user message
-    storage.add_user_message(conversation_id, request.content)
+    storage.add_user_message(conversation_id, request.content, attachment_payload)
+
+    title_seed = request.content.strip() or (
+        f"File: {request.attachment.filename}" if request.attachment else ""
+    )
 
     # If this is the first message, generate a title
     if is_first_message:
-        title = await generate_conversation_title(request.content)
+        title = await generate_conversation_title(title_seed)
         storage.update_conversation_title(conversation_id, title)
 
     # Build context messages from conversation history
@@ -570,7 +601,7 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     conversation = storage.get_conversation(conversation_id)
     messages = await build_context_messages(
         conversation["messages"][:-1],  # Exclude the user message we just added
-        request.content,
+        user_content_for_context,
     )
 
     # Get conversation-specific config
@@ -639,6 +670,15 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
         )
 
+    user_content_for_context = request.content
+    attachment_payload = request.attachment.model_dump() if request.attachment else None
+    if request.attachment:
+        attachment_block = build_attachment_context_block(request.attachment)
+        if request.content.strip():
+            user_content_for_context = f"{request.content}\n\n{attachment_block}"
+        else:
+            user_content_for_context = attachment_block
+
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
@@ -649,33 +689,56 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
     if request.mode == "chairman":
         return StreamingResponse(
-            _chairman_stream(conversation_id, request.content, is_first_message),
+            _chairman_stream(
+                conversation_id,
+                request.content,
+                user_content_for_context,
+                attachment_payload,
+                is_first_message,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     return StreamingResponse(
-        _council_stream(conversation_id, request.content, is_first_message),
+        _council_stream(
+            conversation_id,
+            request.content,
+            user_content_for_context,
+            attachment_payload,
+            is_first_message,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
-async def _chairman_stream(conversation_id: str, content: str, is_first_message: bool):
+async def _chairman_stream(
+    conversation_id: str,
+    content: str,
+    content_for_context: str,
+    attachment: dict[str, Any] | None,
+    is_first_message: bool,
+):
     """Stream a chairman-only response (no council stages)."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
         # Add user message
-        storage.add_user_message(conversation_id, content)
+        storage.add_user_message(conversation_id, content, attachment)
 
         # Start title generation in parallel (don't await yet)
         if is_first_message:
-            title_task = asyncio.create_task(generate_conversation_title(content))
+            title_seed = content.strip() or (
+                f"File: {attachment['filename']}" if attachment else ""
+            )
+            title_task = asyncio.create_task(generate_conversation_title(title_seed))
 
         # Build context messages from conversation history
         conv = storage.get_conversation(conversation_id)
-        messages = await build_context_messages(conv["messages"][:-1], content)
+        messages = await build_context_messages(
+            conv["messages"][:-1], content_for_context
+        )
 
         # Get conversation-specific config
         conv_config = storage.get_conversation_config(conversation_id)
@@ -717,24 +780,33 @@ async def _chairman_stream(conversation_id: str, content: str, is_first_message:
         yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
 
 
-async def _council_stream(conversation_id: str, content: str, is_first_message: bool):
+async def _council_stream(
+    conversation_id: str,
+    content: str,
+    content_for_context: str,
+    attachment: dict[str, Any] | None,
+    is_first_message: bool,
+):
     """Stream the full 3-stage council process."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
         # Add user message
-        storage.add_user_message(conversation_id, content)
+        storage.add_user_message(conversation_id, content, attachment)
 
         # Start title generation in parallel (don't await yet)
         if is_first_message:
-            title_task = asyncio.create_task(generate_conversation_title(content))
+            title_seed = content.strip() or (
+                f"File: {attachment['filename']}" if attachment else ""
+            )
+            title_task = asyncio.create_task(generate_conversation_title(title_seed))
 
         # Build context messages from conversation history
         # Re-fetch conversation to get the user message we just added
         conv = storage.get_conversation(conversation_id)
         messages = await build_context_messages(
             conv["messages"][:-1],  # Exclude the user message we just added
-            content,
+            content_for_context,
         )
 
         # Get conversation-specific config
