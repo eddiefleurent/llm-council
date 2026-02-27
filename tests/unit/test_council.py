@@ -24,7 +24,7 @@ def test_parse_ranking_from_text_numbered_format():
 
 
 def test_parse_ranking_from_text_plain_format():
-    """Test parsing plain ranking format without numbers."""
+    """Unnumbered lines inside FINAL RANKING section return empty (strict parsing)."""
     text = """
     FINAL RANKING:
     Response C
@@ -32,14 +32,14 @@ def test_parse_ranking_from_text_plain_format():
     Response B
     """
     result = parse_ranking_from_text(text)
-    assert result == ["Response C", "Response A", "Response B"]
+    assert result == []
 
 
 def test_parse_ranking_from_text_no_header():
-    """Test fallback parsing when no FINAL RANKING header."""
+    """Missing FINAL RANKING header returns empty (strict parsing)."""
     text = "I think Response B is best, followed by Response A."
     result = parse_ranking_from_text(text)
-    assert result == ["Response B", "Response A"]
+    assert result == []
 
 
 def test_parse_ranking_from_text_empty():
