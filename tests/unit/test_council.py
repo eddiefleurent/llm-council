@@ -1,43 +1,49 @@
 """Unit tests for council orchestration logic."""
 
 from backend.council import (
+    _index_to_alpha_label,
     calculate_aggregate_rankings,
     calculate_tournament_rankings,
     parse_ranking_from_text,
 )
 
 
-def test_parse_ranking_from_text_numbered_format():
-    """Test parsing numbered ranking format."""
-    text = """
-    Response A is good but lacks depth.
-    Response B is excellent.
-    Response C is mediocre.
-
-    FINAL RANKING:
-    1. Response B
-    2. Response A
-    3. Response C
-    """
+def test_parse_ranking_from_text_valid_json_format():
+    """Test parsing strict JSON ranking format."""
+    text = '{"final_ranking": ["Response B", "Response A", "Response C"]}'
     result = parse_ranking_from_text(text)
     assert result == ["Response B", "Response A", "Response C"]
 
 
-def test_parse_ranking_from_text_plain_format():
-    """Unnumbered lines inside FINAL RANKING section return empty (strict parsing)."""
-    text = """
-    FINAL RANKING:
-    Response C
-    Response A
-    Response B
-    """
+def test_index_to_alpha_label_scales_beyond_z():
+    """Label generation scales like spreadsheet columns."""
+    assert _index_to_alpha_label(0) == "A"
+    assert _index_to_alpha_label(25) == "Z"
+    assert _index_to_alpha_label(26) == "AA"
+    assert _index_to_alpha_label(27) == "AB"
+    assert _index_to_alpha_label(51) == "AZ"
+    assert _index_to_alpha_label(52) == "BA"
+
+
+def test_parse_ranking_from_text_accepts_multi_letter_labels():
+    """Parser accepts multi-letter labels when expected labels are provided."""
+    text = '{"final_ranking": ["Response AA", "Response B", "Response Z"]}'
+    result = parse_ranking_from_text(
+        text, expected_labels={"Response AA", "Response B", "Response Z"}
+    )
+    assert result == ["Response AA", "Response B", "Response Z"]
+
+
+def test_parse_ranking_from_text_rejects_non_json():
+    """Non-JSON output is rejected."""
+    text = "FINAL RANKING:\n1. Response A\n2. Response B\n3. Response C"
     result = parse_ranking_from_text(text)
     assert result == []
 
 
-def test_parse_ranking_from_text_no_header():
-    """Missing FINAL RANKING header returns empty (strict parsing)."""
-    text = "I think Response B is best, followed by Response A."
+def test_parse_ranking_from_text_rejects_wrong_schema():
+    """JSON missing final_ranking key is rejected."""
+    text = '{"ranking": ["Response B", "Response A"]}'
     result = parse_ranking_from_text(text)
     assert result == []
 
@@ -48,17 +54,42 @@ def test_parse_ranking_from_text_empty():
     assert result == []
 
 
+def test_parse_ranking_from_text_rejects_partial_with_expected_labels():
+    """Partial rankings are rejected when expected labels are provided."""
+    text = '{"final_ranking": ["Response A", "Response B"]}'
+    result = parse_ranking_from_text(
+        text, expected_labels={"Response A", "Response B", "Response C"}
+    )
+    assert result == []
+
+
+def test_parse_ranking_from_text_rejects_extra_with_expected_labels():
+    """Rankings with extra labels are rejected when expected labels are provided."""
+    text = '{"final_ranking": ["Response A", "Response B", "Response C"]}'
+    result = parse_ranking_from_text(text, expected_labels={"Response A", "Response B"})
+    assert result == []
+
+
+def test_parse_ranking_from_text_accepts_exact_with_expected_labels():
+    """Exact rankings are accepted when expected labels are provided."""
+    text = '{"final_ranking": ["Response C", "Response A", "Response B"]}'
+    result = parse_ranking_from_text(
+        text, expected_labels={"Response A", "Response B", "Response C"}
+    )
+    assert result == ["Response C", "Response A", "Response B"]
+
+
 def test_calculate_aggregate_rankings():
     """Test aggregate ranking calculation."""
     stage2_results = [
         {
             "model": "model1",
-            "ranking": "FINAL RANKING:\n1. Response A\n2. Response B",
+            "ranking": '{"final_ranking": ["Response A", "Response B"]}',
             "parsed_ranking": ["Response A", "Response B"],
         },
         {
             "model": "model2",
-            "ranking": "FINAL RANKING:\n1. Response B\n2. Response A",
+            "ranking": '{"final_ranking": ["Response B", "Response A"]}',
             "parsed_ranking": ["Response B", "Response A"],
         },
     ]
@@ -80,17 +111,17 @@ def test_calculate_tournament_rankings():
     stage2_results = [
         {
             "model": "model1",
-            "ranking": "FINAL RANKING:\n1. Response A\n2. Response B\n3. Response C",
+            "ranking": '{"final_ranking": ["Response A", "Response B", "Response C"]}',
             "parsed_ranking": ["Response A", "Response B", "Response C"],
         },
         {
             "model": "model2",
-            "ranking": "FINAL RANKING:\n1. Response A\n2. Response C\n3. Response B",
+            "ranking": '{"final_ranking": ["Response A", "Response C", "Response B"]}',
             "parsed_ranking": ["Response A", "Response C", "Response B"],
         },
         {
             "model": "model3",
-            "ranking": "FINAL RANKING:\n1. Response B\n2. Response A\n3. Response C",
+            "ranking": '{"final_ranking": ["Response B", "Response A", "Response C"]}',
             "parsed_ranking": ["Response B", "Response A", "Response C"],
         },
     ]
@@ -113,12 +144,12 @@ def test_calculate_tournament_rankings_tie():
     stage2_results = [
         {
             "model": "model1",
-            "ranking": "FINAL RANKING:\n1. Response A\n2. Response B",
+            "ranking": '{"final_ranking": ["Response A", "Response B"]}',
             "parsed_ranking": ["Response A", "Response B"],
         },
         {
             "model": "model2",
-            "ranking": "FINAL RANKING:\n1. Response B\n2. Response A",
+            "ranking": '{"final_ranking": ["Response B", "Response A"]}',
             "parsed_ranking": ["Response B", "Response A"],
         },
     ]

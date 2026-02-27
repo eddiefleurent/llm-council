@@ -1,5 +1,6 @@
 """3-stage LLM Council orchestration."""
 
+import json
 from typing import Any
 
 from .config import (
@@ -13,6 +14,22 @@ STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accura
 - Reasoning quality (weight 20%): Is the logic coherent, non-contradictory, and well-justified?
 - Practical usefulness (weight 10%): Is it actionable and specific enough for the user?
 - Safety/uncertainty handling (weight 5%): Does it avoid overclaiming and call out uncertainty when needed?"""
+
+
+def _index_to_alpha_label(index: int) -> str:
+    """Convert zero-based index to spreadsheet-style alpha labels (A..Z, AA..)."""
+    if index < 0:
+        raise ValueError("index must be non-negative")
+
+    label = []
+    current = index
+    while True:
+        current, remainder = divmod(current, 26)
+        label.append(chr(65 + remainder))
+        if current == 0:
+            break
+        current -= 1
+    return "".join(reversed(label))
 
 
 async def stage1_collect_responses(
@@ -100,8 +117,8 @@ async def stage2_collect_rankings(
         f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}"
     )
 
-    # Create anonymized labels for responses (Response A, Response B, etc.)
-    labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
+    # Create anonymized labels for responses (Response A..Z, AA, AB, etc.)
+    labels = [_index_to_alpha_label(i) for i in range(len(stage1_results))]
 
     # Create mapping from label to model name
     label_to_model = {
@@ -116,6 +133,7 @@ async def stage2_collect_rankings(
             for label, result in zip(labels, stage1_results, strict=False)
         ]
     )
+    allowed_labels_json = json.dumps(list(label_to_model.keys()))
 
     ranking_prompt = f"""You are an impartial expert judge evaluating anonymized
 responses to one user question.
@@ -134,26 +152,18 @@ Evaluation rules:
 - Penalize hallucinations and unsupported claims heavily.
 - Prefer responses that acknowledge uncertainty over confident wrong claims.
 - Use each response label exactly once in your final ranking (no ties).
-- Keep your critique concise and evidence-based.
+- Keep output concise.
 
-Output format:
-1) First, include a brief section titled "EVALUATION:" with one block per response.
-   Use the label format "[Response X]" (with square brackets) as the block header:
-   [Response X]
-   - strengths: ...
-   - weaknesses: ...
-   - rubric scores: factuality=?, completeness=?, reasoning=?, usefulness=?, safety=?
-2) Then, at the very end, include the final ranking section in the exact format
-below.
+Output requirements (STRICT):
+- Return exactly one valid JSON object and nothing else.
+- Do not use markdown code fences.
+- Use this exact schema:
+  {{"final_ranking": ["Response X", "Response Y", "..."]}}
+- `final_ranking` must be an array containing each allowed label exactly once.
+- Allowed labels for this task are:
+  {allowed_labels_json}
 
-IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
-- Start with the line "FINAL RANKING:" (all caps, with colon)
-- Then list the responses from best to worst as a numbered list
-- Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
-- In the FINAL RANKING section, use the plain label format "Response X" (no brackets)
-- Do not add any other text or explanations in the ranking section
-
-Now provide your evaluation and ranking:"""
+Now provide your JSON output:"""
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
@@ -177,7 +187,8 @@ Now provide your evaluation and ranking:"""
                 )
         else:
             full_text = response.get("content", "")
-            parsed = parse_ranking_from_text(full_text)
+            expected_labels = set(label_to_model.keys())
+            parsed = parse_ranking_from_text(full_text, expected_labels=expected_labels)
             stage2_results.append(
                 {"model": model, "ranking": full_text, "parsed_ranking": parsed}
             )
@@ -308,25 +319,41 @@ collective wisdom:"""
     }, stage3_errors
 
 
-def parse_ranking_from_text(ranking_text: str) -> list[str]:
+def parse_ranking_from_text(
+    ranking_text: str, expected_labels: set[str] | None = None
+) -> list[str]:
     """
-    Parse the FINAL RANKING section from the model's response.
+    Parse strict JSON ranking output from a model response.
 
     Args:
-        ranking_text: The full text response from the model
+        ranking_text: The full text response from the model (JSON object string)
+        expected_labels: Optional set of labels that must appear exactly once
 
     Returns:
         List of response labels in ranked order
     """
-    import re
-
-    if "FINAL RANKING:" not in ranking_text:
+    try:
+        payload = json.loads(ranking_text)
+    except json.JSONDecodeError:
         return []
 
-    ranking_section = ranking_text.split("FINAL RANKING:", 1)[1]
-    numbered = re.findall(r"(?m)^\s*\d+\.\s*(Response [A-Z])\s*$", ranking_section)
+    if not isinstance(payload, dict):
+        return []
+
+    numbered = payload.get("final_ranking")
+    if not isinstance(numbered, list):
+        return []
+    if not all(isinstance(label, str) for label in numbered):
+        return []
     if len(numbered) != len(set(numbered)):
         return []
+
+    if expected_labels is not None:
+        if len(numbered) != len(expected_labels):
+            return []
+        if set(numbered) != expected_labels:
+            return []
+
     return numbered
 
 
@@ -347,12 +374,20 @@ def calculate_aggregate_rankings(
 
     # Track positions for each model
     model_positions = defaultdict(list)
+    expected_labels = set(label_to_model.keys())
 
     for ranking in stage2_results:
-        ranking_text = ranking["ranking"]
-
-        # Parse the ranking from the structured format
-        parsed_ranking = parse_ranking_from_text(ranking_text)
+        # Prefer pre-parsed ranking from Stage 2, fall back to strict parsing.
+        parsed_ranking = ranking.get("parsed_ranking")
+        if not parsed_ranking:
+            ranking_text = ranking.get("ranking", "")
+            parsed_ranking = (
+                parse_ranking_from_text(ranking_text, expected_labels=expected_labels)
+                if ranking_text
+                else []
+            )
+        if not parsed_ranking:
+            continue
 
         for position, label in enumerate(parsed_ranking, start=1):
             if label in label_to_model:
@@ -430,13 +465,16 @@ def calculate_tournament_rankings(
 
     # Process each ranker's parsed ranking
     # Use pre-parsed ranking if available, otherwise parse from text
+    expected_labels = set(label_to_model.keys())
     for ranking in stage2_results:
         parsed_ranking = ranking.get("parsed_ranking")
         if not parsed_ranking:
             # Fallback: parse from raw ranking text (consistent with calculate_aggregate_rankings)
             ranking_text = ranking.get("ranking", "")
             parsed_ranking = (
-                parse_ranking_from_text(ranking_text) if ranking_text else []
+                parse_ranking_from_text(ranking_text, expected_labels=expected_labels)
+                if ranking_text
+                else []
             )
 
         if not parsed_ranking:
@@ -535,10 +573,11 @@ def _format_ranker_preferences(
     if not stage2_results:
         return "- No ranking data available."
 
+    expected_labels = set(label_to_model.keys())
     lines = []
     for result in stage2_results:
         parsed = result.get("parsed_ranking") or parse_ranking_from_text(
-            result.get("ranking", "")
+            result.get("ranking", ""), expected_labels=expected_labels
         )
         if not parsed:
             continue

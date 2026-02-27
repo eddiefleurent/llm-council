@@ -229,13 +229,11 @@ In **Stage 2**, council members rank each other's responses using two algorithms
 1. **Mean Position Averaging**: Each response's average position across all rankings (lower = better)
 2. **Tournament-Style Pairwise (Condorcet)**: Head-to-head wins between responses (more robust to outliers)
 
-Responses are anonymized as "Response A", "Response B", etc. to prevent bias. Models provide rankings in this format:
+Responses are anonymized as "Response A", "Response B", etc. to prevent bias.
+Models provide rankings as strict JSON:
 
-```text
-FINAL RANKING:
-1. Response C
-2. Response A
-3. Response B
+```json
+{"final_ranking": ["Response C", "Response A", "Response B"]}
 ```
 
 Both ranking methods appear in the metadata, and the Chairman sees both when synthesizing the final answer in Stage 3.
