@@ -31,10 +31,10 @@ help:
 
 # Installation
 install:
-	uv pip install -e .
+	uv sync
 
 dev-install:
-	uv pip install -e ".[dev]"
+	uv sync --extra dev
 	@echo "✓ Dev dependencies installed. Run 'make pre-commit-install' to set up hooks."
 
 pre-commit-install:
@@ -70,17 +70,17 @@ pre-commit-run:
 # Testing
 test:
 	@echo "Running tests..."
-	pytest
+	uv run python -m pytest
 
 test-cov:
 	@echo "Running tests with coverage..."
-	pytest --cov=backend --cov-report=term-missing --cov-report=html
+	uv run python -m pytest --cov=backend --cov-report=term-missing --cov-report=html
 	@echo "Coverage report generated in htmlcov/index.html"
 
 # Development servers
 run-backend:
 	@echo "Starting FastAPI backend on http://localhost:8001"
-	python -m backend.main
+	uv run python -m backend.main
 
 run-frontend:
 	@echo "Starting Vite frontend on http://localhost:5173"
@@ -92,7 +92,7 @@ run:
 	@echo "Frontend: http://localhost:5173"
 	@echo "Press Ctrl+C to stop both servers"
 	@trap 'kill 0' SIGINT; \
-	(python -m backend.main) & \
+	(uv run python -m backend.main) & \
 	(cd frontend && pnpm run dev) & \
 	wait
 

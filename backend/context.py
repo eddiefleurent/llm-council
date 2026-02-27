@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .config import CHAIRMAN_MODEL
+from .config import get_council_config
 from .file_ingestion import AttachmentPayload, build_attachment_context_block
 from .openrouter import is_error, query_model
 
@@ -40,7 +40,8 @@ Conversation:
 Concise summary:"""
 
     messages_for_api = [{"role": "user", "content": summary_prompt}]
-    response = await query_model(CHAIRMAN_MODEL, messages_for_api, timeout=30.0)
+    summary_model = get_council_config()["chairman_model"]
+    response = await query_model(summary_model, messages_for_api, timeout=30.0)
 
     if is_error(response):
         return "Previous conversation: " + conversation_text[:200] + "..."

@@ -8,11 +8,15 @@ function deAnonymizeText(text, labelToModel) {
   if (!labelToModel) return text;
 
   let result = text;
-  // Replace each "Response X" with the actual model name
-  Object.entries(labelToModel).forEach(([label, model]) => {
-    const modelShortName = getModelDisplayName(model);
-    result = result.replace(new RegExp(label, 'g'), `**${modelShortName}**`);
-  });
+  // Sort descending by label length so longer labels (e.g. "Response AA") are
+  // replaced before shorter ones (e.g. "Response A") to avoid partial matches.
+  Object.entries(labelToModel)
+    .sort((a, b) => b[0].length - a[0].length)
+    .forEach(([label, model]) => {
+      const modelShortName = getModelDisplayName(model);
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'g'), `**${modelShortName}**`);
+    });
   return result;
 }
 
@@ -66,10 +70,11 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
             </div>
           )}
 
-          <h4>Raw Evaluations</h4>
+          <h4>Raw Model Output</h4>
           <p className="stage-description">
-            Each model evaluated all responses (anonymized as Response A, B, C, etc.) and provided rankings.
-            Below, model names are shown in <strong>bold</strong> for readability, but the original evaluation used anonymous labels.
+            Each model returns strict JSON with a final ranking over anonymized labels
+            (Response A, B, C, etc.). Below, model names are shown in <strong>bold</strong>
+            for readability, but the original output uses anonymous labels.
           </p>
 
           <div className="tabs">

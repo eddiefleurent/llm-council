@@ -27,10 +27,6 @@ DEFAULT_COUNCIL_MODELS = [
 # Default chairman model - synthesizes final response
 DEFAULT_CHAIRMAN_MODEL = "google/gemini-3.1-pro-preview"
 
-# Legacy aliases for backward compatibility
-COUNCIL_MODELS = DEFAULT_COUNCIL_MODELS
-CHAIRMAN_MODEL = DEFAULT_CHAIRMAN_MODEL
-
 # OpenRouter API endpoint
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 

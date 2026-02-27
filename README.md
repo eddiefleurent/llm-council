@@ -140,7 +140,7 @@ Models are configured through the **UI** using the gear icon in the sidebar. You
 - Enable web search (`:online` variant) for real-time information
 - Models are auto-discovered from OpenRouter's API
 
-Configuration is saved to `data/council_config.json`. Default models are defined in `backend/config.py` as fallbacks.
+Configuration is saved to `data/council_config.json`. Default models are defined in `backend/config.py`.
 
 ## Running the Application
 
@@ -212,7 +212,7 @@ make clean          # Remove cache and build artifacts
 
 The project uses [Ruff](https://docs.astral.sh/ruff/) (v0.15.0) for fast Python linting and formatting:
 - **Line length**: 88 characters (Black/Ruff standard)
-- **Target**: Python 3.10+
+- **Target**: Python 3.14+
 - **Replaces**: flake8, black, isort, pyupgrade, and more
 - **Configuration**: `pyproject.toml` under `[tool.ruff]`
 - **Pre-commit hooks**: Automatically run linter and formatter before commits
@@ -229,13 +229,11 @@ In **Stage 2**, council members rank each other's responses using two algorithms
 1. **Mean Position Averaging**: Each response's average position across all rankings (lower = better)
 2. **Tournament-Style Pairwise (Condorcet)**: Head-to-head wins between responses (more robust to outliers)
 
-Responses are anonymized as "Response A", "Response B", etc. to prevent bias. Models provide rankings in this format:
+Responses are anonymized as "Response A", "Response B", etc. to prevent bias.
+Models provide rankings as strict JSON:
 
-```text
-FINAL RANKING:
-1. Response C
-2. Response A
-3. Response B
+```json
+{"final_ranking": ["Response C", "Response A", "Response B"]}
 ```
 
 Both ranking methods appear in the metadata, and the Chairman sees both when synthesizing the final answer in Stage 3.
@@ -262,6 +260,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 - 👔 **Chairman Direct Mode** - Toggle between full council deliberation and direct chairman chat for quick follow-up refinement
 - 💬 **Multi-turn Conversations** - Full conversation context with smart summarization
 - 🏆 **Tournament Rankings** - Condorcet voting algorithm alongside mean position averaging
+- 🧭 **Improved Council Prompting** - Stage 2 now uses rubric-based judging, and Stage 3 synthesis consumes structured ranking signals for more reliable final answers
 - ⚠️ **Error Handling** - Graceful degradation when models fail, detailed error reporting
 
 ### 💾 Conversation Management
@@ -276,7 +275,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 
 ## Tech Stack
 
-- **Backend:** FastAPI (Python 3.10+), async httpx, OpenRouter API
+- **Backend:** FastAPI (Python 3.14+), async httpx, OpenRouter API
 - **Frontend:** React + Vite, react-markdown for rendering
 - **Storage:** JSON files in `data/conversations/`
 - **Package Management:** uv for Python, pnpm for JavaScript

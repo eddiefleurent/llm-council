@@ -12,7 +12,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **`config.py`**
 - Contains `DEFAULT_COUNCIL_MODELS` and `DEFAULT_CHAIRMAN_MODEL` as fallback defaults
-- Legacy aliases `COUNCIL_MODELS` and `CHAIRMAN_MODEL` maintained for compatibility
+- Legacy aliases `COUNCIL_MODELS` and `CHAIRMAN_MODEL` have been removed
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - **Validates API key at startup** - fails fast with clear error message
 - `get_council_config()`: Returns current council config (from file or defaults)
@@ -59,7 +59,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `run_full_council(messages, council_models=None, chairman_model=None, web_search_enabled=None)`: Full orchestration
   - Now accepts optional model parameters and web search flag
   - Metadata now includes `council_models`, `chairman_model`, and `web_search_enabled` used
-- `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section
+- `parse_ranking_from_text()`: Parses strict JSON `final_ranking` output
 - `calculate_aggregate_rankings()`: Mean position averaging
 - **`calculate_tournament_rankings()`**: Pairwise comparison (Condorcet voting) - more robust to outliers
 - `generate_conversation_title(user_query, chairman_model=None)`: Uses configurable chairman
@@ -335,10 +335,10 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 ### Stage 2 Prompt Format
 The Stage 2 prompt is very specific to ensure parseable output:
 ```
-1. Evaluate each response individually first
-2. Provide "FINAL RANKING:" header
-3. Numbered list format: "1. Response C", "2. Response A", etc.
-4. No additional text after ranking section
+1. Return exactly one valid JSON object and nothing else
+2. Use schema: {"final_ranking": ["Response X", "Response Y", ...]}
+3. Include each allowed label exactly once (no ties, no missing/extra labels)
+4. No markdown/code fences or trailing text
 ```
 
 ### Ranking Algorithms
@@ -391,7 +391,7 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - **Ruff**: Fast Python linter and formatter (v0.15.0)
 - Configuration in `pyproject.toml` under `[tool.ruff]`
 - **Line length**: 88 characters (Black/Ruff standard)
-- **Target**: Python 3.10+
+- **Target**: Python 3.14+
 - **Rules enabled**: pyflakes, pycodestyle errors, isort, pep8-naming, pyupgrade, flake8-bugbear, flake8-comprehensions, flake8-simplify, Ruff-specific
 - **Key features**:
   - Modern Python idioms (replaces `typing.List` with `list`, `Optional[X]` with `X | None`)
@@ -447,7 +447,7 @@ The project includes a `Makefile` with common development commands:
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend must match allowed origins in `main.py`
-3. **Ranking Parse Failures**: Fallback regex extracts any "Response X" patterns
+3. **Ranking Parse Failures**: Parser is strict JSON-only — returns empty on invalid JSON (no fallback regex). Failed parses are recorded as `parse_failure` errors in Stage 2.
 4. **Metadata Persistence**: Rankings metadata (label_to_model, aggregate_rankings, tournament_rankings) is ephemeral (not persisted), only in API responses. Errors ARE persisted in conversation files for debugging.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 
