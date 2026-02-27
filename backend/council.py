@@ -137,8 +137,9 @@ Evaluation rules:
 - Keep your critique concise and evidence-based.
 
 Output format:
-1) First, include a brief section titled "EVALUATION:" with one block per response:
-   Response X
+1) First, include a brief section titled "EVALUATION:" with one block per response.
+   Use the label format "[Response X]" (with square brackets) as the block header:
+   [Response X]
    - strengths: ...
    - weaknesses: ...
    - rubric scores: factuality=?, completeness=?, reasoning=?, usefulness=?, safety=?
@@ -149,6 +150,7 @@ IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
 - Start with the line "FINAL RANKING:" (all caps, with colon)
 - Then list the responses from best to worst as a numbered list
 - Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
+- In the FINAL RANKING section, use the plain label format "Response X" (no brackets)
 - Do not add any other text or explanations in the ranking section
 
 Now provide your evaluation and ranking:"""
