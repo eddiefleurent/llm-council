@@ -12,7 +12,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 **`config.py`**
 - Contains `DEFAULT_COUNCIL_MODELS` and `DEFAULT_CHAIRMAN_MODEL` as fallback defaults
-- Legacy aliases `COUNCIL_MODELS` and `CHAIRMAN_MODEL` maintained for compatibility
+- Legacy aliases `COUNCIL_MODELS` and `CHAIRMAN_MODEL` have been removed
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - **Validates API key at startup** - fails fast with clear error message
 - `get_council_config()`: Returns current council config (from file or defaults)
@@ -447,7 +447,7 @@ The project includes a `Makefile` with common development commands:
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend must match allowed origins in `main.py`
-3. **Ranking Parse Failures**: Fallback regex extracts any "Response X" patterns
+3. **Ranking Parse Failures**: Parser is strict JSON-only — returns empty on invalid JSON (no fallback regex). Failed parses are recorded as `parse_failure` errors in Stage 2.
 4. **Metadata Persistence**: Rankings metadata (label_to_model, aggregate_rankings, tournament_rankings) is ephemeral (not persisted), only in API responses. Errors ARE persisted in conversation files for debugging.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 

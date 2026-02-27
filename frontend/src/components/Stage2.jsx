@@ -8,11 +8,15 @@ function deAnonymizeText(text, labelToModel) {
   if (!labelToModel) return text;
 
   let result = text;
-  // Replace each "Response X" with the actual model name
-  Object.entries(labelToModel).forEach(([label, model]) => {
-    const modelShortName = getModelDisplayName(model);
-    result = result.replace(new RegExp(label, 'g'), `**${modelShortName}**`);
-  });
+  // Sort descending by label length so longer labels (e.g. "Response AA") are
+  // replaced before shorter ones (e.g. "Response A") to avoid partial matches.
+  Object.entries(labelToModel)
+    .sort((a, b) => b[0].length - a[0].length)
+    .forEach(([label, model]) => {
+      const modelShortName = getModelDisplayName(model);
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'g'), `**${modelShortName}**`);
+    });
   return result;
 }
 

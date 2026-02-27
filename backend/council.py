@@ -189,9 +189,20 @@ Now provide your JSON output:"""
             full_text = response.get("content", "")
             expected_labels = set(label_to_model.keys())
             parsed = parse_ranking_from_text(full_text, expected_labels=expected_labels)
-            stage2_results.append(
-                {"model": model, "ranking": full_text, "parsed_ranking": parsed}
-            )
+            if not parsed:
+                stage2_errors.append(
+                    {
+                        "error_type": "parse_failure",
+                        "message": "Failed to parse ranking from response",
+                        "model": model,
+                        "raw_text": full_text,
+                        "expected_labels": sorted(expected_labels),
+                    }
+                )
+            else:
+                stage2_results.append(
+                    {"model": model, "ranking": full_text, "parsed_ranking": parsed}
+                )
 
     # Log results
     print(
@@ -581,7 +592,9 @@ def _format_ranker_preferences(
         )
         if not parsed:
             continue
-        mapped = [f"{label}->{label_to_model.get(label, 'unknown')}" for label in parsed]
+        mapped = [
+            f"{label}->{label_to_model.get(label, 'unknown')}" for label in parsed
+        ]
         lines.append(f"- {result['model']}: {', '.join(mapped)}")
 
     return "\n".join(lines) if lines else "- No parseable rankings available."
