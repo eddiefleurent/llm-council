@@ -325,7 +325,9 @@ def parse_ranking_from_text(ranking_text: str) -> list[str]:
 
     ranking_section = ranking_text.split("FINAL RANKING:", 1)[1]
     numbered = re.findall(r"(?m)^\s*\d+\.\s*(Response [A-Z])\s*$", ranking_section)
-    return list(dict.fromkeys(numbered))
+    if len(numbered) != len(set(numbered)):
+        return []
+    return numbered
 
 
 def calculate_aggregate_rankings(
