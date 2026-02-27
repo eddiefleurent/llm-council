@@ -8,6 +8,12 @@ from .config import (
 )
 from .openrouter import ModelQueryError, is_error, query_model, query_models_parallel
 
+STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accurate and free of clear errors?
+- Completeness (weight 25%): Does it cover key parts of the question and constraints?
+- Reasoning quality (weight 20%): Is the logic coherent, non-contradictory, and well-justified?
+- Practical usefulness (weight 10%): Is it actionable and specific enough for the user?
+- Safety/uncertainty handling (weight 5%): Does it avoid overclaiming and call out uncertainty when needed?"""
+
 
 async def stage1_collect_responses(
     messages: list[dict[str, str]], council_models: list[str] | None = None
@@ -111,7 +117,8 @@ async def stage2_collect_rankings(
         ]
     )
 
-    ranking_prompt = f"""You are evaluating different responses to the following question:
+    ranking_prompt = f"""You are an impartial expert judge evaluating anonymized
+responses to one user question.
 
 Question: {user_query}
 
@@ -119,26 +126,30 @@ Here are the responses from different models (anonymized):
 
 {responses_text}
 
-Your task:
-1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
-2. Then, at the very end of your response, provide a final ranking.
+Scoring rubric (use this strictly):
+{STAGE2_RUBRIC}
+
+Evaluation rules:
+- Judge only the content quality, not writing style alone.
+- Penalize hallucinations and unsupported claims heavily.
+- Prefer responses that acknowledge uncertainty over confident wrong claims.
+- Use each response label exactly once in your final ranking (no ties).
+- Keep your critique concise and evidence-based.
+
+Output format:
+1) First, include a brief section titled "EVALUATION:" with one block per response:
+   Response X
+   - strengths: ...
+   - weaknesses: ...
+   - rubric scores: factuality=?, completeness=?, reasoning=?, usefulness=?, safety=?
+2) Then, at the very end, include the final ranking section in the exact format
+below.
 
 IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
 - Start with the line "FINAL RANKING:" (all caps, with colon)
 - Then list the responses from best to worst as a numbered list
 - Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
 - Do not add any other text or explanations in the ranking section
-
-Example of the correct format for your ENTIRE response:
-
-Response A provides good detail on X but misses Y...
-Response B is accurate but lacks depth on Z...
-Response C offers the most comprehensive answer...
-
-FINAL RANKING:
-1. Response C
-2. Response A
-3. Response B
 
 Now provide your evaluation and ranking:"""
 
@@ -186,6 +197,9 @@ async def stage3_synthesize_final(
     user_query: str,
     stage1_results: list[dict[str, Any]],
     stage2_results: list[dict[str, Any]],
+    label_to_model: dict[str, str],
+    aggregate_rankings: list[dict[str, Any]],
+    tournament_rankings: list[dict[str, Any]],
     chairman_model: str | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
@@ -195,7 +209,11 @@ async def stage3_synthesize_final(
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
-        chairman_model: Optional model ID for chairman (defaults to configured chairman)
+        label_to_model: Mapping from anonymized label to model ID
+        aggregate_rankings: Mean-position ranking summary
+        tournament_rankings: Pairwise ranking summary
+        chairman_model: Optional model ID for chairman (defaults to configured
+            chairman)
 
     Returns:
         Tuple of (result dict with 'model' and 'response' keys, errors list)
@@ -216,29 +234,38 @@ async def stage3_synthesize_final(
         ]
     )
 
-    stage2_text = "\n\n".join(
-        [
-            f"Model: {result['model']}\nRanking: {result['ranking']}"
-            for result in stage2_results
-        ]
-    )
+    ranker_preferences = _format_ranker_preferences(stage2_results, label_to_model)
+    aggregate_text = _format_aggregate_rankings(aggregate_rankings)
+    tournament_text = _format_tournament_rankings(tournament_rankings)
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models
+have provided responses to a user's question, and then ranked each other's
+responses.
 
 Original Question: {user_query}
 
 STAGE 1 - Individual Responses:
 {stage1_text}
 
-STAGE 2 - Peer Rankings:
-{stage2_text}
+STAGE 2 - Ranking Signals:
+Per-ranker parsed preferences:
+{ranker_preferences}
 
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
-- The individual responses and their insights
-- The peer rankings and what they reveal about response quality
-- Any patterns of agreement or disagreement
+Aggregate mean-position ranking:
+{aggregate_text}
 
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+Tournament pairwise ranking:
+{tournament_text}
+
+Synthesis policy:
+- Use rankings as weak evidence, not ground truth.
+- Prioritize factual correctness and internal consistency over popularity.
+- If top-ranked responses conflict, resolve explicitly and explain the tradeoff.
+- If uncertainty remains, state it clearly and suggest how to verify.
+- Include concrete steps/examples when useful.
+
+Provide a clear, well-reasoned final answer that represents the council's
+collective wisdom:"""
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
@@ -513,6 +540,54 @@ def calculate_tournament_rankings(
     return results
 
 
+def _format_ranker_preferences(
+    stage2_results: list[dict[str, Any]], label_to_model: dict[str, str]
+) -> str:
+    """Format parsed per-ranker preferences for Stage 3 synthesis."""
+    if not stage2_results:
+        return "- No ranking data available."
+
+    lines = []
+    for result in stage2_results:
+        parsed = result.get("parsed_ranking") or parse_ranking_from_text(
+            result.get("ranking", "")
+        )
+        if not parsed:
+            continue
+        mapped = [f"{label}->{label_to_model.get(label, 'unknown')}" for label in parsed]
+        lines.append(f"- {result['model']}: {', '.join(mapped)}")
+
+    return "\n".join(lines) if lines else "- No parseable rankings available."
+
+
+def _format_aggregate_rankings(aggregate_rankings: list[dict[str, Any]]) -> str:
+    """Format aggregate ranking metrics for Stage 3 synthesis."""
+    if not aggregate_rankings:
+        return "- No aggregate ranking data available."
+
+    lines = []
+    for idx, item in enumerate(aggregate_rankings, start=1):
+        lines.append(
+            f"{idx}. {item['model']} (avg_rank={item['average_rank']}, "
+            f"votes={item['rankings_count']})"
+        )
+    return "\n".join(lines)
+
+
+def _format_tournament_rankings(tournament_rankings: list[dict[str, Any]]) -> str:
+    """Format tournament ranking metrics for Stage 3 synthesis."""
+    if not tournament_rankings:
+        return "- No tournament ranking data available."
+
+    lines = []
+    for idx, item in enumerate(tournament_rankings, start=1):
+        lines.append(
+            f"{idx}. {item['model']} (win_pct={item['win_percentage']}, "
+            f"wins={item['wins']}, losses={item['losses']}, ties={item['ties']})"
+        )
+    return "\n".join(lines)
+
+
 async def chairman_direct_response(
     messages: list[dict[str, str]],
     chairman_model: str | None = None,
@@ -702,7 +777,13 @@ async def run_full_council(
 
     # Stage 3: Synthesize final answer
     stage3_result, stage3_errors = await stage3_synthesize_final(
-        current_query, stage1_results, stage2_results, chairman_model
+        current_query,
+        stage1_results,
+        stage2_results,
+        label_to_model,
+        aggregate_rankings,
+        tournament_rankings,
+        chairman_model,
     )
     all_errors.extend(stage3_errors)
 

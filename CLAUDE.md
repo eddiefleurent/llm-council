@@ -391,7 +391,7 @@ Always use `getModelDisplayName()` in frontend - handles arrays, null, missing s
 - **Ruff**: Fast Python linter and formatter (v0.15.0)
 - Configuration in `pyproject.toml` under `[tool.ruff]`
 - **Line length**: 88 characters (Black/Ruff standard)
-- **Target**: Python 3.10+
+- **Target**: Python 3.14+
 - **Rules enabled**: pyflakes, pycodestyle errors, isort, pep8-naming, pyupgrade, flake8-bugbear, flake8-comprehensions, flake8-simplify, Ruff-specific
 - **Key features**:
   - Modern Python idioms (replaces `typing.List` with `list`, `Optional[X]` with `X | None`)
