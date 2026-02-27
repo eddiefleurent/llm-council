@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN pnpm run build
 
 # Stage 2: Python runtime with backend + built frontend
-FROM python:slim
+FROM python:3.14-slim
 WORKDIR /app
 
 # Install uv for faster Python dependency management

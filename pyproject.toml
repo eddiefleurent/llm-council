@@ -3,7 +3,7 @@ name = "llm-council"
 version = "0.1.0"
 description = "Your LLM Council"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -25,8 +25,8 @@ dev = [
 ]
 
 [tool.ruff]
-# Target Python 3.10+
-target-version = "py310"
+# Target Python 3.14+
+target-version = "py314"
 
 # Line length (88 is Ruff/Black default, widely adopted standard)
 line-length = 88
@@ -51,7 +51,7 @@ select = [
     "E9",     # pycodestyle errors (subset) - runtime errors
     "I",      # isort - import sorting
     "N",      # pep8-naming - naming conventions
-    "UP",     # pyupgrade - modern Python idioms (Python 3.10+ features)
+    "UP",     # pyupgrade - modern Python idioms (Python 3.14+ features)
     "B",      # flake8-bugbear - common bugs and design problems
     "C4",     # flake8-comprehensions - better list/dict/set comprehensions
     "SIM",    # flake8-simplify - suggestions for simpler code
