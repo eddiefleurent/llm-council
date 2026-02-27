@@ -719,9 +719,13 @@ async def run_full_council(
                 "response": "No messages provided. Please enter a query.",
             },
             {
-                "errors": [
-                    {"error_type": "validation", "message": "Empty messages list"}
-                ]
+                "errors": {
+                    "stage1": [
+                        {"error_type": "validation", "message": "Empty messages list"}
+                    ],
+                    "stage2": [],
+                    "stage3": [],
+                }
             },
         )
 
@@ -750,7 +754,7 @@ async def run_full_council(
                 "model": "error",
                 "response": f"All models failed to respond. {error_summary}",
             },
-            {"errors": all_errors},
+            {"errors": {"stage1": stage1_errors, "stage2": [], "stage3": []}},
         )
 
     # Stage 2: Collect rankings (uses current query only for ranking prompt)
