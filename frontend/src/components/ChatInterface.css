@@ -467,6 +467,8 @@
 
 .attach-button {
   padding: 8px;
+  min-width: 40px;
+  min-height: 40px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: var(--bg-input);
