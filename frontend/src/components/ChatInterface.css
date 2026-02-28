@@ -466,14 +466,15 @@
 }
 
 .attach-button {
-  padding: 10px 14px;
+  padding: 8px;
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .attach-button:hover:not(:disabled) {
