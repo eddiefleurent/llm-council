@@ -268,6 +268,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 - 🗂️ **Conversation Management** - Clear history, delete conversations, draft mode
 - 🎯 **Per-Conversation Model Config** - Each conversation remembers its own models; config UI moved to chat interface for intuitive per-conversation settings
 - 🔄 **Fresh Start on Load** - App opens with new conversation instead of resuming last one (refresh preserves current conversation)
+- 🔌 **Resilient Streaming UX** - In-progress responses continue server-side even if the client disconnects, and the sidebar remains navigable during generation
 
 ### 🛠️ Development Tools
 - ✅ **Ruff Linter** - Fast Python linting and formatting with pre-commit hooks

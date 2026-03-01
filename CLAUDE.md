@@ -108,6 +108,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - POST `/api/conversations` - Create conversation (accepts optional config: council_models, chairman_model, web_search_enabled)
 - POST `/api/conversations/{id}/message` - Send message (uses conversation-specific config)
 - POST `/api/conversations/{id}/message/stream` - Stream message (uses conversation-specific config)
+ - Streaming workers are detached from the SSE response so generation continues even if the client disconnects (sleep/tab suspension/network blip)
 - DELETE `/api/conversations` clears all conversations
 - Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, web_search_enabled, errors
 
@@ -142,6 +143,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Per-conversation config**: Creates conversations with current global config as starting point
 - **Clear history**: Deletes all conversations with confirmation
 - Handles message sending and metadata storage
+- **Generation tracking**: Tracks the active generation conversation separately so sidebar navigation stays usable while responses stream
 - **Message mode state**: Manages `messageMode` ("council" or "chairman") passed to ChatInterface
 - **Mobile sidebar state**: Manages `isSidebarOpen` for hamburger menu toggle
 - `handleSendMessage(content, mode)`: Routes to council or chairman streaming based on mode, inherits global config on conversation creation
@@ -192,7 +194,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Used in user messages, Stage 1, and Stage 3
 
 **`components/Sidebar.jsx`**
-- **Loading state**: Disables switching during response generation
+- **Loading state**: Shows in-progress warning and highlights the generating conversation while still allowing conversation switching
+- Destructive actions are guarded while generation is running (clear history + deleting the active generating conversation)
 - **Clear History button**: Red-styled, with confirmation
 - Shows "Response in progress" warning
 - **Theme toggle button**: Moon/sun icon to switch between light/dark modes

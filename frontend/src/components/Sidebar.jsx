@@ -7,28 +7,30 @@ export default function Sidebar({
   onNewConversation,
   onClearConversations,
   onDeleteConversation,
-  isLoading = false,
+  isGenerating = false,
+  isMutating = false,
+  activeGenerationConversationId = null,
   theme,
   onToggleTheme,
   isMobileOpen = false,
 }) {
   const handleConversationClick = (id) => {
-    // Prevent switching while a response is being generated
-    if (isLoading) return;
     onSelectConversation(id);
   };
 
   const handleNewConversation = () => {
-    // Prevent creating new conversation while a response is being generated
-    if (isLoading) return;
+    if (isMutating) return;
     onNewConversation();
   };
 
   const handleDeleteConversation = (event, id) => {
     event.stopPropagation();
-    if (isLoading) return;
+    if (isMutating || id === activeGenerationConversationId) return;
     if (typeof onDeleteConversation === 'function') onDeleteConversation(id);
   };
+
+  const isClearHistoryDisabled =
+    isMutating || activeGenerationConversationId !== null;
 
   return (
     <div className={`sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
@@ -66,8 +68,7 @@ export default function Sidebar({
         <button 
           className="new-conversation-btn" 
           onClick={handleNewConversation}
-          disabled={isLoading}
-          title={isLoading ? 'Please wait for the current response to complete' : ''}
+          disabled={isMutating}
         >
           + New Conversation
         </button>
@@ -76,15 +77,20 @@ export default function Sidebar({
           onClick={() => {
             if (typeof onClearConversations === 'function') onClearConversations();
           }}
-          disabled={isLoading}
+          disabled={isClearHistoryDisabled}
+          title={
+            activeGenerationConversationId
+              ? 'Wait for the in-progress response to complete before clearing history'
+              : ''
+          }
         >
           Clear History
         </button>
       </div>
 
-      {isLoading && (
+      {isGenerating && (
         <div className="sidebar-loading-warning">
-          ⏳ Response in progress...
+          ⏳ Response in progress (you can keep browsing)
         </div>
       )}
 
@@ -97,9 +103,13 @@ export default function Sidebar({
               key={conv.id}
               className={`conversation-item ${
                 conv.id === currentConversationId ? 'active' : ''
-              } ${isLoading && conv.id !== currentConversationId ? 'disabled' : ''}`}
+              } ${conv.id === activeGenerationConversationId ? 'generating' : ''}`}
               onClick={() => handleConversationClick(conv.id)}
-              title={isLoading && conv.id !== currentConversationId ? 'Please wait for the current response to complete' : ''}
+              title={
+                conv.id === activeGenerationConversationId
+                  ? 'Response currently generating'
+                  : ''
+              }
             >
               <div className="conversation-item-header">
                 <div className="conversation-title">
@@ -111,7 +121,9 @@ export default function Sidebar({
                   onClick={(event) => handleDeleteConversation(event, conv.id)}
                   aria-label={`Delete conversation ${conv.title || conv.id}`}
                   title="Delete conversation"
-                  disabled={isLoading}
+                  disabled={
+                    isMutating || conv.id === activeGenerationConversationId
+                  }
                 >
                   ×
                 </button>

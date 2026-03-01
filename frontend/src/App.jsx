@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import { api } from './api';
@@ -8,7 +8,9 @@ function App() {
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeGenerationConversationId, setActiveGenerationConversationId] =
+    useState(null);
+  const [isMutatingConversations, setIsMutatingConversations] = useState(false);
   const [isDraftMode, setIsDraftMode] = useState(false);
 
   // Draft conversation config (used before conversation is created)
@@ -19,6 +21,22 @@ function App() {
 
   // Mobile sidebar state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const currentConversationIdRef = useRef(currentConversationId);
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+  const currentConversationRef = useRef(currentConversation);
+  useEffect(() => {
+    currentConversationRef.current = currentConversation;
+  }, [currentConversation]);
+
+  const isGenerating = activeGenerationConversationId !== null;
+  const isCurrentConversationGenerating =
+    activeGenerationConversationId !== null &&
+    currentConversationId === activeGenerationConversationId;
+  const isSendLockedByOtherConversation =
+    isGenerating && !isCurrentConversationGenerating;
 
   // Theme state
   const [theme, setTheme] = useState(() => {
@@ -117,14 +135,27 @@ function App() {
     }
   }, [currentConversationId, isDraftMode]);
 
-  // Load conversation details when selected
-  // IMPORTANT: Skip loading if isLoading is true - prevents race condition where
-  // loadConversation overwrites optimistic UI state during message streaming
+  // Load conversation details when selected.
+  // Avoid re-fetching while this same conversation is actively streaming
+  // to preserve optimistic in-progress UI state.
   useEffect(() => {
-    if (currentConversationId && !isDraftMode && !isLoading) {
+    if (!currentConversationId || isDraftMode) {
+      return;
+    }
+
+    const isStreamingConversationVisible =
+      activeGenerationConversationId === currentConversationId &&
+      currentConversation?.id === currentConversationId;
+
+    if (!isStreamingConversationVisible) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId, isDraftMode, isLoading]);
+  }, [
+    currentConversationId,
+    isDraftMode,
+    activeGenerationConversationId,
+    currentConversation?.id,
+  ]);
 
   const loadConversations = async () => {
     try {
@@ -172,7 +203,8 @@ function App() {
 
   const handleClearConversations = async () => {
     if (!window.confirm('Clear all conversations? This cannot be undone.')) return;
-    setIsLoading(true);
+    if (isGenerating) return;
+    setIsMutatingConversations(true);
     try {
       await api.deleteAllConversations();
       setConversations([]);
@@ -182,18 +214,23 @@ function App() {
     } catch (error) {
       console.error('Failed to clear conversations:', error);
     } finally {
-      setIsLoading(false);
+      setIsMutatingConversations(false);
     }
   };
 
   const handleDeleteConversation = async (conversationId) => {
-    if (isLoading) return;
+    if (
+      isMutatingConversations ||
+      conversationId === activeGenerationConversationId
+    ) {
+      return;
+    }
 
     const conversationToDelete = conversations.find((conv) => conv.id === conversationId);
     const conversationTitle = conversationToDelete?.title || 'this conversation';
     if (!window.confirm(`Delete "${conversationTitle}"? This cannot be undone.`)) return;
 
-    setIsLoading(true);
+    setIsMutatingConversations(true);
     try {
       await api.deleteConversation(conversationId);
 
@@ -222,16 +259,52 @@ function App() {
     } catch (error) {
       console.error('Failed to delete conversation:', error);
     } finally {
-      setIsLoading(false);
+      setIsMutatingConversations(false);
+    }
+  };
+
+  const updateCurrentAssistantMessage = (targetConversationId, updater) => {
+    setCurrentConversation((prev) => {
+      if (!prev || prev.id !== targetConversationId || prev.messages.length === 0) {
+        return prev;
+      }
+
+      const lastMsg = prev.messages[prev.messages.length - 1];
+      if (lastMsg.role !== 'assistant') {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        messages: [...prev.messages.slice(0, -1), updater(lastMsg)],
+      };
+    });
+  };
+
+  const maybeSyncConversationAfterBackgroundStream = (conversationId) => {
+    const visibleConversation = currentConversationRef.current;
+    if (!visibleConversation || visibleConversation.id !== conversationId) {
+      return;
+    }
+
+    const lastMessage =
+      visibleConversation.messages[visibleConversation.messages.length - 1];
+    const hasCompleteAssistantMessage =
+      lastMessage?.role === 'assistant' && Boolean(lastMessage.stage3);
+
+    if (!hasCompleteAssistantMessage) {
+      loadConversation(conversationId);
     }
   };
 
   const handleSendMessage = async (content, attachment = null) => {
-    const effectiveMode = messageMode;
-    setIsLoading(true);
-    try {
-      let conversationId = currentConversationId;
+    if (activeGenerationConversationId) return;
 
+    const effectiveMode = messageMode;
+    let conversationId = currentConversationId;
+    let generationStarted = false;
+
+    try {
       // If in draft mode, create the conversation first
       if (isDraftMode) {
         // Use draft config if set, otherwise inherit global config
@@ -262,6 +335,8 @@ function App() {
       }
 
       if (!conversationId) return;
+      setActiveGenerationConversationId(conversationId);
+      generationStarted = true;
 
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
@@ -272,10 +347,16 @@ function App() {
           size_bytes: attachment.size_bytes,
         };
       }
-      setCurrentConversation((prev) => ({
-        ...prev,
-        messages: [...prev.messages, userMessage],
-      }));
+      setCurrentConversation((prev) => {
+        if (!prev || prev.id !== conversationId) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          messages: [...prev.messages, userMessage],
+        };
+      });
 
       if (effectiveMode === 'chairman') {
         // Chairman-only mode: simpler assistant message
@@ -288,41 +369,33 @@ function App() {
           loading: { chairman: false },
         };
 
-        setCurrentConversation((prev) => ({
-          ...prev,
-          messages: [...prev.messages, assistantMessage],
-        }));
+        setCurrentConversation((prev) => {
+          if (!prev || prev.id !== conversationId) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+          };
+        });
 
         await api.sendMessageStream(conversationId, content, (eventType, event) => {
           switch (eventType) {
             case 'chairman_start':
-              setCurrentConversation((prev) => {
-                const messages = prev.messages.slice(0, -1);
-                const lastMsg = prev.messages[prev.messages.length - 1];
-                return {
-                  ...prev,
-                  messages: [...messages, { ...lastMsg, loading: { chairman: true } }],
-                };
-              });
+              updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+                ...lastMsg,
+                loading: { chairman: true },
+              }));
               break;
 
             case 'chairman_complete':
-              setCurrentConversation((prev) => {
-                const messages = prev.messages.slice(0, -1);
-                const lastMsg = prev.messages[prev.messages.length - 1];
-                return {
-                  ...prev,
-                  messages: [
-                    ...messages,
-                    {
-                      ...lastMsg,
-                      stage3: event.data,
-                      errors: event.errors ? { chairman: event.errors } : undefined,
-                      loading: { chairman: false },
-                    },
-                  ],
-                };
-              });
+              updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+                ...lastMsg,
+                stage3: event.data,
+                errors: event.errors ? { chairman: event.errors } : undefined,
+                loading: { chairman: false },
+              }));
               break;
 
             case 'title_complete':
@@ -331,12 +404,20 @@ function App() {
 
             case 'complete':
               loadConversations();
-              setIsLoading(false);
+              maybeSyncConversationAfterBackgroundStream(conversationId);
+              setActiveGenerationConversationId((prev) =>
+                prev === conversationId ? null : prev
+              );
               break;
 
             case 'error':
               console.error('Stream error:', event.message);
-              setIsLoading(false);
+              if (currentConversationIdRef.current === conversationId) {
+                loadConversation(conversationId);
+              }
+              setActiveGenerationConversationId((prev) =>
+                prev === conversationId ? null : prev
+              );
               break;
 
             default:
@@ -358,24 +439,23 @@ function App() {
           },
         };
 
-        setCurrentConversation((prev) => ({
-          ...prev,
-          messages: [...prev.messages, assistantMessage],
-        }));
+        setCurrentConversation((prev) => {
+          if (!prev || prev.id !== conversationId) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+          };
+        });
 
         // Helper to immutably update loading state of the last message
         const updateLastMessageLoading = (loadingUpdates) => {
-          setCurrentConversation((prev) => {
-            const messages = prev.messages.slice(0, -1);
-            const lastMsg = prev.messages[prev.messages.length - 1];
-            return {
-              ...prev,
-              messages: [
-                ...messages,
-                { ...lastMsg, loading: { ...lastMsg.loading, ...loadingUpdates } },
-              ],
-            };
-          });
+          updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+            ...lastMsg,
+            loading: { ...lastMsg.loading, ...loadingUpdates },
+          }));
         };
 
         await api.sendMessageStream(conversationId, content, (eventType, event) => {
@@ -385,25 +465,15 @@ function App() {
               break;
 
             case 'stage1_complete':
-              setCurrentConversation((prev) => {
-                const messages = prev.messages.slice(0, -1);
-                const lastMsg = prev.messages[prev.messages.length - 1];
-                return {
-                  ...prev,
-                  messages: [
-                    ...messages,
-                    {
-                      ...lastMsg,
-                      stage1: event.data,
-                      errors: {
-                        ...(lastMsg.errors || {}),
-                        stage1: event.errors || []
-                      },
-                      loading: { stage1: false, stage2: false, stage3: false }
-                    }
-                  ]
-                };
-              });
+              updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+                ...lastMsg,
+                stage1: event.data,
+                errors: {
+                  ...(lastMsg.errors || {}),
+                  stage1: event.errors || []
+                },
+                loading: { stage1: false, stage2: false, stage3: false }
+              }));
               break;
 
             case 'stage2_start':
@@ -411,26 +481,16 @@ function App() {
               break;
 
             case 'stage2_complete':
-              setCurrentConversation((prev) => {
-                const messages = prev.messages.slice(0, -1);
-                const lastMsg = prev.messages[prev.messages.length - 1];
-                return {
-                  ...prev,
-                  messages: [
-                    ...messages,
-                    {
-                      ...lastMsg,
-                      stage2: event.data,
-                      metadata: event.metadata,
-                      errors: {
-                        ...(lastMsg.errors || {}),
-                        stage2: event.errors || []
-                      },
-                      loading: { stage1: false, stage2: false, stage3: false }
-                    }
-                  ]
-                };
-              });
+              updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+                ...lastMsg,
+                stage2: event.data,
+                metadata: event.metadata,
+                errors: {
+                  ...(lastMsg.errors || {}),
+                  stage2: event.errors || []
+                },
+                loading: { stage1: false, stage2: false, stage3: false }
+              }));
               break;
 
             case 'stage3_start':
@@ -438,25 +498,15 @@ function App() {
               break;
 
             case 'stage3_complete':
-              setCurrentConversation((prev) => {
-                const messages = prev.messages.slice(0, -1);
-                const lastMsg = prev.messages[prev.messages.length - 1];
-                return {
-                  ...prev,
-                  messages: [
-                    ...messages,
-                    {
-                      ...lastMsg,
-                      stage3: event.data,
-                      errors: {
-                        ...(lastMsg.errors || {}),
-                        stage3: event.errors || []
-                      },
-                      loading: { stage1: false, stage2: false, stage3: false }
-                    }
-                  ]
-                };
-              });
+              updateCurrentAssistantMessage(conversationId, (lastMsg) => ({
+                ...lastMsg,
+                stage3: event.data,
+                errors: {
+                  ...(lastMsg.errors || {}),
+                  stage3: event.errors || []
+                },
+                loading: { stage1: false, stage2: false, stage3: false }
+              }));
               break;
 
             case 'title_complete':
@@ -467,12 +517,20 @@ function App() {
             case 'complete':
               // Stream complete, reload conversations list
               loadConversations();
-              setIsLoading(false);
+              maybeSyncConversationAfterBackgroundStream(conversationId);
+              setActiveGenerationConversationId((prev) =>
+                prev === conversationId ? null : prev
+              );
               break;
 
             case 'error':
               console.error('Stream error:', event.message);
-              setIsLoading(false);
+              if (currentConversationIdRef.current === conversationId) {
+                loadConversation(conversationId);
+              }
+              setActiveGenerationConversationId((prev) =>
+                prev === conversationId ? null : prev
+              );
               break;
 
             default:
@@ -482,12 +540,14 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      // Remove optimistic messages on error
-      setCurrentConversation((prev) => ({
-        ...prev,
-        messages: prev.messages.slice(0, -2),
-      }));
-      setIsLoading(false);
+      if (conversationId && currentConversationIdRef.current === conversationId) {
+        loadConversation(conversationId);
+      }
+      if (generationStarted) {
+        setActiveGenerationConversationId((prev) =>
+          prev === conversationId ? null : prev
+        );
+      }
     }
   };
 
@@ -505,7 +565,9 @@ function App() {
         onNewConversation={handleNewConversation}
         onClearConversations={handleClearConversations}
         onDeleteConversation={handleDeleteConversation}
-        isLoading={isLoading}
+        isGenerating={isGenerating}
+        isMutating={isMutatingConversations}
+        activeGenerationConversationId={activeGenerationConversationId}
         theme={theme}
         onToggleTheme={toggleTheme}
         isMobileOpen={isSidebarOpen}
@@ -514,7 +576,8 @@ function App() {
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
-        isLoading={isLoading}
+        isLoading={isCurrentConversationGenerating}
+        isSendLocked={isSendLockedByOtherConversation}
         messageMode={messageMode}
         onSetMessageMode={setMessageMode}
         onToggleSidebar={toggleSidebar}

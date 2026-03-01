@@ -690,39 +690,130 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     is_first_message = len(conversation["messages"]) == 0
 
     if request.mode == "chairman":
-        return StreamingResponse(
-            _chairman_stream(
+        event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        worker_task = asyncio.create_task(
+            _run_chairman_stream_worker(
                 conversation_id,
                 request.content,
                 user_content_for_context,
                 attachment_payload,
                 is_first_message,
+                event_queue,
+            )
+        )
+        _attach_worker_exception_logger(
+            worker_task, conversation_id=conversation_id, mode="chairman"
+        )
+        return StreamingResponse(
+            _stream_from_queue(
+                conversation_id,
+                "chairman",
+                event_queue,
+                worker_task,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
-    return StreamingResponse(
-        _council_stream(
+    event_queue = asyncio.Queue()
+    worker_task = asyncio.create_task(
+        _run_council_stream_worker(
             conversation_id,
             request.content,
             user_content_for_context,
             attachment_payload,
             is_first_message,
+            event_queue,
+        )
+    )
+    _attach_worker_exception_logger(
+        worker_task, conversation_id=conversation_id, mode="council"
+    )
+
+    return StreamingResponse(
+        _stream_from_queue(
+            conversation_id,
+            "council",
+            event_queue,
+            worker_task,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
-async def _chairman_stream(
+def _serialize_sse_event(event: dict[str, Any]) -> str:
+    """Serialize an event as an SSE data frame."""
+    return f"data: {json.dumps(event)}\n\n"
+
+
+async def _emit_stream_event(
+    event_queue: asyncio.Queue[dict[str, Any] | None], event: dict[str, Any]
+) -> None:
+    """Queue an SSE event for the active stream client."""
+    await event_queue.put(event)
+
+
+def _attach_worker_exception_logger(
+    worker_task: asyncio.Task[None], *, conversation_id: str, mode: str
+) -> None:
+    """Log unexpected exceptions from detached stream workers."""
+
+    def _on_done(task: asyncio.Task[None]) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logger.info(
+                "Background %s worker cancelled for conversation %s",
+                mode,
+                conversation_id,
+            )
+        except Exception:
+            logger.exception(
+                "Background %s worker failed for conversation %s",
+                mode,
+                conversation_id,
+            )
+
+    worker_task.add_done_callback(_on_done)
+
+
+async def _stream_from_queue(
+    conversation_id: str,
+    mode: str,
+    event_queue: asyncio.Queue[dict[str, Any] | None],
+    worker_task: asyncio.Task[None],
+):
+    """Yield SSE events from a queue while worker runs in background."""
+    try:
+        while True:
+            event = await event_queue.get()
+            if event is None:
+                break
+            yield _serialize_sse_event(event)
+    except asyncio.CancelledError:
+        logger.info(
+            "Client disconnected from %s stream for conversation %s; "
+            "continuing processing in background",
+            mode,
+            conversation_id,
+        )
+        raise
+    finally:
+        if worker_task.done():
+            with suppress(asyncio.CancelledError, Exception):
+                worker_task.result()
+
+
+async def _run_chairman_stream_worker(
     conversation_id: str,
     content: str,
     content_for_context: str,
     attachment: dict[str, Any] | None,
     is_first_message: bool,
+    event_queue: asyncio.Queue[dict[str, Any] | None],
 ):
-    """Stream a chairman-only response (no council stages)."""
+    """Run chairman-only generation and enqueue stream events."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
@@ -739,7 +830,7 @@ async def _chairman_stream(
         # Build context messages from conversation history
         conv = storage.get_conversation(conversation_id)
         if conv is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            raise ValueError("Conversation not found")
         messages = await build_context_messages(
             conv["messages"][:-1], content_for_context
         )
@@ -750,7 +841,7 @@ async def _chairman_stream(
         web_search_enabled = conv_config.get("web_search_enabled", False)
 
         # Signal chairman mode to frontend
-        yield f"data: {json.dumps({'type': 'chairman_start'})}\n\n"
+        await _emit_stream_event(event_queue, {"type": "chairman_start"})
 
         # Query chairman directly
         result, errors = await chairman_direct_response(
@@ -759,41 +850,57 @@ async def _chairman_stream(
             web_search_enabled=web_search_enabled,
         )
 
-        yield f"data: {json.dumps({'type': 'chairman_complete', 'data': result, 'errors': errors if errors else None})}\n\n"
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "chairman_complete",
+                "data": result,
+                "errors": errors if errors else None,
+            },
+        )
 
         # Wait for title generation if it was started
         if title_task:
             title = await title_task
             storage.update_conversation_title(conversation_id, title)
-            yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+            await _emit_stream_event(
+                event_queue, {"type": "title_complete", "data": {"title": title}}
+            )
 
         # Persist chairman message
         storage.add_chairman_message(
             conversation_id, result, errors if errors else None
         )
 
-        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-
-    except HTTPException:
-        raise
+        await _emit_stream_event(event_queue, {"type": "complete"})
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
             with suppress(asyncio.CancelledError):
                 await title_task
-        logger.exception("Error in chairman streaming process")
-        yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
+        logger.exception("Error in chairman streaming worker")
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "error",
+                "message": "An unexpected error occurred. Please try again.",
+            },
+        )
+    finally:
+        with suppress(asyncio.CancelledError):
+            await event_queue.put(None)
 
 
-async def _council_stream(
+async def _run_council_stream_worker(
     conversation_id: str,
     content: str,
     content_for_context: str,
     attachment: dict[str, Any] | None,
     is_first_message: bool,
+    event_queue: asyncio.Queue[dict[str, Any] | None],
 ):
-    """Stream the full 3-stage council process."""
+    """Run full council generation and enqueue stream events."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
@@ -811,7 +918,7 @@ async def _council_stream(
         # Re-fetch conversation to get the user message we just added
         conv = storage.get_conversation(conversation_id)
         if conv is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            raise ValueError("Conversation not found")
         messages = await build_context_messages(
             conv["messages"][:-1],  # Exclude the user message we just added
             content_for_context,
@@ -831,11 +938,18 @@ async def _council_stream(
             chairman_model = apply_online_variant(chairman_model)
 
         # Stage 1: Collect responses with context
-        yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
+        await _emit_stream_event(event_queue, {"type": "stage1_start"})
         stage1_results, stage1_errors = await stage1_collect_responses(
             messages, council_models
         )
-        yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results, 'errors': stage1_errors if stage1_errors else None})}\n\n"
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "stage1_complete",
+                "data": stage1_results,
+                "errors": stage1_errors if stage1_errors else None,
+            },
+        )
 
         # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
         if not stage1_results:
@@ -846,11 +960,18 @@ async def _council_stream(
                 # Suppress any title generation errors to preserve short-circuit flow
                 with suppress(Exception):
                     await title_task
-            yield f"data: {json.dumps({'type': 'error', 'message': 'All models failed to respond. Please try again.', 'errors': stage1_errors if stage1_errors else None})}\n\n"
+            await _emit_stream_event(
+                event_queue,
+                {
+                    "type": "error",
+                    "message": "All models failed to respond. Please try again.",
+                    "errors": stage1_errors if stage1_errors else None,
+                },
+            )
             return
 
         # Stage 2: Collect rankings
-        yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
+        await _emit_stream_event(event_queue, {"type": "stage2_start"})
         stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
             content, stage1_results, council_models
         )
@@ -860,10 +981,22 @@ async def _council_stream(
         tournament_rankings = calculate_tournament_rankings(
             stage2_results, label_to_model
         )
-        yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'tournament_rankings': tournament_rankings}, 'errors': stage2_errors if stage2_errors else None})}\n\n"
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "stage2_complete",
+                "data": stage2_results,
+                "metadata": {
+                    "label_to_model": label_to_model,
+                    "aggregate_rankings": aggregate_rankings,
+                    "tournament_rankings": tournament_rankings,
+                },
+                "errors": stage2_errors if stage2_errors else None,
+            },
+        )
 
         # Stage 3: Synthesize final answer
-        yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
+        await _emit_stream_event(event_queue, {"type": "stage3_start"})
         stage3_result, stage3_errors = await stage3_synthesize_final(
             content,
             stage1_results,
@@ -873,13 +1006,22 @@ async def _council_stream(
             tournament_rankings,
             chairman_model,
         )
-        yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "stage3_complete",
+                "data": stage3_result,
+                "errors": stage3_errors if stage3_errors else None,
+            },
+        )
 
         # Wait for title generation if it was started
         if title_task:
             title = await title_task
             storage.update_conversation_title(conversation_id, title)
-            yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
+            await _emit_stream_event(
+                event_queue, {"type": "title_complete", "data": {"title": title}}
+            )
 
         # Collect all errors for persistence
         errors = {
@@ -894,19 +1036,25 @@ async def _council_stream(
         )
 
         # Send completion event
-        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-
-    except HTTPException:
-        raise
+        await _emit_stream_event(event_queue, {"type": "complete"})
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
             with suppress(asyncio.CancelledError):
                 await title_task
-        logger.exception("Error in streaming council process")
+        logger.exception("Error in streaming council worker")
         # Send sanitized error event (don't leak internal details)
-        yield f"data: {json.dumps({'type': 'error', 'message': 'An unexpected error occurred. Please try again.'})}\n\n"
+        await _emit_stream_event(
+            event_queue,
+            {
+                "type": "error",
+                "message": "An unexpected error occurred. Please try again.",
+            },
+        )
+    finally:
+        with suppress(asyncio.CancelledError):
+            await event_queue.put(None)
 
 
 if __name__ == "__main__":
