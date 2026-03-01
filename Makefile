@@ -1,4 +1,4 @@
-.PHONY: help install dev-install clean lint format test test-cov run-backend run-frontend run pre-commit-install pre-commit-run
+.PHONY: help install dev-install clean lint format typecheck test test-cov run-backend run-frontend run pre-commit-install pre-commit-run
 
 # Default target - show help
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  make lint-unsafe       Run ruff with unsafe auto-fixes"
 	@echo "  make format            Run ruff formatter"
 	@echo "  make format-check      Check formatting without changes"
+	@echo "  make typecheck         Run pyright type checker"
 	@echo "  make pre-commit-run    Run all pre-commit hooks manually"
 	@echo ""
 	@echo "Testing:"
@@ -62,6 +63,10 @@ format:
 format-check:
 	@echo "Checking code formatting..."
 	uv run ruff format --check .
+
+typecheck:
+	@echo "Running pyright type checker..."
+	uv run pyright
 
 pre-commit-run:
 	@echo "Running all pre-commit hooks..."
