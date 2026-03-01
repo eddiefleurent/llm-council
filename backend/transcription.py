@@ -45,7 +45,7 @@ def get_groq_client():
     return _client
 
 
-def _is_retriable_error(exception: Exception) -> bool:
+def _is_retriable_error(exception: BaseException) -> bool:
     """
     Determine if an exception should trigger a retry.
 
