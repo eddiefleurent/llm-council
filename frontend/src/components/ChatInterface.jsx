@@ -19,6 +19,7 @@ export default function ChatInterface({
   conversation,
   onSendMessage,
   isLoading,
+  isSendLocked = false,
   messageMode,
   onSetMessageMode,
   onToggleSidebar,
@@ -107,7 +108,7 @@ export default function ChatInterface({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if ((input.trim() || attachment) && !isLoading && !isUploadingAttachment) {
+    if ((input.trim() || attachment) && !isLoading && !isUploadingAttachment && !isSendLocked) {
       onSendMessage(input, attachment);
       setInput('');
       setAttachment(null);
@@ -342,7 +343,6 @@ export default function ChatInterface({
               type="button"
               className={`mode-button ${messageMode === 'council' ? 'active' : ''}`}
               onClick={() => onSetMessageMode('council')}
-              disabled={isLoading}
               title="Full council deliberation (all 3 stages)"
             >
               Council
@@ -351,7 +351,6 @@ export default function ChatInterface({
               type="button"
               className={`mode-button ${messageMode === 'chairman' ? 'active' : ''}`}
               onClick={() => onSetMessageMode('chairman')}
-              disabled={isLoading}
               title="Chat directly with the chairman model"
             >
               Chairman
@@ -361,7 +360,6 @@ export default function ChatInterface({
             type="button"
             className="config-btn-chat"
             onClick={() => setShowConfig(true)}
-            disabled={isLoading}
             title="Configure models for this conversation"
             aria-label="Configure models"
           >
@@ -438,7 +436,7 @@ export default function ChatInterface({
               type="button"
               className="attach-button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || isUploadingAttachment}
+              disabled={isLoading || isUploadingAttachment || isSendLocked}
               title="Attach file"
               aria-label="Attach file"
             >
@@ -448,12 +446,12 @@ export default function ChatInterface({
             </button>
             <VoiceButton
               onTranscription={handleTranscription}
-              disabled={isLoading || isUploadingAttachment}
+              disabled={isLoading || isUploadingAttachment || isSendLocked}
             />
             <button
               type="submit"
               className="send-button"
-              disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment}
+              disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment || isSendLocked}
             >
               Send
             </button>

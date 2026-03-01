@@ -167,14 +167,8 @@
   opacity: 0.6;
 }
 
-.conversation-item.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.conversation-item.disabled:hover {
-  background: transparent;
+.conversation-item.generating {
+  border: 1px dashed var(--accent-primary);
 }
 
 .conversation-item-header {
