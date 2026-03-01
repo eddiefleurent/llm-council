@@ -15,7 +15,9 @@ MAX_EXTRACTED_CHARS = 30_000
 TRUNCATION_SUFFIX = "\n\n[File content truncated due to size limits.]"
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".json", ".csv"}
-SUPPORTED_TYPES_DISPLAY = ", ".join(sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS))
+SUPPORTED_TYPES_DISPLAY = ", ".join(
+    sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS)
+)
 
 
 class AttachmentPayload(BaseModel):
