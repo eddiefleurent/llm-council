@@ -59,7 +59,8 @@ lint-unsafe:
 	@echo "Running ruff linter with unsafe auto-fixes..."
 	uv run ruff check --fix --unsafe-fixes .
 
-# Exclude files where ruff format incorrectly converts "except (A, B):" to invalid "except A, B:"
+# Exclude files where ruff format incorrectly converts "except (A, B):" to invalid "except A, B:".
+# Tracking: https://github.com/astral-sh/ruff/issues/23626 (remove workaround when fixed in a release).
 RUFF_FORMAT_EXCLUDE = --exclude backend/config.py --exclude backend/context.py --exclude backend/models.py
 
 format:

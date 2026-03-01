@@ -140,21 +140,8 @@ def get_effective_models(
     config = get_council_config()
 
     if council_models is None:
-        council_models = config["council_models"]
-    if not isinstance(council_models, list):
-        council_models = (
-            list(config["council_models"])
-            if isinstance(config.get("council_models"), list)
-            else list(DEFAULT_COUNCIL_MODELS)
-        )
-
-    council_models = [
-        model_id
-        for model_id in council_models
-        if isinstance(model_id, str) and model_id.strip()
-    ]
-    if not council_models:
-        council_models = list(DEFAULT_COUNCIL_MODELS)
+        council_models = config.get("council_models")
+    council_models = _normalize_council_models(council_models)
 
     if chairman_model is None:
         chairman_model = config.get("chairman_model")
@@ -164,7 +151,6 @@ def get_effective_models(
         web_search_enabled = config["web_search_enabled"]
     elif not isinstance(web_search_enabled, bool):
         web_search_enabled = False
-    web_search_enabled = bool(web_search_enabled)
 
     if web_search_enabled:
         council_models = [apply_online_variant(m) for m in council_models]
