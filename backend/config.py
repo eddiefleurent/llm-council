@@ -1,6 +1,7 @@
 """Configuration for the LLM Council."""
 
 import os
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -53,7 +54,7 @@ def _normalize_council_models(value) -> list[str]:
     return list(DEFAULT_COUNCIL_MODELS)  # Return a copy of defaults
 
 
-def get_council_config() -> dict:
+def get_council_config() -> dict[str, Any]:
     """
     Get the current council configuration.
 
@@ -123,7 +124,7 @@ def get_effective_models(
     council_models: list[str] | None = None,
     chairman_model: str | None = None,
     web_search_enabled: bool | None = None,
-) -> dict:
+) -> dict[str, list[str] | str | bool]:
     """
     Get effective model IDs with :online suffix applied if web search is enabled.
 
@@ -139,11 +140,17 @@ def get_effective_models(
     config = get_council_config()
 
     if council_models is None:
-        council_models = config["council_models"]
+        council_models = config.get("council_models")
+    council_models = _normalize_council_models(council_models)
+
     if chairman_model is None:
-        chairman_model = config["chairman_model"]
+        chairman_model = config.get("chairman_model")
+    if not isinstance(chairman_model, str) or not chairman_model.strip():
+        chairman_model = DEFAULT_CHAIRMAN_MODEL
     if web_search_enabled is None:
         web_search_enabled = config["web_search_enabled"]
+    elif not isinstance(web_search_enabled, bool):
+        web_search_enabled = False
 
     if web_search_enabled:
         council_models = [apply_online_variant(m) for m in council_models]

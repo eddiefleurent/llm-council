@@ -46,7 +46,9 @@ async def test_extract_pdf_file_success_with_mocked_reader(monkeypatch):
         def __init__(self, _stream):
             self.pages = [_FakePage()]
 
-    monkeypatch.setitem(sys.modules, "pypdf", types.SimpleNamespace(PdfReader=_FakeReader))
+    monkeypatch.setitem(
+        sys.modules, "pypdf", types.SimpleNamespace(PdfReader=_FakeReader)
+    )
     upload = _make_upload("file.pdf", b"%PDF-1.4 fake")
     payload = await extract_attachment_payload(upload)
     assert payload.extracted_text == "Page text"

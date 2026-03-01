@@ -415,6 +415,7 @@ The project includes a `Makefile` with common development commands:
 - `make lint-unsafe` - Run ruff with unsafe auto-fixes
 - `make format` - Run ruff formatter
 - `make format-check` - Check formatting without changes
+- `make typecheck` - Run pyright type checker (catches wrong arg counts, missing args, type mismatches)
 - `make pre-commit-run` - Run all pre-commit hooks manually
 
 **Testing:**

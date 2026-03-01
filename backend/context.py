@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from .config import get_council_config
 from .file_ingestion import AttachmentPayload, build_attachment_context_block
-from .openrouter import is_error, query_model
+from .openrouter import ModelQueryError, query_model
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,9 @@ Concise summary:"""
     summary_model = get_council_config()["chairman_model"]
     response = await query_model(summary_model, messages_for_api, timeout=30.0)
 
-    if is_error(response):
+    if isinstance(response, ModelQueryError):
+        return "Previous conversation: " + conversation_text[:200] + "..."
+    if not isinstance(response, dict):
         return "Previous conversation: " + conversation_text[:200] + "..."
 
     return response.get("content", "").strip()

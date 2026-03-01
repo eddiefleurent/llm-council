@@ -209,7 +209,7 @@ def add_user_message(
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
-    message = {"role": "user", "content": content}
+    message: dict[str, Any] = {"role": "user", "content": content}
     if attachment is not None:
         message["attachment"] = attachment
 
@@ -239,7 +239,7 @@ def add_assistant_message(
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
-    message = {
+    message: dict[str, Any] = {
         "role": "assistant",
         "stage1": stage1,
         "stage2": stage2,

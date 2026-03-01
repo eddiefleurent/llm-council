@@ -4,16 +4,37 @@ import json
 from typing import Any
 
 from .config import (
+    DEFAULT_CHAIRMAN_MODEL,
     get_council_config,
     get_effective_models,
 )
-from .openrouter import ModelQueryError, is_error, query_model, query_models_parallel
+from .openrouter import ModelQueryError, query_model, query_models_parallel
 
 STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accurate and free of clear errors?
 - Completeness (weight 25%): Does it cover key parts of the question and constraints?
 - Reasoning quality (weight 20%): Is the logic coherent, non-contradictory, and well-justified?
 - Practical usefulness (weight 10%): Is it actionable and specific enough for the user?
 - Safety/uncertainty handling (weight 5%): Does it avoid overclaiming and call out uncertainty when needed?"""
+
+
+def _normalize_council_models(council_models: list[str] | None) -> list[str]:
+    """Resolve council models from input or configured defaults."""
+    if council_models is None:
+        council_models = get_council_config().get("council_models", [])
+    if not isinstance(council_models, list):
+        return list(get_council_config().get("council_models", []))
+    return [
+        model for model in council_models if isinstance(model, str) and model.strip()
+    ]
+
+
+def _normalize_chairman_model(chairman_model: str | None) -> str:
+    """Resolve chairman model from input or configuration."""
+    if chairman_model is None:
+        chairman_model = get_council_config().get("chairman_model")
+    if isinstance(chairman_model, str) and chairman_model.strip():
+        return chairman_model
+    return DEFAULT_CHAIRMAN_MODEL
 
 
 def _index_to_alpha_label(index: int) -> str:
@@ -45,10 +66,7 @@ async def stage1_collect_responses(
     Returns:
         Tuple of (successful responses list, errors list)
     """
-    # Use provided models or fall back to configured/default
-    if council_models is None:
-        config = get_council_config()
-        council_models = config["council_models"]
+    council_models = _normalize_council_models(council_models)
 
     # Log which models are being queried
     print(
@@ -62,20 +80,19 @@ async def stage1_collect_responses(
     stage1_results = []
     stage1_errors = []
     for model, response in responses.items():
-        if is_error(response):
-            if isinstance(response, ModelQueryError):
-                stage1_errors.append(response.to_dict())
-            else:
-                stage1_errors.append(
-                    {
-                        "error_type": "unknown",
-                        "message": "Unknown error occurred",
-                        "model": model,
-                    }
-                )
-        else:
+        if isinstance(response, ModelQueryError):
+            stage1_errors.append(response.to_dict())
+        elif isinstance(response, dict):
             stage1_results.append(
                 {"model": model, "response": response.get("content", "")}
+            )
+        else:
+            stage1_errors.append(
+                {
+                    "error_type": "unknown",
+                    "message": "Unknown error occurred",
+                    "model": model,
+                }
             )
 
     # Log results
@@ -107,10 +124,7 @@ async def stage2_collect_rankings(
     Returns:
         Tuple of (rankings list, label_to_model mapping, errors list)
     """
-    # Use provided models or fall back to configured/default
-    if council_models is None:
-        config = get_council_config()
-        council_models = config["council_models"]
+    council_models = _normalize_council_models(council_models)
 
     # Log which models are being queried
     print(
@@ -174,18 +188,9 @@ Now provide your JSON output:"""
     stage2_results = []
     stage2_errors = []
     for model, response in responses.items():
-        if is_error(response):
-            if isinstance(response, ModelQueryError):
-                stage2_errors.append(response.to_dict())
-            else:
-                stage2_errors.append(
-                    {
-                        "error_type": "unknown",
-                        "message": "Unknown error occurred",
-                        "model": model,
-                    }
-                )
-        else:
+        if isinstance(response, ModelQueryError):
+            stage2_errors.append(response.to_dict())
+        elif isinstance(response, dict):
             full_text = response.get("content", "")
             expected_labels = set(label_to_model.keys())
             parsed = parse_ranking_from_text(full_text, expected_labels=expected_labels)
@@ -203,6 +208,14 @@ Now provide your JSON output:"""
                 stage2_results.append(
                     {"model": model, "ranking": full_text, "parsed_ranking": parsed}
                 )
+        else:
+            stage2_errors.append(
+                {
+                    "error_type": "unknown",
+                    "message": "Unknown error occurred",
+                    "model": model,
+                }
+            )
 
     # Log results
     print(
@@ -242,10 +255,7 @@ async def stage3_synthesize_final(
     Returns:
         Tuple of (result dict with 'model' and 'response' keys, errors list)
     """
-    # Use provided model or fall back to configured/default
-    if chairman_model is None:
-        config = get_council_config()
-        chairman_model = config["chairman_model"]
+    chairman_model = _normalize_chairman_model(chairman_model)
 
     # Log chairman model
     print(f"[Stage 3] Chairman model: {chairman_model}")
@@ -297,31 +307,30 @@ collective wisdom:"""
     response = await query_model(chairman_model, messages)
 
     stage3_errors = []
-    if is_error(response):
-        if isinstance(response, ModelQueryError):
-            error_info = response.to_dict()
-            stage3_errors.append(error_info)
-            print(
-                f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
-            )
-            return {
+    if isinstance(response, ModelQueryError):
+        error_info = response.to_dict()
+        stage3_errors.append(error_info)
+        print(
+            f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
+        )
+        return {
+            "model": chairman_model,
+            "response": f"Error: {error_info['message']}",
+            "error": error_info,
+        }, stage3_errors
+    if not isinstance(response, dict):
+        stage3_errors.append(
+            {
+                "error_type": "unknown",
+                "message": "Unknown error occurred",
                 "model": chairman_model,
-                "response": f"Error: {error_info['message']}",
-                "error": error_info,
-            }, stage3_errors
-        else:
-            stage3_errors.append(
-                {
-                    "error_type": "unknown",
-                    "message": "Unknown error occurred",
-                    "model": chairman_model,
-                }
-            )
-            print("[Stage 3] ✗ Chairman failed: unknown error")
-            return {
-                "model": chairman_model,
-                "response": "Error: Unable to generate final synthesis.",
-            }, stage3_errors
+            }
+        )
+        print("[Stage 3] ✗ Chairman failed: unknown error")
+        return {
+            "model": chairman_model,
+            "response": "Error: Unable to generate final synthesis.",
+        }, stage3_errors
 
     print("[Stage 3] ✓ Chairman synthesis complete")
     return {
@@ -647,16 +656,18 @@ async def chairman_direct_response(
     Returns:
         Tuple of (result dict with 'model' and 'response' keys, errors list)
     """
-    # Use provided model or fall back to configured/default
-    if chairman_model is None:
-        config = get_council_config()
-        chairman_model = config["chairman_model"]
+    chairman_model = _normalize_chairman_model(chairman_model)
 
     # Apply :online suffix if web search is enabled
     effective = get_effective_models(
         chairman_model=chairman_model, web_search_enabled=web_search_enabled
     )
-    chairman_model = effective["chairman_model"]
+    effective_chairman = effective["chairman_model"]
+    chairman_model = (
+        _normalize_chairman_model(effective_chairman)
+        if isinstance(effective_chairman, str)
+        else _normalize_chairman_model(None)
+    )
 
     print(f"[Chairman Direct] Model: {chairman_model}")
 
@@ -664,31 +675,30 @@ async def chairman_direct_response(
     response = await query_model(chairman_model, messages)
 
     errors = []
-    if is_error(response):
-        if isinstance(response, ModelQueryError):
-            error_info = response.to_dict()
-            errors.append(error_info)
-            print(
-                f"[Chairman Direct] ✗ Failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
-            )
-            return {
+    if isinstance(response, ModelQueryError):
+        error_info = response.to_dict()
+        errors.append(error_info)
+        print(
+            f"[Chairman Direct] ✗ Failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
+        )
+        return {
+            "model": chairman_model,
+            "response": f"Error: {error_info['message']}",
+            "error": error_info,
+        }, errors
+    if not isinstance(response, dict):
+        errors.append(
+            {
+                "error_type": "unknown",
+                "message": "Unknown error occurred",
                 "model": chairman_model,
-                "response": f"Error: {error_info['message']}",
-                "error": error_info,
-            }, errors
-        else:
-            errors.append(
-                {
-                    "error_type": "unknown",
-                    "message": "Unknown error occurred",
-                    "model": chairman_model,
-                }
-            )
-            print("[Chairman Direct] ✗ Failed: unknown error")
-            return {
-                "model": chairman_model,
-                "response": "Error: Unable to generate response.",
-            }, errors
+            }
+        )
+        print("[Chairman Direct] ✗ Failed: unknown error")
+        return {
+            "model": chairman_model,
+            "response": "Error: Unable to generate response.",
+        }, errors
 
     print("[Chairman Direct] ✓ Response complete")
     return {"model": chairman_model, "response": response.get("content", "")}, errors
@@ -707,10 +717,7 @@ async def generate_conversation_title(
     Returns:
         A short title (3-5 words)
     """
-    # Use provided model or fall back to configured/default
-    if chairman_model is None:
-        config = get_council_config()
-        chairman_model = config["chairman_model"]
+    chairman_model = _normalize_chairman_model(chairman_model)
 
     title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
@@ -724,8 +731,10 @@ Title:"""
     # Use chairman model for title generation (configurable)
     response = await query_model(chairman_model, messages, timeout=30.0)
 
-    if is_error(response):
+    if isinstance(response, ModelQueryError):
         # Fallback to a generic title
+        return "New Conversation"
+    if not isinstance(response, dict):
         return "New Conversation"
 
     title = response.get("content", "New Conversation").strip()
@@ -783,9 +792,24 @@ async def run_full_council(
 
     # Get effective models (applies :online suffix if web search enabled)
     effective = get_effective_models(council_models, chairman_model, web_search_enabled)
-    council_models = effective["council_models"]
-    chairman_model = effective["chairman_model"]
-    web_search_enabled = effective["web_search_enabled"]
+    effective_council_models = effective["council_models"]
+    council_models = (
+        _normalize_council_models(effective_council_models)
+        if isinstance(effective_council_models, list)
+        else _normalize_council_models(None)
+    )
+    effective_chairman_model = effective["chairman_model"]
+    chairman_model = (
+        _normalize_chairman_model(effective_chairman_model)
+        if isinstance(effective_chairman_model, str)
+        else _normalize_chairman_model(None)
+    )
+    effective_web_search_enabled = effective.get("web_search_enabled")
+    web_search_enabled = (
+        effective_web_search_enabled
+        if isinstance(effective_web_search_enabled, bool)
+        else False
+    )
 
     # Extract current query from messages
     current_query = messages[-1]["content"]

@@ -22,6 +22,7 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.8.0",
+    "pyright>=1.1.0",
 ]
 
 [tool.ruff]
@@ -69,6 +70,11 @@ ignore = [
 "__init__.py" = ["F401"]
 # Allow assert statements in tests
 "tests/**/*.py" = ["S101"]
+
+[tool.pyright]
+include = ["backend"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
 
 [tool.ruff.format]
 # Use double quotes for strings (2026 style guide)

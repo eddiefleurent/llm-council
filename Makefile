@@ -1,4 +1,4 @@
-.PHONY: help install dev-install clean lint format test test-cov run-backend run-frontend run pre-commit-install pre-commit-run
+.PHONY: all help install dev-install clean lint lint-fix lint-unsafe format format-check typecheck test test-cov run-backend run-frontend run pre-commit-install pre-commit-run
 
 # Default target - show help
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  make lint-unsafe       Run ruff with unsafe auto-fixes"
 	@echo "  make format            Run ruff formatter"
 	@echo "  make format-check      Check formatting without changes"
+	@echo "  make typecheck         Run pyright type checker"
 	@echo "  make pre-commit-run    Run all pre-commit hooks manually"
 	@echo ""
 	@echo "Testing:"
@@ -28,6 +29,9 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean             Remove cache files and build artifacts"
+
+# Standard build/check flow (for CI or make all)
+all: typecheck lint format-check test
 
 # Installation
 install:
@@ -55,13 +59,21 @@ lint-unsafe:
 	@echo "Running ruff linter with unsafe auto-fixes..."
 	uv run ruff check --fix --unsafe-fixes .
 
+# Exclude files where ruff format incorrectly converts "except (A, B):" to invalid "except A, B:".
+# Tracking: https://github.com/astral-sh/ruff/issues/23626 (remove workaround when fixed in a release).
+RUFF_FORMAT_EXCLUDE = --exclude backend/config.py --exclude backend/context.py --exclude backend/models.py
+
 format:
 	@echo "Running ruff formatter..."
-	uv run ruff format .
+	uv run ruff format $(RUFF_FORMAT_EXCLUDE) .
 
 format-check:
 	@echo "Checking code formatting..."
-	uv run ruff format --check .
+	uv run ruff format --check $(RUFF_FORMAT_EXCLUDE) .
+
+typecheck:
+	@echo "Running pyright type checker..."
+	uv run pyright
 
 pre-commit-run:
 	@echo "Running all pre-commit hooks..."

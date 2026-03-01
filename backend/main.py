@@ -599,6 +599,8 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     # Build context messages from conversation history
     # Re-fetch conversation to get the user message we just added
     conversation = storage.get_conversation(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     messages = await build_context_messages(
         conversation["messages"][:-1],  # Exclude the user message we just added
         user_content_for_context,
@@ -736,6 +738,8 @@ async def _chairman_stream(
 
         # Build context messages from conversation history
         conv = storage.get_conversation(conversation_id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         messages = await build_context_messages(
             conv["messages"][:-1], content_for_context
         )
@@ -770,6 +774,8 @@ async def _chairman_stream(
 
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
+    except HTTPException:
+        raise
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
@@ -804,6 +810,8 @@ async def _council_stream(
         # Build context messages from conversation history
         # Re-fetch conversation to get the user message we just added
         conv = storage.get_conversation(conversation_id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         messages = await build_context_messages(
             conv["messages"][:-1],  # Exclude the user message we just added
             content_for_context,
@@ -857,7 +865,13 @@ async def _council_stream(
         # Stage 3: Synthesize final answer
         yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
         stage3_result, stage3_errors = await stage3_synthesize_final(
-            content, stage1_results, stage2_results, chairman_model
+            content,
+            stage1_results,
+            stage2_results,
+            label_to_model,
+            aggregate_rankings,
+            tournament_rankings,
+            chairman_model,
         )
         yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result, 'errors': stage3_errors if stage3_errors else None})}\n\n"
 
@@ -882,6 +896,8 @@ async def _council_stream(
         # Send completion event
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
+    except HTTPException:
+        raise
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
