@@ -48,6 +48,10 @@ from .transcription import GroqNotConfiguredError, transcribe_audio
 
 logger = logging.getLogger(__name__)
 
+# Per-process registry to prevent overlapping detached workers for one
+# conversation from interleaving storage writes.
+active_generations: set[str] = set()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -686,13 +690,49 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    if conversation_id in active_generations:
+        raise HTTPException(
+            status_code=409,
+            detail="A response is already being generated for this conversation.",
+        )
+
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
 
-    if request.mode == "chairman":
-        event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    active_generations.add(conversation_id)
+    try:
+        if request.mode == "chairman":
+            event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+            worker_task = asyncio.create_task(
+                _run_chairman_stream_worker(
+                    conversation_id,
+                    request.content,
+                    user_content_for_context,
+                    attachment_payload,
+                    is_first_message,
+                    event_queue,
+                )
+            )
+            _attach_active_generation_cleanup(
+                worker_task, conversation_id=conversation_id
+            )
+            _attach_worker_exception_logger(
+                worker_task, conversation_id=conversation_id, mode="chairman"
+            )
+            return StreamingResponse(
+                _stream_from_queue(
+                    conversation_id,
+                    "chairman",
+                    event_queue,
+                    worker_task,
+                ),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
+
+        event_queue = asyncio.Queue()
         worker_task = asyncio.create_task(
-            _run_chairman_stream_worker(
+            _run_council_stream_worker(
                 conversation_id,
                 request.content,
                 user_content_for_context,
@@ -701,45 +741,23 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 event_queue,
             )
         )
+        _attach_active_generation_cleanup(worker_task, conversation_id=conversation_id)
         _attach_worker_exception_logger(
-            worker_task, conversation_id=conversation_id, mode="chairman"
+            worker_task, conversation_id=conversation_id, mode="council"
         )
         return StreamingResponse(
             _stream_from_queue(
                 conversation_id,
-                "chairman",
+                "council",
                 event_queue,
                 worker_task,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
-
-    event_queue = asyncio.Queue()
-    worker_task = asyncio.create_task(
-        _run_council_stream_worker(
-            conversation_id,
-            request.content,
-            user_content_for_context,
-            attachment_payload,
-            is_first_message,
-            event_queue,
-        )
-    )
-    _attach_worker_exception_logger(
-        worker_task, conversation_id=conversation_id, mode="council"
-    )
-
-    return StreamingResponse(
-        _stream_from_queue(
-            conversation_id,
-            "council",
-            event_queue,
-            worker_task,
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
+    except Exception:
+        active_generations.discard(conversation_id)
+        raise
 
 
 def _serialize_sse_event(event: dict[str, Any]) -> str:
@@ -752,6 +770,17 @@ async def _emit_stream_event(
 ) -> None:
     """Queue an SSE event for the active stream client."""
     await event_queue.put(event)
+
+
+def _attach_active_generation_cleanup(
+    worker_task: asyncio.Task[None], *, conversation_id: str
+) -> None:
+    """Release active-generation tracking when worker exits."""
+
+    def _on_done(_: asyncio.Task[None]) -> None:
+        active_generations.discard(conversation_id)
+
+    worker_task.add_done_callback(_on_done)
 
 
 def _attach_worker_exception_logger(
@@ -954,11 +983,10 @@ async def _run_council_stream_worker(
         # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
         if not stage1_results:
             # Cancel title task if running and await it to prevent warnings
-            # Use broad exception handling to prevent title_task errors from masking the primary error
             if title_task and not title_task.done():
                 title_task.cancel()
-                # Suppress any title generation errors to preserve short-circuit flow
-                with suppress(Exception):
+                # Suppress cancellation from awaiting the cancelled title task.
+                with suppress(asyncio.CancelledError):
                     await title_task
             await _emit_stream_event(
                 event_queue,

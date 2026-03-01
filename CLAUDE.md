@@ -108,7 +108,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - POST `/api/conversations` - Create conversation (accepts optional config: council_models, chairman_model, web_search_enabled)
 - POST `/api/conversations/{id}/message` - Send message (uses conversation-specific config)
 - POST `/api/conversations/{id}/message/stream` - Stream message (uses conversation-specific config)
- - Streaming workers are detached from the SSE response so generation continues even if the client disconnects (sleep/tab suspension/network blip)
+- Streaming workers are detached from the SSE response so generation continues even if the client disconnects (sleep/tab suspension/network blip)
 - DELETE `/api/conversations` clears all conversations
 - Metadata includes: label_to_model, aggregate_rankings, tournament_rankings, council_models, chairman_model, web_search_enabled, errors
 
