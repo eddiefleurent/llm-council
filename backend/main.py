@@ -774,6 +774,8 @@ async def _chairman_stream(
 
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
+    except HTTPException:
+        raise
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
@@ -894,6 +896,8 @@ async def _council_stream(
         # Send completion event
         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
+    except HTTPException:
+        raise
     except Exception:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():

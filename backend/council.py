@@ -4,11 +4,11 @@ import json
 from typing import Any
 
 from .config import (
+    DEFAULT_CHAIRMAN_MODEL,
     get_council_config,
     get_effective_models,
-    DEFAULT_CHAIRMAN_MODEL,
 )
-from .openrouter import ModelQueryError, is_error, query_model, query_models_parallel
+from .openrouter import ModelQueryError, query_model, query_models_parallel
 
 STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accurate and free of clear errors?
 - Completeness (weight 25%): Does it cover key parts of the question and constraints?

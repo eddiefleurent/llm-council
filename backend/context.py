@@ -72,7 +72,7 @@ def format_user_message(user_msg: dict[str, Any]) -> str:
     try:
         attachment = AttachmentPayload.model_validate(attachment_data)
         attachment_block = build_attachment_context_block(attachment)
-    except ValidationError, KeyError, TypeError:
+    except (ValidationError, KeyError, TypeError):
         logger.debug("Failed to parse attachment payload for context", exc_info=True)
         return content
 
