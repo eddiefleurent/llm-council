@@ -261,6 +261,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 - 💬 **Multi-turn Conversations** - Full conversation context with smart summarization
 - 🏆 **Tournament Rankings** - Condorcet voting algorithm alongside mean position averaging
 - 🧭 **Improved Council Prompting** - Stage 2 now uses rubric-based judging, and Stage 3 synthesis consumes structured ranking signals for more reliable final answers
+- 📎 **File Attachments** - Attach files (txt, md, pdf, json, csv) to your messages to include their content in the LLM context (up to 5MB per file)
 - ⚠️ **Error Handling** - Graceful degradation when models fail, detailed error reporting
 
 ### 💾 Conversation Management

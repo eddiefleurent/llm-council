@@ -83,6 +83,12 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `delete_all_conversations()`: Clear all history
 - **Backward compatibility**: Old conversations without config fields fall back to global config
 
+**`file_ingestion.py`** - File Attachment Processing
+- `extract_attachment_payload(upload)`: Validates and extracts text from an uploaded file → `AttachmentPayload`
+- `build_attachment_context_block(attachment)`: Wraps extracted text in `BEGIN/END ATTACHMENT CONTENT` delimiters (prompt injection guard)
+- Supported: `.txt`, `.md`, `.pdf` (pypdf), `.json` (pretty-printed), `.csv` (comma-joined rows)
+- Limits: 5MB max upload, 30,000 chars extracted (truncated if exceeded); never written to disk
+
 **`transcription.py`** - Voice Transcription (Optional)
 - Uses Groq's Whisper API for speech-to-text
 - **Optional**: `GROQ_API_KEY` environment variable (voice feature disabled without it)
@@ -122,6 +128,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **Voice Transcription Endpoint:**
 - POST `/api/transcribe` - Transcribe audio file using Groq Whisper
 
+**File Attachment Endpoint:**
+- POST `/api/attachments/ingest` - Upload file, returns `AttachmentPayload` JSON; sent with message as `attachment` field; stored in conversation JSON as `attachment_payload`
+
 ### Frontend Structure (`frontend/src/`)
 
 **`App.jsx`**
@@ -148,8 +157,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled)`: Update configuration
 - `resetCouncilConfig()`: Reset to defaults
 - `transcribeAudio(audioBlob, filename)`: Send audio for transcription
-- `sendMessage(conversationId, content, mode)`: Now accepts `mode` parameter
-- `sendMessageStream(conversationId, content, onEvent, mode)`: Now accepts `mode` parameter
+- `ingestAttachment(file)`: Upload a file to `/api/attachments/ingest`, returns parsed `AttachmentPayload`
+- `sendMessage(conversationId, content, mode, attachment)`: Accepts optional `attachment` payload
+- `sendMessageStream(conversationId, content, onEvent, mode, attachment)`: Accepts optional `attachment` payload
 
 **`utils.js`**
 - `getModelDisplayName()`: Safely extracts model name, handles arrays/null
@@ -161,6 +171,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Context indicator**: Shows when using conversation history (>6 messages)
 - Dynamic placeholder text for follow-ups (changes based on mode)
 - **Voice dictation**: Microphone button to record and transcribe speech
+- **File attachments**: Paperclip button uploads file → `/api/attachments/ingest`; payload sent with message; filename shown as removable chip above input
 - **Mode toggle**: Council/Chairman toggle buttons in input header
 - **Config button**: Gear icon button in input header to open per-conversation config
 - **Model indicator**: Shows council model count, chairman model, and web search status below textarea
@@ -443,6 +454,7 @@ The project includes a `Makefile` with common development commands:
 - **README.md Changelog**: When adding significant features, update the "Changelog" section in README.md with a concise bullet point
 - Keep changelog focused on user-visible features (UI improvements, new capabilities, major fixes)
 - Technical implementation details belong in this CLAUDE.md file, not the README changelog
+- **CLAUDE.md**: For major features, also update here — new backend modules under "Backend Structure", new endpoints in `main.py` list, significant UI changes in the relevant component entry, non-obvious design decisions under "Key Design Decisions"
 
 ## Common Gotchas
 
