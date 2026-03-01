@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 # Per-process registry to prevent overlapping detached workers for one
 # conversation from interleaving storage writes.
 active_generations: set[str] = set()
+generations_lock = asyncio.Lock()
 
 
 @asynccontextmanager
@@ -576,8 +577,17 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if this is the first message
-    is_first_message = len(conversation["messages"]) == 0
+    async with generations_lock:
+        if conversation_id in active_generations:
+            raise HTTPException(
+                status_code=409,
+                detail="A response is already being generated for this conversation.",
+            )
+        active_generations.add(conversation_id)
+
+    try:
+        # Check if this is the first message
+        is_first_message = len(conversation["messages"]) == 0
 
     user_content_for_context = request.content
     attachment_payload = request.attachment.model_dump() if request.attachment else None
@@ -656,6 +666,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         "stage3": stage3_result,
         "metadata": metadata,
     }
+    finally:
+        async with generations_lock:
+            active_generations.discard(conversation_id)
 
 
 @app.post("/api/conversations/{conversation_id}/message/stream")
@@ -690,16 +703,17 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    if conversation_id in active_generations:
-        raise HTTPException(
-            status_code=409,
-            detail="A response is already being generated for this conversation.",
-        )
+    async with generations_lock:
+        if conversation_id in active_generations:
+            raise HTTPException(
+                status_code=409,
+                detail="A response is already being generated for this conversation.",
+            )
+        active_generations.add(conversation_id)
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
 
-    active_generations.add(conversation_id)
     try:
         if request.mode == "chairman":
             event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -756,7 +770,8 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
     except Exception:
-        active_generations.discard(conversation_id)
+        async with generations_lock:
+            active_generations.discard(conversation_id)
         raise
 
 
@@ -778,7 +793,11 @@ def _attach_active_generation_cleanup(
     """Release active-generation tracking when worker exits."""
 
     def _on_done(_: asyncio.Task[None]) -> None:
-        active_generations.discard(conversation_id)
+        async def _cleanup():
+            async with generations_lock:
+                active_generations.discard(conversation_id)
+
+        asyncio.create_task(_cleanup())
 
     worker_task.add_done_callback(_on_done)
 
@@ -890,11 +909,18 @@ async def _run_chairman_stream_worker(
 
         # Wait for title generation if it was started
         if title_task:
-            title = await title_task
-            storage.update_conversation_title(conversation_id, title)
-            await _emit_stream_event(
-                event_queue, {"type": "title_complete", "data": {"title": title}}
-            )
+            try:
+                title = await title_task
+                storage.update_conversation_title(conversation_id, title)
+                await _emit_stream_event(
+                    event_queue, {"type": "title_complete", "data": {"title": title}}
+                )
+            except Exception:
+                logger.exception("Failed to generate or update conversation title")
+                # Swallow error to avoid aborting the main success path
+                await _emit_stream_event(
+                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                )
 
         # Persist chairman message
         storage.add_chairman_message(
@@ -1045,11 +1071,18 @@ async def _run_council_stream_worker(
 
         # Wait for title generation if it was started
         if title_task:
-            title = await title_task
-            storage.update_conversation_title(conversation_id, title)
-            await _emit_stream_event(
-                event_queue, {"type": "title_complete", "data": {"title": title}}
-            )
+            try:
+                title = await title_task
+                storage.update_conversation_title(conversation_id, title)
+                await _emit_stream_event(
+                    event_queue, {"type": "title_complete", "data": {"title": title}}
+                )
+            except Exception:
+                logger.exception("Failed to generate or update conversation title")
+                # Swallow error to avoid aborting the main success path
+                await _emit_stream_event(
+                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                )
 
         # Collect all errors for persistence
         errors = {
