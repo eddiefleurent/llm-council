@@ -2,7 +2,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   background: var(--bg-primary);
 }
 
@@ -12,6 +12,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px 16px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-primary);
   position: sticky;
@@ -28,8 +29,8 @@
 
 .hamburger-btn {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-secondary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   color: var(--text-primary);
   cursor: pointer;
   padding: 10px;
@@ -198,8 +199,9 @@
 .input-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 8px;
+  padding: 12px 24px 24px 24px;
+  padding: 12px 24px calc(24px + env(safe-area-inset-bottom)) 24px;
   background: var(--bg-primary);
   position: relative;
   z-index: 10;
@@ -210,7 +212,8 @@
 
 @media (max-width: 768px) {
   .input-form {
-    padding: 12px;
+    padding: 8px 12px 16px 12px;
+    padding: 8px 12px calc(16px + env(safe-area-inset-bottom)) 12px;
     gap: 8px;
   }
 }
@@ -218,17 +221,18 @@
 .input-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .input-area-wrapper {
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
   border-radius: 20px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -265,14 +269,14 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 8px;
+  padding: 6px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .icon-btn:hover:not(:disabled),
@@ -322,15 +326,15 @@
   background: var(--accent-primary);
   border: none;
   color: #fff;
-  padding: 10px;
+  padding: 8px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .send-button-icon:hover:not(:disabled) {
@@ -389,21 +393,21 @@
 }
 
 /* Modals / Tags */
-.model-indicator {
+.model-indicator-compact {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-secondary);
-  border-radius: 6px;
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 8px;
-  max-width: 100%;
-  word-break: normal;
-  overflow-wrap: anywhere;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .model-indicator-compact {
+    font-size: 11px;
+    gap: 4px;
+  }
 }
 
 .indicator-label {
