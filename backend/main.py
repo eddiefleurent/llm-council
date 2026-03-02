@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 # conversation from interleaving storage writes.
 active_generations: set[str] = set()
 generations_lock = asyncio.Lock()
+_background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -556,6 +557,22 @@ async def update_conversation_configuration(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+def _normalize_request_input(
+    request: SendMessageRequest,
+) -> tuple[str, dict | None]:
+    """Return (user_content_for_context, attachment_payload) for a request."""
+    attachment_payload = request.attachment.model_dump() if request.attachment else None
+    if request.attachment:
+        attachment_block = build_attachment_context_block(request.attachment)
+        if request.content.strip():
+            user_content_for_context = f"{request.content}\n\n{attachment_block}"
+        else:
+            user_content_for_context = attachment_block
+    else:
+        user_content_for_context = request.content
+    return user_content_for_context, attachment_payload
+
+
 @app.post("/api/conversations/{conversation_id}/message")
 async def send_message(conversation_id: str, request: SendMessageRequest):
     """
@@ -589,14 +606,7 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         # Check if this is the first message
         is_first_message = len(conversation["messages"]) == 0
 
-        user_content_for_context = request.content
-        attachment_payload = request.attachment.model_dump() if request.attachment else None
-        if request.attachment:
-            attachment_block = build_attachment_context_block(request.attachment)
-            if request.content.strip():
-                user_content_for_context = f"{request.content}\n\n{attachment_block}"
-            else:
-                user_content_for_context = attachment_block
+        user_content_for_context, attachment_payload = _normalize_request_input(request)
 
         # Add user message
         storage.add_user_message(conversation_id, request.content, attachment_payload)
@@ -613,7 +623,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                     storage.update_conversation_title(conversation_id, title)
                 except Exception:
                     logger.exception("Failed to generate or update conversation title")
-            asyncio.create_task(_generate_and_save_title())
+            _title_task = asyncio.create_task(_generate_and_save_title())
+            _background_tasks.add(_title_task)
+            _title_task.add_done_callback(_background_tasks.discard)
 
         # Build context messages from conversation history
         # Re-fetch conversation to get the user message we just added
@@ -694,14 +706,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
         )
 
-    user_content_for_context = request.content
-    attachment_payload = request.attachment.model_dump() if request.attachment else None
-    if request.attachment:
-        attachment_block = build_attachment_context_block(request.attachment)
-        if request.content.strip():
-            user_content_for_context = f"{request.content}\n\n{attachment_block}"
-        else:
-            user_content_for_context = attachment_block
+    user_content_for_context, attachment_payload = _normalize_request_input(request)
 
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
@@ -802,7 +807,9 @@ def _attach_active_generation_cleanup(
             async with generations_lock:
                 active_generations.discard(conversation_id)
 
-        asyncio.create_task(_cleanup())
+        _cleanup_task = asyncio.create_task(_cleanup())
+        _background_tasks.add(_cleanup_task)
+        _cleanup_task.add_done_callback(_background_tasks.discard)
 
     worker_task.add_done_callback(_on_done)
 
