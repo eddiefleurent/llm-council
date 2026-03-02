@@ -375,6 +375,19 @@ export default function ChatInterface({
               Chairman
             </button>
           </div>
+          
+          {conversationConfig && !loadingConfig && (
+            <div className="model-indicator-compact">
+              <span className="indicator-label">
+                {isWebSearchEnabled && '🌐 '}
+                Council: {councilCount} model{councilCount === 1 ? '' : 's'}
+              </span>
+              <span className="indicator-separator">•</span>
+              <span className="indicator-label">
+                Chairman: {chairmanName}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="input-area-wrapper">
@@ -423,18 +436,6 @@ export default function ChatInterface({
               </div>
             )}
 
-            {conversationConfig && !loadingConfig && (
-              <div className="model-indicator">
-                <span className="indicator-label">
-                  {isWebSearchEnabled && '🌐 '}
-                  Council: {councilCount} model{councilCount === 1 ? '' : 's'}
-                </span>
-                <span className="indicator-separator">•</span>
-                <span className="indicator-label">
-                  Chairman: {chairmanName}
-                </span>
-              </div>
-            )}
           </div>
 
           <div className="input-action-bar">
