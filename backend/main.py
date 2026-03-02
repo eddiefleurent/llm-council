@@ -622,75 +622,82 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
             else None
         )
 
-        # Build context messages from conversation history
-        # Re-fetch conversation to get the user message we just added
-        conversation = storage.get_conversation(conversation_id)
-        if conversation is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        messages = await build_context_messages(
-            conversation["messages"][:-1],  # Exclude the user message we just added
-            user_content_for_context,
-        )
+        try:
+            # Build context messages from conversation history
+            # Re-fetch conversation to get the user message we just added
+            conversation = storage.get_conversation(conversation_id)
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            messages = await build_context_messages(
+                conversation["messages"][:-1],  # Exclude the user message we just added
+                user_content_for_context,
+            )
 
-        # Get conversation-specific config
-        conv_config = storage.get_conversation_config(conversation_id)
-        council_models = conv_config["council_models"]
-        chairman_model = conv_config["chairman_model"]
-        web_search_enabled = conv_config.get("web_search_enabled", False)
+            # Get conversation-specific config
+            conv_config = storage.get_conversation_config(conversation_id)
+            council_models = conv_config["council_models"]
+            chairman_model = conv_config["chairman_model"]
+            web_search_enabled = conv_config.get("web_search_enabled", False)
 
-        if request.mode == "chairman":
-            # Chairman-only mode
-            result, errors = await chairman_direct_response(
+            if request.mode == "chairman":
+                # Chairman-only mode
+                result, errors = await chairman_direct_response(
+                    messages,
+                    chairman_model=chairman_model,
+                    web_search_enabled=web_search_enabled,
+                )
+                storage.add_chairman_message(
+                    conversation_id, result, errors if errors else None
+                )
+                if title_task:
+                    try:
+                        title = await title_task
+                        storage.update_conversation_title(conversation_id, title)
+                    except Exception:
+                        logger.exception("Failed to generate or update conversation title")
+                return {
+                    "mode": "chairman",
+                    "stage3": result,
+                    "errors": errors if errors else [],
+                }
+
+            # Full council mode
+            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
                 messages,
+                council_models=council_models,
                 chairman_model=chairman_model,
                 web_search_enabled=web_search_enabled,
             )
-            storage.add_chairman_message(
-                conversation_id, result, errors if errors else None
+
+            # Extract structured errors directly from metadata
+            errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
+
+            # Add assistant message with all stages and errors
+            storage.add_assistant_message(
+                conversation_id, stage1_results, stage2_results, stage3_result, errors
             )
+
             if title_task:
                 try:
                     title = await title_task
                     storage.update_conversation_title(conversation_id, title)
                 except Exception:
                     logger.exception("Failed to generate or update conversation title")
+
+            # Return the complete response with metadata
             return {
-                "mode": "chairman",
-                "stage3": result,
-                "errors": errors if errors else [],
+                "mode": "council",
+                "stage1": stage1_results,
+                "stage2": stage2_results,
+                "stage3": stage3_result,
+                "metadata": metadata,
             }
-
-        # Full council mode
-        stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-            messages,
-            council_models=council_models,
-            chairman_model=chairman_model,
-            web_search_enabled=web_search_enabled,
-        )
-
-        # Extract structured errors directly from metadata
-        errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
-
-        # Add assistant message with all stages and errors
-        storage.add_assistant_message(
-            conversation_id, stage1_results, stage2_results, stage3_result, errors
-        )
-
-        if title_task:
-            try:
-                title = await title_task
-                storage.update_conversation_title(conversation_id, title)
-            except Exception:
-                logger.exception("Failed to generate or update conversation title")
-
-        # Return the complete response with metadata
-        return {
-            "mode": "council",
-            "stage1": stage1_results,
-            "stage2": stage2_results,
-            "stage3": stage3_result,
-            "metadata": metadata,
-        }
+        except Exception:
+            if title_task is not None and not title_task.done():
+                title_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await title_task
+            raise
     finally:
         async with generations_lock:
             active_generations.discard(conversation_id)
