@@ -146,6 +146,18 @@ export default function ChatInterface({
   const hasChairman = !!conversationConfig?.chairman_model;
   const chairmanName = hasChairman ? getModelDisplayName(conversationConfig.chairman_model) : 'None';
   const isLocked = isLoading || isUploadingAttachment || isSendLocked;
+  const lockReason = isUploadingAttachment
+    ? "during upload"
+    : isSendLocked
+      ? "while message is being sent externally"
+      : isLoading
+        ? "while responding"
+        : "";
+
+  const attachTooltip = isLocked ? `Attachments disabled ${lockReason}` : "Attach file";
+  const configTooltip = isLocked ? `Configuration disabled ${lockReason}` : "Configure models for this conversation";
+  const voiceTooltip = isLocked ? `Voice dictation disabled ${lockReason}` : "";
+  const sendTooltip = isLocked ? `Sending disabled ${lockReason}` : "Send message";
 
   // Handle voice transcription - append to current input
   const handleTranscription = useCallback((text) => {
@@ -439,8 +451,8 @@ export default function ChatInterface({
                 onClick={() => !isLocked && fileInputRef.current?.click()}
                 disabled={isLocked}
                 aria-disabled={isLocked}
-                title={isLocked ? "Attachments disabled while responding" : "Attach file"}
-                aria-label="Attach file"
+                title={attachTooltip}
+                aria-label={attachTooltip}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
                   <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -450,6 +462,7 @@ export default function ChatInterface({
               <VoiceButton
                 onTranscription={handleTranscription}
                 disabled={isLocked}
+                disabledReason={voiceTooltip}
               />
 
               <button
@@ -458,8 +471,8 @@ export default function ChatInterface({
                 onClick={() => !isLocked && setShowConfig(true)}
                 disabled={isLocked}
                 aria-disabled={isLocked}
-                title={isLocked ? "Configuration disabled while responding" : "Configure models for this conversation"}
-                aria-label="Configure models"
+                title={configTooltip}
+                aria-label={configTooltip}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
                   <circle cx="12" cy="12" r="3"></circle>
@@ -473,8 +486,8 @@ export default function ChatInterface({
                 type="submit"
                 className="send-button-icon"
                 disabled={(!input.trim() && !attachment) || isLocked}
-                title="Send message"
-                aria-label="Send message"
+                title={sendTooltip}
+                aria-label={sendTooltip}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
                   <path d="m5 12 7-7 7 7" />

@@ -6,7 +6,7 @@ import './VoiceButton.css';
  * VoiceButton component for voice dictation.
  * Records audio from the microphone and transcribes it using Groq's Whisper API.
  */
-export default function VoiceButton({ onTranscription, disabled }) {
+export default function VoiceButton({ onTranscription, disabled, disabledReason }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +32,7 @@ export default function VoiceButton({ onTranscription, disabled }) {
   const startRecording = useCallback(async () => {
     try {
       setError(null);
-      
+
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -48,8 +48,8 @@ export default function VoiceButton({ onTranscription, disabled }) {
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/mp4')
-        ? 'audio/mp4'
-        : undefined; // Let browser choose default
+          ? 'audio/mp4'
+          : undefined; // Let browser choose default
 
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
@@ -144,8 +144,8 @@ export default function VoiceButton({ onTranscription, disabled }) {
         className={buttonClass}
         onClick={handleClick}
         disabled={isDisabled}
-        title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
-        aria-label={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
+        title={disabled && disabledReason ? disabledReason : isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
+        aria-label={disabled && disabledReason ? disabledReason : isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
       >
         {isTranscribing ? (
           <span className="voice-spinner"></span>
@@ -167,7 +167,7 @@ export default function VoiceButton({ onTranscription, disabled }) {
           {error}
         </div>
       )}
-      
+
       {/* Setup Modal for missing GROQ_API_KEY */}
       {showSetupModal && (
         <div className="voice-modal-overlay" onClick={() => setShowSetupModal(false)}>
@@ -179,9 +179,9 @@ export default function VoiceButton({ onTranscription, disabled }) {
             <ol>
               <li>
                 Get a free API key at{' '}
-                <a 
-                  href="https://console.groq.com/keys" 
-                  target="_blank" 
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
                   rel="noopener noreferrer"
                 >
                   console.groq.com/keys
@@ -193,7 +193,7 @@ export default function VoiceButton({ onTranscription, disabled }) {
               </li>
               <li>Restart the backend server</li>
             </ol>
-            <button 
+            <button
               className="voice-modal-close"
               onClick={() => setShowSetupModal(false)}
             >
