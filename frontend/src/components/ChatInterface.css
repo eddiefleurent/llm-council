@@ -471,6 +471,8 @@
   border: 1px solid var(--border-primary);
   background: var(--bg-primary);
   width: fit-content;
+  max-width: min(100%, 280px);
+  overflow: hidden;
 }
 
 .attachment-name {
