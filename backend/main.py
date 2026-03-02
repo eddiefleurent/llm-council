@@ -615,17 +615,12 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
             f"File: {request.attachment.filename}" if request.attachment else ""
         )
 
-        # If this is the first message, generate a title
-        if is_first_message:
-            async def _generate_and_save_title():
-                try:
-                    title = await generate_conversation_title(title_seed)
-                    storage.update_conversation_title(conversation_id, title)
-                except Exception:
-                    logger.exception("Failed to generate or update conversation title")
-            _title_task = asyncio.create_task(_generate_and_save_title())
-            _background_tasks.add(_title_task)
-            _title_task.add_done_callback(_background_tasks.discard)
+        # Start title generation in parallel with main work (awaited before return)
+        title_task = (
+            asyncio.create_task(generate_conversation_title(title_seed))
+            if is_first_message
+            else None
+        )
 
         # Build context messages from conversation history
         # Re-fetch conversation to get the user message we just added
@@ -653,6 +648,12 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
             storage.add_chairman_message(
                 conversation_id, result, errors if errors else None
             )
+            if title_task:
+                try:
+                    title = await title_task
+                    storage.update_conversation_title(conversation_id, title)
+                except Exception:
+                    logger.exception("Failed to generate or update conversation title")
             return {
                 "mode": "chairman",
                 "stage3": result,
@@ -674,6 +675,13 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         storage.add_assistant_message(
             conversation_id, stage1_results, stage2_results, stage3_result, errors
         )
+
+        if title_task:
+            try:
+                title = await title_task
+                storage.update_conversation_title(conversation_id, title)
+            except Exception:
+                logger.exception("Failed to generate or update conversation title")
 
         # Return the complete response with metadata
         return {
