@@ -201,6 +201,7 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
               <li>Restart the backend server</li>
             </ol>
             <button
+              type="button"
               className="voice-modal-close"
               onClick={() => setShowSetupModal(false)}
             >

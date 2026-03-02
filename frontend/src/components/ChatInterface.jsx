@@ -108,7 +108,7 @@ export default function ChatInterface({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if ((input.trim() || attachment) && !isLoading && !isUploadingAttachment && !isSendLocked) {
+    if (hasSendContent && !isLoading && !isUploadingAttachment && !isSendLocked) {
       onSendMessage(input, attachment);
       setInput('');
       setAttachment(null);
@@ -154,10 +154,11 @@ export default function ChatInterface({
         ? "while responding"
         : "";
 
+  const hasSendContent = !!(input.trim() || attachment);
   const attachTooltip = isLocked ? `Attachments disabled ${lockReason}` : "Attach file";
   const configTooltip = isLocked ? `Configuration disabled ${lockReason}` : "Configure models for this conversation";
   const voiceTooltip = isLocked ? `Voice dictation disabled ${lockReason}` : "";
-  const sendTooltip = (!input.trim() && !attachment) ? "No message or attachment" : isLocked ? `Sending disabled ${lockReason}` : "Send message";
+  const sendTooltip = !hasSendContent ? "No message or attachment" : isLocked ? `Sending disabled ${lockReason}` : "Send message";
 
   // Handle voice transcription - append to current input
   const handleTranscription = useCallback((text) => {
@@ -485,7 +486,7 @@ export default function ChatInterface({
               <button
                 type="submit"
                 className="send-button-icon"
-                disabled={(!input.trim() && !attachment) || isLocked}
+                disabled={!hasSendContent || isLocked}
                 title={sendTooltip}
                 aria-label={sendTooltip}
               >
