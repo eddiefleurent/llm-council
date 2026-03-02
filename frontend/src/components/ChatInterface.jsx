@@ -408,12 +408,23 @@ export default function ChatInterface({
               <div className="model-indicator">
                 <span className="indicator-label">
                   {conversationConfig.web_search_enabled && '🌐 '}
-                  Council: {conversationConfig.council_models.length} models
+                  Council: {Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0} models
                 </span>
-                <span className="indicator-separator">•</span>
-                <span className="indicator-label">
-                  Chairman: {getModelDisplayName(conversationConfig.chairman_model)}
-                </span>
+                {conversationConfig.chairman_model ? (
+                  <>
+                    <span className="indicator-separator">•</span>
+                    <span className="indicator-label">
+                      Chairman: {getModelDisplayName(conversationConfig.chairman_model)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="indicator-separator">•</span>
+                    <span className="indicator-label">
+                      Chairman: None
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
