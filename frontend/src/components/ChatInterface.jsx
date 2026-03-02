@@ -356,29 +356,18 @@ export default function ChatInterface({
               Chairman
             </button>
           </div>
-          <button
-            type="button"
-            className="config-btn-chat"
-            onClick={() => setShowConfig(true)}
-            title="Configure models for this conversation"
-            aria-label="Configure models"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
         </div>
-        <div className="input-row">
+
+        <div className="input-area-wrapper">
           <div className="input-main">
             <textarea
               className="message-input"
               placeholder={
                 messageMode === 'chairman'
-                  ? "Chat with the chairman... (Shift+Enter for new line, Enter to send)"
+                  ? "Chat with the chairman..."
                   : conversation.messages.length === 0
-                    ? "Ask your question... (Shift+Enter for new line, Enter to send)"
-                    : "Ask a follow-up question... (Shift+Enter for new line, Enter to send)"
+                    ? "Ask your question..."
+                    : "Ask a follow-up question..."
               }
               ref={textareaRef}
               value={input}
@@ -387,6 +376,7 @@ export default function ChatInterface({
               disabled={isLoading}
               rows={1}
             />
+
             {attachment && (
               <div className="attachment-chip">
                 <span className="attachment-name">{attachment.filename}</span>
@@ -401,16 +391,19 @@ export default function ChatInterface({
                 </button>
               </div>
             )}
+
             {isUploadingAttachment && (
               <div className="attachment-status" role="status" aria-live="polite">
                 Processing attachment...
               </div>
             )}
+
             {attachmentError && (
               <div className="attachment-error" role="alert" aria-live="assertive">
                 {attachmentError}
               </div>
             )}
+
             {conversationConfig && !loadingConfig && (
               <div className="model-indicator">
                 <span className="indicator-label">
@@ -424,37 +417,62 @@ export default function ChatInterface({
               </div>
             )}
           </div>
-          <div className="input-actions">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ATTACHMENT_ACCEPT}
-              onChange={handleAttachmentSelect}
-              style={{ display: 'none' }}
-            />
-            <button
-              type="button"
-              className="attach-button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || isUploadingAttachment || isSendLocked}
-              title="Attach file"
-              aria-label="Attach file"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-            </button>
-            <VoiceButton
-              onTranscription={handleTranscription}
-              disabled={isLoading || isUploadingAttachment || isSendLocked}
-            />
-            <button
-              type="submit"
-              className="send-button"
-              disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment || isSendLocked}
-            >
-              Send
-            </button>
+
+          <div className="input-action-bar">
+            <div className="input-actions-left">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ATTACHMENT_ACCEPT}
+                onChange={handleAttachmentSelect}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || isUploadingAttachment || isSendLocked}
+                title="Attach file"
+                aria-label="Attach file"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                  <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+              </button>
+
+              <VoiceButton
+                onTranscription={handleTranscription}
+                disabled={isLoading || isUploadingAttachment || isSendLocked}
+              />
+
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setShowConfig(true)}
+                title="Configure models for this conversation"
+                aria-label="Configure models"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div className="input-actions-right">
+              <button
+                type="submit"
+                className="send-button-icon"
+                disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment || isSendLocked}
+                title="Send message"
+                aria-label="Send message"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m5 12 7-7 7 7" />
+                  <path d="M12 19V5" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </form>
