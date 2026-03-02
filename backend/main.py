@@ -607,8 +607,13 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
 
         # If this is the first message, generate a title
         if is_first_message:
-            title = await generate_conversation_title(title_seed)
-            storage.update_conversation_title(conversation_id, title)
+            async def _generate_and_save_title():
+                try:
+                    title = await generate_conversation_title(title_seed)
+                    storage.update_conversation_title(conversation_id, title)
+                except Exception:
+                    logger.exception("Failed to generate or update conversation title")
+            asyncio.create_task(_generate_and_save_title())
 
         # Build context messages from conversation history
         # Re-fetch conversation to get the user message we just added

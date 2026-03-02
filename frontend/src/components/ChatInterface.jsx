@@ -157,7 +157,7 @@ export default function ChatInterface({
   const attachTooltip = isLocked ? `Attachments disabled ${lockReason}` : "Attach file";
   const configTooltip = isLocked ? `Configuration disabled ${lockReason}` : "Configure models for this conversation";
   const voiceTooltip = isLocked ? `Voice dictation disabled ${lockReason}` : "";
-  const sendTooltip = isLocked ? `Sending disabled ${lockReason}` : "Send message";
+  const sendTooltip = (!input.trim() && !attachment) ? "No message or attachment" : isLocked ? `Sending disabled ${lockReason}` : "Send message";
 
   // Handle voice transcription - append to current input
   const handleTranscription = useCallback((text) => {

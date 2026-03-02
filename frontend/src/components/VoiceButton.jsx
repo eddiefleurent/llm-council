@@ -136,6 +136,13 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
   // Determine button state
   const isDisabled = disabled || isTranscribing;
   const buttonClass = `voice-button ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`;
+  const buttonLabel = disabled && disabledReason
+    ? disabledReason
+    : isRecording
+      ? 'Stop recording'
+      : isTranscribing
+        ? 'Transcribing...'
+        : 'Start voice dictation';
 
   return (
     <div className="voice-button-container">
@@ -144,8 +151,8 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
         className={buttonClass}
         onClick={handleClick}
         disabled={isDisabled}
-        title={disabled && disabledReason ? disabledReason : isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
-        aria-label={disabled && disabledReason ? disabledReason : isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice dictation'}
+        title={buttonLabel}
+        aria-label={buttonLabel}
       >
         {isTranscribing ? (
           <span className="voice-spinner"></span>
