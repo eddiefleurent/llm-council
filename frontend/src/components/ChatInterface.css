@@ -259,7 +259,8 @@
   gap: 4px;
 }
 
-.icon-btn {
+.icon-btn,
+.input-actions-left .voice-button {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -274,19 +275,22 @@
   min-height: 44px;
 }
 
-.icon-btn:hover:not(:disabled) {
+.icon-btn:hover:not(:disabled),
+.input-actions-left .voice-button:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.icon-btn:focus-visible {
+.icon-btn:focus-visible,
+.input-actions-left .voice-button:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.icon-btn:disabled {
+.icon-btn:disabled,
+.input-actions-left .voice-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -296,19 +300,7 @@
   margin: 0;
 }
 
-.input-actions-left .voice-button {
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 50%;
-  padding: 8px;
-  min-width: 44px;
-  min-height: 44px;
-}
-
 .input-actions-left .voice-button:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
   border-color: transparent;
 }
 

@@ -141,6 +141,12 @@ export default function ChatInterface({
     }
   }, [input]);
 
+  const isWebSearchEnabled = !!conversationConfig?.web_search_enabled;
+  const councilCount = Array.isArray(conversationConfig?.council_models) ? conversationConfig.council_models.length : 0;
+  const hasChairman = !!conversationConfig?.chairman_model;
+  const chairmanName = hasChairman ? getModelDisplayName(conversationConfig.chairman_model) : 'None';
+  const isLocked = isLoading || isUploadingAttachment || isSendLocked;
+
   // Handle voice transcription - append to current input
   const handleTranscription = useCallback((text) => {
     setInput((prev) => {
@@ -407,24 +413,13 @@ export default function ChatInterface({
             {conversationConfig && !loadingConfig && (
               <div className="model-indicator">
                 <span className="indicator-label">
-                  {conversationConfig.web_search_enabled && '🌐 '}
-                  Council: {Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0} model{(Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0) === 1 ? '' : 's'}
+                  {isWebSearchEnabled && '🌐 '}
+                  Council: {councilCount} model{councilCount === 1 ? '' : 's'}
                 </span>
-                {conversationConfig.chairman_model ? (
-                  <>
-                    <span className="indicator-separator">•</span>
-                    <span className="indicator-label">
-                      Chairman: {getModelDisplayName(conversationConfig.chairman_model)}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="indicator-separator">•</span>
-                    <span className="indicator-label">
-                      Chairman: None
-                    </span>
-                  </>
-                )}
+                <span className="indicator-separator">•</span>
+                <span className="indicator-label">
+                  Chairman: {chairmanName}
+                </span>
               </div>
             )}
           </div>
@@ -441,9 +436,10 @@ export default function ChatInterface({
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading || isUploadingAttachment || isSendLocked}
-                title="Attach file"
+                onClick={() => !isLocked && fileInputRef.current?.click()}
+                disabled={isLocked}
+                aria-disabled={isLocked}
+                title={isLocked ? "Attachments disabled while responding" : "Attach file"}
                 aria-label="Attach file"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -453,16 +449,16 @@ export default function ChatInterface({
 
               <VoiceButton
                 onTranscription={handleTranscription}
-                disabled={isLoading || isUploadingAttachment || isSendLocked}
+                disabled={isLocked}
               />
 
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => !(isLoading || isUploadingAttachment || isSendLocked) && setShowConfig(true)}
-                disabled={isLoading || isUploadingAttachment || isSendLocked}
-                aria-disabled={isLoading || isUploadingAttachment || isSendLocked}
-                title={isLoading || isUploadingAttachment || isSendLocked ? "Configuration disabled while responding" : "Configure models for this conversation"}
+                onClick={() => !isLocked && setShowConfig(true)}
+                disabled={isLocked}
+                aria-disabled={isLocked}
+                title={isLocked ? "Configuration disabled while responding" : "Configure models for this conversation"}
                 aria-label="Configure models"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -476,7 +472,7 @@ export default function ChatInterface({
               <button
                 type="submit"
                 className="send-button-icon"
-                disabled={(!input.trim() && !attachment) || isLoading || isUploadingAttachment || isSendLocked}
+                disabled={(!input.trim() && !attachment) || isLocked}
                 title="Send message"
                 aria-label="Send message"
               >
