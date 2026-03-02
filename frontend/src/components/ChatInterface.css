@@ -270,8 +270,8 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .icon-btn:hover:not(:disabled) {
@@ -302,8 +302,8 @@
   color: var(--text-secondary);
   border-radius: 50%;
   padding: 8px;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .input-actions-left .voice-button:hover:not(:disabled) {
@@ -337,6 +337,8 @@
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .send-button-icon:hover:not(:disabled) {

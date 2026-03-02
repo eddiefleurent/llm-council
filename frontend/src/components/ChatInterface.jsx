@@ -459,8 +459,10 @@ export default function ChatInterface({
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => setShowConfig(true)}
-                title="Configure models for this conversation"
+                onClick={() => !(isLoading || isUploadingAttachment || isSendLocked) && setShowConfig(true)}
+                disabled={isLoading || isUploadingAttachment || isSendLocked}
+                aria-disabled={isLoading || isUploadingAttachment || isSendLocked}
+                title={isLoading || isUploadingAttachment || isSendLocked ? "Configuration disabled while responding" : "Configure models for this conversation"}
                 aria-label="Configure models"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
