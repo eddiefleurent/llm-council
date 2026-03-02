@@ -185,11 +185,16 @@ function App() {
       title: 'New Conversation',
       messages: [],
     });
+    setMessageMode('council');
   };
 
   const handleSelectConversation = (id) => {
+    const isSwitchingConversation = id !== currentConversationId;
     setIsDraftMode(false);
     setCurrentConversationId(id);
+    if (isSwitchingConversation) {
+      setMessageMode('council');
+    }
     setIsSidebarOpen(false); // Close sidebar on mobile when conversation is selected
   };
 
