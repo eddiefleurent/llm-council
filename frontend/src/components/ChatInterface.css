@@ -279,6 +279,13 @@
   color: var(--text-primary);
 }
 
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -336,6 +343,12 @@
   background: var(--accent-hover);
 }
 
+.send-button-icon:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  background: var(--accent-hover);
+}
+
 .send-button-icon:active:not(:disabled) {
   transform: scale(0.95);
 }
@@ -385,6 +398,7 @@
 .model-indicator {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   background: var(--bg-primary);
@@ -393,7 +407,9 @@
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 8px;
-  width: fit-content;
+  max-width: 100%;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .indicator-label {

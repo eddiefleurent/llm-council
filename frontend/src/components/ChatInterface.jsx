@@ -408,7 +408,7 @@ export default function ChatInterface({
               <div className="model-indicator">
                 <span className="indicator-label">
                   {conversationConfig.web_search_enabled && '🌐 '}
-                  Council: {Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0} models
+                  Council: {Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0} model{(Array.isArray(conversationConfig.council_models) ? conversationConfig.council_models.length : 0) === 1 ? '' : 's'}
                 </span>
                 {conversationConfig.chairman_model ? (
                   <>
