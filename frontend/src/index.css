@@ -116,6 +116,7 @@ html, body, #root {
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg-secondary);
   color: var(--text-primary);
