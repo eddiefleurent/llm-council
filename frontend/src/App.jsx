@@ -189,9 +189,12 @@ function App() {
   };
 
   const handleSelectConversation = (id) => {
+    const isSwitchingConversation = id !== currentConversationId;
     setIsDraftMode(false);
     setCurrentConversationId(id);
-    setMessageMode('council');
+    if (isSwitchingConversation) {
+      setMessageMode('council');
+    }
     setIsSidebarOpen(false); // Close sidebar on mobile when conversation is selected
   };
 
