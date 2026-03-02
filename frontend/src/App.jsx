@@ -185,11 +185,13 @@ function App() {
       title: 'New Conversation',
       messages: [],
     });
+    setMessageMode('council');
   };
 
   const handleSelectConversation = (id) => {
     setIsDraftMode(false);
     setCurrentConversationId(id);
+    setMessageMode('council');
     setIsSidebarOpen(false); // Close sidebar on mobile when conversation is selected
   };
 
