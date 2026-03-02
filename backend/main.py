@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 # conversation from interleaving storage writes.
 active_generations: set[str] = set()
 generations_lock = asyncio.Lock()
+_background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -556,6 +557,22 @@ async def update_conversation_configuration(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+def _normalize_request_input(
+    request: SendMessageRequest,
+) -> tuple[str, dict | None]:
+    """Return (user_content_for_context, attachment_payload) for a request."""
+    attachment_payload = request.attachment.model_dump() if request.attachment else None
+    if request.attachment:
+        attachment_block = build_attachment_context_block(request.attachment)
+        if request.content.strip():
+            user_content_for_context = f"{request.content}\n\n{attachment_block}"
+        else:
+            user_content_for_context = attachment_block
+    else:
+        user_content_for_context = request.content
+    return user_content_for_context, attachment_payload
+
+
 @app.post("/api/conversations/{conversation_id}/message")
 async def send_message(conversation_id: str, request: SendMessageRequest):
     """
@@ -589,83 +606,98 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         # Check if this is the first message
         is_first_message = len(conversation["messages"]) == 0
 
-    user_content_for_context = request.content
-    attachment_payload = request.attachment.model_dump() if request.attachment else None
-    if request.attachment:
-        attachment_block = build_attachment_context_block(request.attachment)
-        if request.content.strip():
-            user_content_for_context = f"{request.content}\n\n{attachment_block}"
-        else:
-            user_content_for_context = attachment_block
+        user_content_for_context, attachment_payload = _normalize_request_input(request)
 
-    # Add user message
-    storage.add_user_message(conversation_id, request.content, attachment_payload)
+        # Add user message
+        storage.add_user_message(conversation_id, request.content, attachment_payload)
 
-    title_seed = request.content.strip() or (
-        f"File: {request.attachment.filename}" if request.attachment else ""
-    )
-
-    # If this is the first message, generate a title
-    if is_first_message:
-        title = await generate_conversation_title(title_seed)
-        storage.update_conversation_title(conversation_id, title)
-
-    # Build context messages from conversation history
-    # Re-fetch conversation to get the user message we just added
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    messages = await build_context_messages(
-        conversation["messages"][:-1],  # Exclude the user message we just added
-        user_content_for_context,
-    )
-
-    # Get conversation-specific config
-    conv_config = storage.get_conversation_config(conversation_id)
-    council_models = conv_config["council_models"]
-    chairman_model = conv_config["chairman_model"]
-    web_search_enabled = conv_config.get("web_search_enabled", False)
-
-    if request.mode == "chairman":
-        # Chairman-only mode
-        result, errors = await chairman_direct_response(
-            messages,
-            chairman_model=chairman_model,
-            web_search_enabled=web_search_enabled,
+        title_seed = request.content.strip() or (
+            f"File: {request.attachment.filename}" if request.attachment else ""
         )
-        storage.add_chairman_message(
-            conversation_id, result, errors if errors else None
+
+        # Start title generation in parallel with main work (awaited before return)
+        title_task = (
+            asyncio.create_task(generate_conversation_title(title_seed))
+            if is_first_message
+            else None
         )
-        return {
-            "mode": "chairman",
-            "stage3": result,
-            "errors": errors if errors else [],
-        }
 
-    # Full council mode
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        messages,
-        council_models=council_models,
-        chairman_model=chairman_model,
-        web_search_enabled=web_search_enabled,
-    )
+        try:
+            # Build context messages from conversation history
+            # Re-fetch conversation to get the user message we just added
+            conversation = storage.get_conversation(conversation_id)
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            messages = await build_context_messages(
+                conversation["messages"][:-1],  # Exclude the user message we just added
+                user_content_for_context,
+            )
 
-    # Extract structured errors directly from metadata
-    errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
+            # Get conversation-specific config
+            conv_config = storage.get_conversation_config(conversation_id)
+            council_models = conv_config["council_models"]
+            chairman_model = conv_config["chairman_model"]
+            web_search_enabled = conv_config.get("web_search_enabled", False)
 
-    # Add assistant message with all stages and errors
-    storage.add_assistant_message(
-        conversation_id, stage1_results, stage2_results, stage3_result, errors
-    )
+            if request.mode == "chairman":
+                # Chairman-only mode
+                result, errors = await chairman_direct_response(
+                    messages,
+                    chairman_model=chairman_model,
+                    web_search_enabled=web_search_enabled,
+                )
+                storage.add_chairman_message(
+                    conversation_id, result, errors if errors else None
+                )
+                if title_task:
+                    try:
+                        title = await title_task
+                        storage.update_conversation_title(conversation_id, title)
+                    except Exception:
+                        logger.exception("Failed to generate or update conversation title")
+                return {
+                    "mode": "chairman",
+                    "stage3": result,
+                    "errors": errors if errors else [],
+                }
 
-    # Return the complete response with metadata
-    return {
-        "mode": "council",
-        "stage1": stage1_results,
-        "stage2": stage2_results,
-        "stage3": stage3_result,
-        "metadata": metadata,
-    }
+            # Full council mode
+            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+                messages,
+                council_models=council_models,
+                chairman_model=chairman_model,
+                web_search_enabled=web_search_enabled,
+            )
+
+            # Extract structured errors directly from metadata
+            errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
+
+            # Add assistant message with all stages and errors
+            storage.add_assistant_message(
+                conversation_id, stage1_results, stage2_results, stage3_result, errors
+            )
+
+            if title_task:
+                try:
+                    title = await title_task
+                    storage.update_conversation_title(conversation_id, title)
+                except Exception:
+                    logger.exception("Failed to generate or update conversation title")
+
+            # Return the complete response with metadata
+            return {
+                "mode": "council",
+                "stage1": stage1_results,
+                "stage2": stage2_results,
+                "stage3": stage3_result,
+                "metadata": metadata,
+            }
+        except Exception:
+            if title_task is not None and not title_task.done():
+                title_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await title_task
+            raise
     finally:
         async with generations_lock:
             active_generations.discard(conversation_id)
@@ -689,14 +721,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
         )
 
-    user_content_for_context = request.content
-    attachment_payload = request.attachment.model_dump() if request.attachment else None
-    if request.attachment:
-        attachment_block = build_attachment_context_block(request.attachment)
-        if request.content.strip():
-            user_content_for_context = f"{request.content}\n\n{attachment_block}"
-        else:
-            user_content_for_context = attachment_block
+    user_content_for_context, attachment_payload = _normalize_request_input(request)
 
     # Check if conversation exists
     conversation = storage.get_conversation(conversation_id)
@@ -797,7 +822,9 @@ def _attach_active_generation_cleanup(
             async with generations_lock:
                 active_generations.discard(conversation_id)
 
-        asyncio.create_task(_cleanup())
+        _cleanup_task = asyncio.create_task(_cleanup())
+        _background_tasks.add(_cleanup_task)
+        _cleanup_task.add_done_callback(_background_tasks.discard)
 
     worker_task.add_done_callback(_on_done)
 
