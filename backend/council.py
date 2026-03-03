@@ -170,6 +170,7 @@ Evaluation rules:
 
 Output requirements (STRICT):
 - Return exactly one valid JSON object and nothing else.
+- Do not include any text before or after the JSON. No preamble, no explanation.
 - Do not use markdown code fences.
 - Use this exact schema:
   {{"final_ranking": ["Response X", "Response Y", "..."]}}
@@ -177,7 +178,7 @@ Output requirements (STRICT):
 - Allowed labels for this task are:
   {allowed_labels_json}
 
-Now provide your JSON output:"""
+{{"""
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
@@ -355,7 +356,15 @@ def parse_ranking_from_text(
     try:
         payload = json.loads(ranking_text)
     except json.JSONDecodeError:
-        return []
+        # Fallback: extract the first JSON object embedded in surrounding text
+        start = ranking_text.find("{")
+        end = ranking_text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return []
+        try:
+            payload = json.loads(ranking_text[start : end + 1])
+        except json.JSONDecodeError:
+            return []
 
     if not isinstance(payload, dict):
         return []
