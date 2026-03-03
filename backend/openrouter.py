@@ -200,7 +200,7 @@ async def query_model(
                 model=model,
             )
         except Exception as e:
-            logger.exception("Error querying model %s: %s", model, e)
+            logger.exception("Error querying model %s", model)
             return ModelQueryError(error_type="unknown", message=str(e), model=model)
 
     # Should never reach here
