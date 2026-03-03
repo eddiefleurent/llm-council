@@ -371,7 +371,10 @@ def parse_ranking_from_text(
                     break
                 try:
                     payload = json.loads(ranking_text[start : end + 1])
-                    break
+                    if isinstance(payload, dict) and "final_ranking" in payload:
+                        break
+                    payload = None
+                    pos = end + 1
                 except json.JSONDecodeError:
                     pos = end + 1
             if payload is not None:

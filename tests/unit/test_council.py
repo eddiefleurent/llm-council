@@ -48,6 +48,13 @@ def test_parse_ranking_from_text_rejects_wrong_schema():
     assert result == []
 
 
+def test_parse_ranking_from_text_fallback_skips_junk_json():
+    """Fallback skips valid JSON without final_ranking and finds the real payload."""
+    text = 'Preamble {"foo": "bar"} suffix {"final_ranking": ["Response B", "Response A"]}'
+    result = parse_ranking_from_text(text)
+    assert result == ["Response B", "Response A"]
+
+
 def test_parse_ranking_from_text_empty():
     """Test parsing empty text."""
     result = parse_ranking_from_text("")
