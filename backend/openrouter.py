@@ -127,7 +127,12 @@ async def query_model(
                 # underlying provider fails (no `choices` field in that case)
                 if "error" in data and "choices" not in data:
                     err = data["error"]
-                    err_code = err.get("code", 500)
+                    if not isinstance(err, dict):
+                        err = {"message": str(err)}
+                    try:
+                        err_code = int(err.get("code", 500))
+                    except (TypeError, ValueError):
+                        err_code = 500
                     err_msg = err.get("message", "Unknown provider error")
                     error_type = "rate_limit" if err_code == 429 else "server"
                     # Retry on retriable codes
@@ -186,7 +191,7 @@ async def query_model(
                 model=model,
             )
         except Exception as e:
-            logger.error("Error querying model %s: %s", model, e)
+            logger.exception("Error querying model %s: %s", model, e)
             return ModelQueryError(error_type="unknown", message=str(e), model=model)
 
     # Should never reach here

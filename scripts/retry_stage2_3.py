@@ -60,9 +60,14 @@ async def retry(conversation_id: str) -> None:
     print(f"  Chairman: {chairman_model}")
     print(f"  Stage 1 responses: {len(stage1)}")
 
-    # Get the original user query
+    # Get the user query that triggered this assistant message (walk backward from it)
+    msg_index = convo["messages"].index(msg)
     user_query = next(
-        (m["content"] for m in convo["messages"] if m["role"] == "user"),
+        (
+            m["content"]
+            for m in reversed(convo["messages"][:msg_index])
+            if m["role"] == "user"
+        ),
         "",
     )
 
@@ -90,18 +95,14 @@ async def retry(conversation_id: str) -> None:
     resp_len = len(stage3_result.get("response", ""))
     print(f"[Stage 3] response length: {resp_len} chars")
 
-    # Patch the message in place
+    # Patch the message in place — preserve any existing Stage 1 errors
+    stage1_errors = (
+        msg["errors"].get("stage1", []) if isinstance(msg.get("errors"), dict) else []
+    )
+    errors = {"stage1": stage1_errors, "stage2": stage2_errors, "stage3": stage3_errors}
     msg["stage2"] = stage2_results
     msg["stage3"] = stage3_result
-    msg["errors"] = (
-        {
-            "stage1": msg.get("errors", {}).get("stage1", []),
-            "stage2": stage2_errors,
-            "stage3": stage3_errors,
-        }
-        if any([stage2_errors, stage3_errors])
-        else None
-    )
+    msg["errors"] = errors if any([stage1_errors, stage2_errors, stage3_errors]) else None
 
     with data_path.open("w") as f:
         json.dump(convo, f, indent=2)

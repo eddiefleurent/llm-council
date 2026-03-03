@@ -356,14 +356,23 @@ def parse_ranking_from_text(
     try:
         payload = json.loads(ranking_text)
     except json.JSONDecodeError:
-        # Fallback: extract the first JSON object embedded in surrounding text
+        # Fallback: extract the first valid JSON object embedded in surrounding text.
+        # Iterate successive "}" positions rather than using rfind (too greedy).
         start = ranking_text.find("{")
-        end = ranking_text.rfind("}")
-        if start == -1 or end == -1 or end <= start:
+        if start == -1:
             return []
-        try:
-            payload = json.loads(ranking_text[start : end + 1])
-        except json.JSONDecodeError:
+        payload = None
+        pos = start
+        while True:
+            end = ranking_text.find("}", pos)
+            if end == -1:
+                break
+            try:
+                payload = json.loads(ranking_text[start : end + 1])
+                break
+            except json.JSONDecodeError:
+                pos = end + 1
+        if payload is None:
             return []
 
     if not isinstance(payload, dict):
