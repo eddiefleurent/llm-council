@@ -134,7 +134,16 @@ async def query_model(
                     except (TypeError, ValueError):
                         err_code = 500
                     err_msg = err.get("message", "Unknown provider error")
-                    error_type = "rate_limit" if err_code == 429 else "server"
+                    if err_code == 401:
+                        error_type = "auth"
+                    elif err_code == 402:
+                        error_type = "payment"
+                    elif err_code == 404:
+                        error_type = "not_found"
+                    elif err_code == 429:
+                        error_type = "rate_limit"
+                    else:
+                        error_type = "server"
                     # Retry on retriable codes
                     if (
                         err_code in _RETRIABLE_STATUS_CODES
