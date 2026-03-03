@@ -61,7 +61,11 @@ async def retry(conversation_id: str) -> None:
     print(f"  Stage 1 responses: {len(stage1)}")
 
     # Get the user query that triggered this assistant message (walk backward from it)
-    msg_index = convo["messages"].index(msg)
+    msg_index = -1
+    for i in range(len(convo["messages"]) - 1, -1, -1):
+        if convo["messages"][i] is msg:
+            msg_index = i
+            break
     user_query = next(
         (
             m["content"]
