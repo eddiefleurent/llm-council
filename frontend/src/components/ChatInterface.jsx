@@ -7,6 +7,7 @@ import Stage3 from './Stage3';
 import CopyButton from './CopyButton';
 import VoiceButton from './VoiceButton';
 import CouncilConfig from './CouncilConfig';
+import PromptLab from './PromptLab';
 import { api } from '../api';
 import { getModelDisplayName } from '../utils';
 import './ChatInterface.css';
@@ -29,6 +30,7 @@ export default function ChatInterface({
 }) {
   const [input, setInput] = useState('');
   const [showConfig, setShowConfig] = useState(false);
+  const [showPromptLab, setShowPromptLab] = useState(false);
   const [attachment, setAttachment] = useState(null);
   const [attachmentError, setAttachmentError] = useState('');
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
@@ -157,6 +159,7 @@ export default function ChatInterface({
   const hasSendContent = !!(input.trim() || attachment);
   const attachTooltip = isLocked ? `Attachments disabled ${lockReason}` : "Attach file";
   const configTooltip = isLocked ? `Configuration disabled ${lockReason}` : "Configure models for this conversation";
+  const labTooltip = isLocked ? `Prompt Lab disabled ${lockReason}` : "Outcome-Based Prompt Lab";
   const voiceTooltip = isLocked ? `Voice dictation disabled ${lockReason}` : "";
   const sendTooltip = !hasSendContent ? "No message or attachment" : isLocked ? `Sending disabled ${lockReason}` : "Send message";
 
@@ -271,7 +274,12 @@ export default function ChatInterface({
                 {msg.role === 'user' ? (
                   <div className="user-message">
                     <div className="message-label">You</div>
-                    <div className="message-content">
+                    <div className={`message-content ${msg.is_outcome_mode ? 'outcome-mode' : ''}`}>
+                      {msg.is_outcome_mode && (
+                        <div className="outcome-badge">
+                          <span className="lab-icon">🧪</span> Outcome-Based Prompt
+                        </div>
+                      )}
                       <div className="markdown-content">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                       </div>
@@ -481,6 +489,22 @@ export default function ChatInterface({
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
               </button>
+
+              <button
+                type="button"
+                className="icon-btn lab-btn"
+                onClick={() => !isLocked && setShowPromptLab(true)}
+                disabled={isLocked}
+                aria-disabled={isLocked}
+                title={labTooltip}
+                aria-label={labTooltip}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M4.5 3h15" />
+                  <path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" />
+                  <path d="M6 14h12" />
+                </svg>
+              </button>
             </div>
 
             <div className="input-actions-right">
@@ -517,6 +541,13 @@ export default function ChatInterface({
         isDraftMode={isDraftMode}
         draftConfig={draftConfig}
         onDraftConfigChange={onDraftConfigChange}
+      />
+
+      <PromptLab
+        isOpen={showPromptLab}
+        onClose={() => setShowPromptLab(false)}
+        onCommit={(finalPrompt) => onSendMessage(finalPrompt, null, true)}
+        chairmanModel={conversationConfig?.chairman_model}
       />
     </div>
   );

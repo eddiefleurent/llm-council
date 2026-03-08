@@ -195,7 +195,10 @@ def list_conversations() -> list[dict[str, Any]]:
 
 
 def add_user_message(
-    conversation_id: str, content: str, attachment: dict[str, Any] | None = None
+    conversation_id: str,
+    content: str,
+    attachment: dict[str, Any] | None = None,
+    is_outcome_mode: bool = False,
 ):
     """
     Add a user message to a conversation.
@@ -204,6 +207,7 @@ def add_user_message(
         conversation_id: Conversation identifier
         content: User message content
         attachment: Optional attachment metadata/payload
+        is_outcome_mode: Whether this was an outcome-based prompt
     """
     conversation = get_conversation(conversation_id)
     if conversation is None:
@@ -212,6 +216,8 @@ def add_user_message(
     message: dict[str, Any] = {"role": "user", "content": content}
     if attachment is not None:
         message["attachment"] = attachment
+    if is_outcome_mode:
+        message["is_outcome_mode"] = True
 
     conversation["messages"].append(message)
 

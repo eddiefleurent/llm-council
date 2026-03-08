@@ -100,6 +100,7 @@ class SendMessageRequest(BaseModel):
         "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
     )
     attachment: AttachmentPayload | None = None
+    is_outcome_mode: bool = False
 
     @model_validator(mode="after")
     def validate_has_content_or_attachment(self):
@@ -114,6 +115,13 @@ class UpdateCouncilConfigRequest(BaseModel):
     council_models: list[str]
     chairman_model: str
     web_search_enabled: bool = False
+
+
+class PromptLabChatRequest(BaseModel):
+    """Request for a prompt lab chat interaction."""
+
+    messages: list[dict[str, str]]
+    chairman_model: str | None = None
 
 
 class ConversationMetadata(BaseModel):
@@ -150,6 +158,36 @@ async def debug_config():
         "model_count": len(config["council_models"]),
         "config_file_exists": os.path.exists("data/council_config.json"),
     }
+
+
+# ============================================================================
+# Prompt Lab Endpoint
+# ============================================================================
+
+
+@app.post("/api/prompt-lab/chat")
+async def prompt_lab_chat(request: PromptLabChatRequest):
+    """
+    Chat with the Chairman in the Prompt Lab sandbox.
+    Does not persist to conversation storage.
+    """
+    from .council import PROMPT_LAB_SYSTEM_PROMPT, _normalize_chairman_model
+    from .openrouter import ModelQueryError, query_model
+
+    chairman_model = _normalize_chairman_model(request.chairman_model)
+
+    # Prepend the specialized system prompt for the lab
+    messages = [
+        {"role": "system", "content": PROMPT_LAB_SYSTEM_PROMPT},
+        *request.messages,
+    ]
+
+    response = await query_model(chairman_model, messages)
+
+    if isinstance(response, ModelQueryError):
+        raise HTTPException(status_code=500, detail=response.message)
+
+    return response
 
 
 # ============================================================================
@@ -609,7 +647,12 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         user_content_for_context, attachment_payload = _normalize_request_input(request)
 
         # Add user message
-        storage.add_user_message(conversation_id, request.content, attachment_payload)
+        storage.add_user_message(
+            conversation_id,
+            request.content,
+            attachment_payload,
+            is_outcome_mode=request.is_outcome_mode,
+        )
 
         title_seed = request.content.strip() or (
             f"File: {request.attachment.filename}" if request.attachment else ""
@@ -654,7 +697,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                         title = await title_task
                         storage.update_conversation_title(conversation_id, title)
                     except Exception:
-                        logger.exception("Failed to generate or update conversation title")
+                        logger.exception(
+                            "Failed to generate or update conversation title"
+                        )
                 return {
                     "mode": "chairman",
                     "stage3": result,
@@ -662,15 +707,25 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                 }
 
             # Full council mode
-            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+            (
+                stage1_results,
+                stage2_results,
+                stage3_result,
+                metadata,
+            ) = await run_full_council(
                 messages,
                 council_models=council_models,
                 chairman_model=chairman_model,
                 web_search_enabled=web_search_enabled,
+                is_outcome_mode=request.is_outcome_mode,
             )
 
             # Extract structured errors directly from metadata
-            errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
+            errors = metadata.get("errors") or {
+                "stage1": [],
+                "stage2": [],
+                "stage3": [],
+            }
 
             # Add assistant message with all stages and errors
             storage.add_assistant_message(
@@ -750,6 +805,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                     attachment_payload,
                     is_first_message,
                     event_queue,
+                    is_outcome_mode=request.is_outcome_mode,
                 )
             )
             _attach_active_generation_cleanup(
@@ -778,6 +834,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 attachment_payload,
                 is_first_message,
                 event_queue,
+                is_outcome_mode=request.is_outcome_mode,
             )
         )
         _attach_active_generation_cleanup(worker_task, conversation_id=conversation_id)
@@ -887,13 +944,16 @@ async def _run_chairman_stream_worker(
     attachment: dict[str, Any] | None,
     is_first_message: bool,
     event_queue: asyncio.Queue[dict[str, Any] | None],
+    is_outcome_mode: bool = False,
 ):
     """Run chairman-only generation and enqueue stream events."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
         # Add user message
-        storage.add_user_message(conversation_id, content, attachment)
+        storage.add_user_message(
+            conversation_id, content, attachment, is_outcome_mode=is_outcome_mode
+        )
 
         # Start title generation in parallel (don't await yet)
         if is_first_message:
@@ -946,7 +1006,8 @@ async def _run_chairman_stream_worker(
                 logger.exception("Failed to generate or update conversation title")
                 # Swallow error to avoid aborting the main success path
                 await _emit_stream_event(
-                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                    event_queue,
+                    {"type": "title_failed", "message": "Failed to generate title"},
                 )
 
         # Persist chairman message
@@ -981,13 +1042,16 @@ async def _run_council_stream_worker(
     attachment: dict[str, Any] | None,
     is_first_message: bool,
     event_queue: asyncio.Queue[dict[str, Any] | None],
+    is_outcome_mode: bool = False,
 ):
     """Run full council generation and enqueue stream events."""
     # Initialize title_task before any operation that could raise
     title_task = None
     try:
         # Add user message
-        storage.add_user_message(conversation_id, content, attachment)
+        storage.add_user_message(
+            conversation_id, content, attachment, is_outcome_mode=is_outcome_mode
+        )
 
         # Start title generation in parallel (don't await yet)
         if is_first_message:
@@ -1108,7 +1172,8 @@ async def _run_council_stream_worker(
                 logger.exception("Failed to generate or update conversation title")
                 # Swallow error to avoid aborting the main success path
                 await _emit_stream_event(
-                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                    event_queue,
+                    {"type": "title_failed", "message": "Failed to generate title"},
                 )
 
         # Collect all errors for persistence

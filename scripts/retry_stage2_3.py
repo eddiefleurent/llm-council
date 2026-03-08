@@ -106,7 +106,9 @@ async def retry(conversation_id: str) -> None:
     errors = {"stage1": stage1_errors, "stage2": stage2_errors, "stage3": stage3_errors}
     msg["stage2"] = stage2_results
     msg["stage3"] = stage3_result
-    msg["errors"] = errors if any([stage1_errors, stage2_errors, stage3_errors]) else None
+    msg["errors"] = (
+        errors if any([stage1_errors, stage2_errors, stage3_errors]) else None
+    )
 
     with data_path.open("w") as f:
         json.dump(convo, f, indent=2)

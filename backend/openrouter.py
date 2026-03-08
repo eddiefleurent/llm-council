@@ -131,7 +131,7 @@ async def query_model(
                         err = {"message": str(err)}
                     try:
                         err_code = int(err.get("code", 500))
-                    except (TypeError, ValueError):
+                    except TypeError, ValueError:
                         err_code = 500
                     err_msg = err.get("message", "Unknown provider error")
                     if err_code == 401:

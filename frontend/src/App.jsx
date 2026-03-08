@@ -302,7 +302,7 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content, attachment = null) => {
+  const handleSendMessage = async (content, attachment = null, isOutcomeMode = false) => {
     if (activeGenerationConversationId) return;
 
     const effectiveMode = messageMode;
@@ -345,6 +345,9 @@ function App() {
 
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
+      if (isOutcomeMode) {
+        userMessage.is_outcome_mode = true;
+      }
       if (attachment) {
         userMessage.attachment = {
           filename: attachment.filename,
@@ -541,7 +544,7 @@ function App() {
             default:
               console.log('Unknown event type:', eventType);
           }
-        }, 'council', attachment);
+        }, 'council', attachment, isOutcomeMode);
       }
     } catch (error) {
       console.error('Failed to send message:', error);

@@ -178,8 +178,10 @@ export const api = {
    * @param {string} conversationId - The conversation ID
    * @param {string} content - The message content
    * @param {string} mode - "council" (full 3-stage) or "chairman" (direct chairman only)
+   * @param {Object} attachment - Optional attachment payload
+   * @param {boolean} isOutcomeMode - Whether to frame the prompt as an outcome
    */
-  async sendMessage(conversationId, content, mode = 'council', attachment = null) {
+  async sendMessage(conversationId, content, mode = 'council', attachment = null, isOutcomeMode = false) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
@@ -187,7 +189,7 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content, mode, attachment }),
+        body: JSON.stringify({ content, mode, attachment, is_outcome_mode: isOutcomeMode }),
       }
     );
     if (!response.ok) {
@@ -216,7 +218,8 @@ export const api = {
     content,
     onEvent,
     mode = 'council',
-    attachment = null
+    attachment = null,
+    isOutcomeMode = false
   ) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
@@ -225,7 +228,7 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content, mode, attachment }),
+        body: JSON.stringify({ content, mode, attachment, is_outcome_mode: isOutcomeMode }),
       }
     );
 
@@ -276,6 +279,34 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to get conversation config');
     }
+    return response.json();
+  },
+
+  /**
+   * Chat with the Chairman in the Prompt Lab sandbox.
+   * @param {Array} messages - List of message objects {role, content}
+   * @param {string} chairmanModel - Optional chairman model ID
+   */
+  async promptLabChat(messages, chairmanModel = null) {
+    const response = await fetch(`${API_BASE}/api/prompt-lab/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages, chairman_model: chairmanModel }),
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'Prompt Lab chat failed';
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || errorMessage;
+      } catch {
+        // Fallback
+      }
+      throw new Error(errorMessage);
+    }
+
     return response.json();
   },
 

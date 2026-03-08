@@ -16,6 +16,18 @@ STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accura
 - Practical usefulness (weight 10%): Is it actionable and specific enough for the user?
 - Safety/uncertainty handling (weight 5%): Does it avoid overclaiming and call out uncertainty when needed?"""
 
+PROMPT_LAB_SYSTEM_PROMPT = """You are the Lead Architect of the Outcome-Based Prompt Lab. Your goal is to help the user craft a prompt that focuses on the DESIRED OUTCOME rather than just a simple question.
+
+As the Hitchhiker's Guide to the Galaxy teaches us, it's not about the answer, but asking the right question.
+
+Your role:
+1. Help the user articulate the specific, measurable outcome they want to achieve.
+2. Suggest improvements to their prompt to reduce ambiguity.
+3. Encourage framing the prompt in a way that minimizes the influence of the question's phrasing on the council's answers.
+4. When you think the prompt is ready, summarize it as a clear "OUTCOME" statement.
+
+Be interrogative, insightful, and focused on clarity."""
+
 
 def _normalize_council_models(council_models: list[str] | None) -> list[str]:
     """Resolve council models from input or configured defaults."""
@@ -780,6 +792,7 @@ async def run_full_council(
     council_models: list[str] | None = None,
     chairman_model: str | None = None,
     web_search_enabled: bool | None = None,
+    is_outcome_mode: bool = False,
 ) -> tuple[list, list, dict, dict]:
     """
     Run the complete 3-stage council process with conversation context.
@@ -789,6 +802,7 @@ async def run_full_council(
         council_models: Optional list of model IDs for the council (defaults to configured)
         chairman_model: Optional model ID for the chairman (defaults to configured)
         web_search_enabled: Optional flag to enable web search (defaults to configured)
+        is_outcome_mode: Whether to frame the prompt as an outcome to reduce question bias
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
@@ -839,6 +853,14 @@ async def run_full_council(
 
     # Extract current query from messages
     current_query = messages[-1]["content"]
+
+    # If outcome mode is enabled, re-frame the messages for the council
+    if is_outcome_mode:
+        messages = list(messages)  # Copy to avoid mutating original
+        messages[-1] = {
+            "role": "user",
+            "content": f"DESIRED OUTCOME: {current_query}\n\nPlease provide the best response to achieve this outcome, focusing on the result rather than the framing of the request.",
+        }
 
     # Stage 1: Collect individual responses (with full context)
     stage1_results, stage1_errors = await stage1_collect_responses(
