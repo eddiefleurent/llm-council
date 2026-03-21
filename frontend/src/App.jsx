@@ -308,6 +308,7 @@ function App() {
     const effectiveMode = messageMode;
     let conversationId = currentConversationId;
     let generationStarted = false;
+    let receivedTerminalEvent = false;
 
     try {
       // If in draft mode, create the conversation first
@@ -408,6 +409,7 @@ function App() {
               break;
 
             case 'complete':
+              receivedTerminalEvent = true;
               loadConversations();
               maybeSyncConversationAfterBackgroundStream(conversationId);
               setActiveGenerationConversationId((prev) =>
@@ -416,6 +418,7 @@ function App() {
               break;
 
             case 'error':
+              receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
@@ -520,6 +523,7 @@ function App() {
               break;
 
             case 'complete':
+              receivedTerminalEvent = true;
               // Stream complete, reload conversations list
               loadConversations();
               maybeSyncConversationAfterBackgroundStream(conversationId);
@@ -529,6 +533,7 @@ function App() {
               break;
 
             case 'error':
+              receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
@@ -542,6 +547,18 @@ function App() {
               console.log('Unknown event type:', eventType);
           }
         }, 'council', attachment);
+      }
+
+      if (!receivedTerminalEvent && conversationId) {
+        // Stream can terminate without a terminal event on mobile/background transitions.
+        // Force a state sync so the UI does not stay stuck in "response in progress".
+        loadConversations();
+        if (currentConversationIdRef.current === conversationId) {
+          loadConversation(conversationId);
+        }
+        setActiveGenerationConversationId((prev) =>
+          prev === conversationId ? null : prev
+        );
       }
     } catch (error) {
       console.error('Failed to send message:', error);
