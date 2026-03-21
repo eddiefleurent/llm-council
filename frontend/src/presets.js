@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-02-18.
+ * All model IDs were validated against the OpenRouter API on 2026-03-21.
  */
 export const MODEL_PRESETS = [
   {
@@ -20,9 +20,9 @@ export const MODEL_PRESETS = [
     icon: '⭐',
     council_models: [
       'anthropic/claude-opus-4.6',
-      'openai/gpt-5.2',
+      'openai/gpt-5.4',
       'google/gemini-3.1-pro-preview',
-      'x-ai/grok-4',
+      'x-ai/grok-4.20-multi-agent-beta',
       'deepseek/deepseek-v3.2-speciale',
     ],
     chairman_model: 'anthropic/claude-opus-4.6',
@@ -34,9 +34,9 @@ export const MODEL_PRESETS = [
     icon: '⚖️',
     council_models: [
       'anthropic/claude-sonnet-4.6',
-      'openai/gpt-5.2-chat',
+      'openai/gpt-5.4-mini',
       'google/gemini-3.1-pro-preview',
-      'x-ai/grok-4.1-fast',
+      'x-ai/grok-4.20-multi-agent-beta',
       'moonshotai/kimi-k2.5',
     ],
     chairman_model: 'google/gemini-3.1-pro-preview',
@@ -49,12 +49,12 @@ export const MODEL_PRESETS = [
     council_models: [
       'anthropic/claude-haiku-4.5',
       'z-ai/glm-5',
-      'deepseek/deepseek-v3.2-speciale',
       'moonshotai/kimi-k2.5',
       'google/gemini-3-flash-preview',
-      'minimax/minimax-m2.5',
+      'minimax/minimax-m2.7',
+      'nvidia/nemotron-3-super-120b-a12b',
     ],
-    chairman_model: 'deepseek/deepseek-v3.2-speciale',
+    chairman_model: 'google/gemini-3-flash-preview',
   },
   {
     id: 'large-council',
@@ -63,12 +63,12 @@ export const MODEL_PRESETS = [
     icon: '🏛️',
     council_models: [
       'anthropic/claude-sonnet-4.6',
-      'openai/gpt-5.2-chat',
+      'openai/gpt-5.4',
       'google/gemini-3-flash-preview',
-      'x-ai/grok-4.1-fast',
+      'x-ai/grok-4.20-multi-agent-beta',
       'moonshotai/kimi-k2.5',
-      'deepseek/deepseek-v3.2-speciale',
       'z-ai/glm-5',
+      'nvidia/nemotron-3-super-120b-a12b',
     ],
     chairman_model: 'google/gemini-3.1-pro-preview',
   },
@@ -79,9 +79,9 @@ export const MODEL_PRESETS = [
     icon: '⚡',
     council_models: [
       'anthropic/claude-haiku-4.5',
-      'openai/gpt-5.2-chat',
-      'google/gemini-3-flash-preview',
+      'openai/gpt-5.4-mini',
+      'google/gemini-3.1-flash-lite-preview',
     ],
-    chairman_model: 'google/gemini-3-flash-preview',
+    chairman_model: 'google/gemini-3.1-flash-lite-preview',
   },
 ];
