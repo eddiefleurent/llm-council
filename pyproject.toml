@@ -12,7 +12,7 @@ dependencies = [
     "pydantic>=2.12.5",
     "groq>=1.1.2",
     "python-multipart>=0.0.26",
-    "tenacity>=8.0.0",
+    "tenacity>=9.1.4",
     "pypdf>=6.7.2",
 ]
 
