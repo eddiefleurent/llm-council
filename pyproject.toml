@@ -5,7 +5,7 @@ description = "Your LLM Council"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.136.0",
+    "fastapi>=0.136.1",
     "uvicorn[standard]>=0.44.0",
     "python-dotenv>=1.2.2",
     "httpx>=0.28.1",
