@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-03-21.
+ * All model IDs were validated against the OpenRouter API on 2026-10-04.
  */
 export const MODEL_PRESETS = [
   {
@@ -19,12 +19,12 @@ export const MODEL_PRESETS = [
     description: 'Top-tier models for maximum quality',
     icon: '⭐',
     council_models: [
-      'anthropic/claude-opus-4.6',
-      'openai/gpt-5.4',
+      'anthropic/claude-opus-5.5',
+      'openai/gpt-6-astra',
       'google/gemini-3.1-pro-preview',
-      'x-ai/grok-4.20-multi-agent',
+      'x-ai/grok-4.7',
     ],
-    chairman_model: 'anthropic/claude-opus-4.6',
+    chairman_model: 'anthropic/claude-opus-5.5',
   },
   {
     id: 'balanced',
@@ -32,11 +32,11 @@ export const MODEL_PRESETS = [
     description: 'Great quality at reasonable cost',
     icon: '⚖️',
     council_models: [
-      'anthropic/claude-sonnet-4.6',
-      'openai/gpt-5.4-mini',
-      'google/gemini-3.1-pro-preview',
-      'x-ai/grok-4.20-multi-agent',
-      'moonshotai/kimi-k2.5',
+      'anthropic/claude-sonnet-5.5',
+      'openai/gpt-6.1-sol',
+      'google/gemini-3.8-flash',
+      'x-ai/grok-4.7',
+      'moonshotai/kimi-k3',
     ],
     chairman_model: 'google/gemini-3.1-pro-preview',
   },
@@ -47,13 +47,13 @@ export const MODEL_PRESETS = [
     icon: '💰',
     council_models: [
       'anthropic/claude-haiku-4.5',
-      'z-ai/glm-5',
-      'moonshotai/kimi-k2.5',
-      'google/gemini-3-flash-preview',
-      'minimax/minimax-m2.7',
-      'nvidia/nemotron-3-super-120b-a12b',
+      'z-ai/glm-5.3-flash',
+      'moonshotai/kimi-k3',
+      'google/gemini-3.8-flash',
+      'minimax/minimax-m3',
+      'nvidia/nemotron-3-ultra-550b-a55b',
     ],
-    chairman_model: 'google/gemini-3-flash-preview',
+    chairman_model: 'google/gemini-3.8-flash',
   },
   {
     id: 'large-council',
@@ -61,13 +61,13 @@ export const MODEL_PRESETS = [
     description: 'Seven diverse models for broad consensus',
     icon: '🏛️',
     council_models: [
-      'anthropic/claude-sonnet-4.6',
-      'openai/gpt-5.4',
-      'google/gemini-3-flash-preview',
-      'x-ai/grok-4.20-multi-agent',
-      'moonshotai/kimi-k2.5',
-      'z-ai/glm-5',
-      'nvidia/nemotron-3-super-120b-a12b',
+      'anthropic/claude-sonnet-5.5',
+      'openai/gpt-6-astra',
+      'google/gemini-3.8-flash',
+      'x-ai/grok-4.7',
+      'moonshotai/kimi-k3',
+      'z-ai/glm-5.3',
+      'nvidia/nemotron-3-ultra-550b-a55b',
     ],
     chairman_model: 'google/gemini-3.1-pro-preview',
   },
@@ -78,9 +78,9 @@ export const MODEL_PRESETS = [
     icon: '⚡',
     council_models: [
       'anthropic/claude-haiku-4.5',
-      'openai/gpt-5.4-mini',
-      'google/gemini-3.1-flash-lite-preview',
+      'openai/gpt-6-luna',
+      'google/gemini-3.5-flash-lite',
     ],
-    chairman_model: 'google/gemini-3.1-flash-lite-preview',
+    chairman_model: 'google/gemini-3.5-flash-lite',
   },
 ];
