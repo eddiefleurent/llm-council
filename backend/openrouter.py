@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +26,7 @@ class ModelQueryError:
     message: str
     status_code: int | None = None
     model: str | None = None
+    latency_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -32,11 +34,18 @@ class ModelQueryError:
             "message": self.message,
             "status_code": self.status_code,
             "model": self.model,
+            "latency_seconds": self.latency_seconds,
         }
 
 
-async def query_model(
-    model: str, messages: list[dict[str, str]], timeout: float = 120.0
+async def _query_model(
+    model: str,
+    messages: list[dict[str, str]],
+    timeout: float = 120.0,
+    *,
+    max_tokens: int = 4096,
+    response_format: dict | None = None,
+    context_limit: int = 32000,
 ) -> dict[str, Any] | ModelQueryError:
     """
     Query a single model via OpenRouter API.
@@ -50,6 +59,13 @@ async def query_model(
         Response dict with 'content' and optional 'reasoning_details',
         or ModelQueryError if the request failed
     """
+    started = time.monotonic()
+    # Conservative UTF-8 byte estimate; never silently truncate task evidence.
+    estimated_tokens = sum(len(m["content"].encode("utf-8")) + 8 for m in messages)
+    if estimated_tokens + max_tokens > context_limit:
+        return ModelQueryError(
+            "context_limit", "Input exceeds the configured context budget.", model=model
+        )
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -58,7 +74,12 @@ async def query_model(
     payload = {
         "model": model,
         "messages": messages,
+        "max_tokens": max_tokens,
     }
+
+    if response_format is not None:
+        payload["response_format"] = response_format
+        payload["provider"] = {"require_parameters": True}
 
     for attempt in range(_MAX_ATTEMPTS):
         try:
@@ -131,7 +152,7 @@ async def query_model(
                         err = {"message": str(err)}
                     try:
                         err_code = int(err.get("code", 500))
-                    except (TypeError, ValueError):
+                    except TypeError, ValueError:
                         err_code = 500
                     err_msg = err.get("message", "Unknown provider error")
                     if err_code == 401:
@@ -170,9 +191,24 @@ async def query_model(
 
                 msg = data["choices"][0]["message"]
 
+                content = msg.get("content")
+                if not isinstance(content, str) or not content.strip():
+                    return ModelQueryError(
+                        "empty_response",
+                        "Provider returned no usable text.",
+                        model=model,
+                    )
+                finish_reason = data["choices"][0].get("finish_reason")
                 return {
-                    "content": msg.get("content"),
+                    "content": content,
                     "reasoning_details": msg.get("reasoning_details"),
+                    "annotations": msg.get("annotations") or [],
+                    "usage": data.get("usage") or {},
+                    "generation_id": data.get("id"),
+                    "finish_reason": finish_reason,
+                    "truncated": finish_reason == "length",
+                    "latency_seconds": round(time.monotonic() - started, 3),
+                    "attempts": attempt + 1,
                 }
 
         except httpx.TimeoutException:
@@ -209,8 +245,26 @@ async def query_model(
     )
 
 
+async def query_model(
+    model: str,
+    messages: list[dict[str, str]],
+    timeout: float = 120.0,
+    **kwargs: Any,
+) -> dict[str, Any] | ModelQueryError:
+    """Bound all attempts and retry waits by one total call deadline."""
+    started = time.monotonic()
+    try:
+        async with asyncio.timeout(timeout):
+            result = await _query_model(model, messages, timeout, **kwargs)
+    except TimeoutError:
+        result = ModelQueryError("timeout", "Model call deadline exceeded", model=model)
+    if isinstance(result, ModelQueryError):
+        result.latency_seconds = round(time.monotonic() - started, 3)
+    return result
+
+
 async def query_models_parallel(
-    models: list[str], messages: list[dict[str, str]]
+    models: list[str], messages: list[dict[str, str]], **kwargs: Any
 ) -> dict[str, dict[str, Any] | ModelQueryError]:
     """
     Query multiple models in parallel.
@@ -225,7 +279,7 @@ async def query_models_parallel(
     import asyncio
 
     # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
+    tasks = [query_model(model, messages, **kwargs) for model in models]
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)

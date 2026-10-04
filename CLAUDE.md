@@ -346,14 +346,17 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - SSE events for chairman mode: `chairman_start` → `chairman_complete` → `complete`
 - Frontend displays chairman-only messages with "Chairman Direct" label and green-tinted styling
 
-### Stage 2 Prompt Format
-The Stage 2 prompt is very specific to ensure parseable output:
-```
-1. Return exactly one valid JSON object and nothing else
-2. Use schema: {"final_ranking": ["Response X", "Response Y", ...]}
-3. Include each allowed label exactly once (no ties, no missing/extra labels)
-4. No markdown/code fences or trailing text
-```
+### Evidence review and recovery
+- `reviews.py` owns versioned system policies and strict Pydantic review schemas.
+- Stage 2 returns findings (errors, disagreements, agreement, gaps, unique insights), evidence, resolution status, and optional complete rankings. Unknown labels and partial/duplicate rankings are rejected.
+- Structured outputs are requested only for models advertising `structured_outputs`; local validation applies to every response.
+- Stage 3 gets anonymous candidates, citation annotations, and substantive reviews. Model IDs and ranker identities are omitted from its prompt.
+- All stages receive the same task context, including attachments and history.
+- `run_full_council` is shared by HTTP and SSE, emits the existing stage events, and checkpoints completed stages.
+- `SendMessageRequest.review_mode` is `peer` (default) or `analyst` (chairman performs one review).
+- POST `/api/conversations/{id}/resume` reuses the last saved inputs and completed stages, replaces a failed assistant turn, and is idempotent after completion. A new user turn invalidates the checkpoint.
+- Metadata, source annotations, usage, finish reasons, and latency are persisted. Conversation writes use atomic replacement.
+- See `docs/deliberation.md` for budgets, recovery limitations, and the opt-in comparison harness.
 
 ### Ranking Algorithms
 Two methods available in metadata:
@@ -378,10 +381,9 @@ Two methods available in metadata:
   - Visual count in stage titles: "[3 models queried, 2 successful, 1 failed]"
 
 ### Multi-turn Conversations
-- Stage 1 receives full conversation context
-- Long conversations (>10 messages) get summarized
-- Recent 5 exchanges kept verbatim
-- Stage 2 and 3 use current query only (ranking is per-response)
+- All stages receive the same conversation context.
+- Summarization is triggered by a conservative token budget, preserving recent messages when possible.
+- Every older chunk is summarized with explicit requirements and unresolved questions preserved; oversized failed summaries produce an explicit error instead of silent loss.
 
 ## Important Implementation Details
 
@@ -464,7 +466,7 @@ The project includes a `Makefile` with common development commands:
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend must match allowed origins in `main.py`
 3. **Ranking Parse Failures**: Parser is strict JSON-only — returns empty on invalid JSON (no fallback regex). Failed parses are recorded as `parse_failure` errors in Stage 2.
-4. **Metadata Persistence**: Rankings metadata (label_to_model, aggregate_rankings, tournament_rankings) is ephemeral (not persisted), only in API responses. Errors ARE persisted in conversation files for debugging.
+4. **Metadata Persistence**: Council metadata and errors are persisted on assistant messages; the latest checkpoint is stored as `council_run`.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 
 ## Data Flow Summary
@@ -477,7 +479,7 @@ Build Context (summarize if long conversation)
     ↓
 Stage 1: Parallel queries with context → [responses, errors]
     ↓
-Stage 2: Anonymize → Parallel ranking → [rankings, errors]
+Stage 2: Anonymize → Peer or single analyst evidence review → [reviews, errors]
     ↓
 Calculate Rankings (mean + tournament)
     ↓

@@ -35,7 +35,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
     <div className="stage stage2">
       <div className="stage-header">
         <h3 className="stage-title">
-          Stage 2: Peer Rankings
+          Stage 2: Evidence Review
           {totalQueried > 0 && (
             <span className="model-count">
               {' '}[{totalQueried} models queried, {rankings.length} successful
@@ -72,8 +72,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
 
           <h4>Raw Model Output</h4>
           <p className="stage-description">
-            Each model returns strict JSON with a final ranking over anonymized labels
-            (Response A, B, C, etc.). Below, model names are shown in <strong>bold</strong>
+            Reviewers identify errors, disagreements, gaps, and useful insights using anonymized labels
+            (Response A, B, C, etc.), with optional rankings. Below, model names are shown in <strong>bold</strong>
             for readability, but the original output uses anonymous labels.
           </p>
 

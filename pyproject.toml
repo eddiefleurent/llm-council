@@ -72,6 +72,8 @@ ignore = [
 "tests/**/*.py" = ["S101"]
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 include = ["backend"]
 pythonVersion = "3.14"
 typeCheckingMode = "standard"
