@@ -149,7 +149,7 @@ def get_effective_models(
         chairman_model = DEFAULT_CHAIRMAN_MODEL
     if web_search_enabled is None:
         web_search_enabled = config["web_search_enabled"]
-    elif not isinstance(web_search_enabled, bool):
+    if not isinstance(web_search_enabled, bool):
         web_search_enabled = False
 
     if web_search_enabled:
