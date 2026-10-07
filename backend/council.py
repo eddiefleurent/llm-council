@@ -12,7 +12,7 @@ from .config import (
     get_council_config,
     get_effective_models,
 )
-from .models import get_available_models
+from .models import ModelInfo, get_available_models
 from .openrouter import ModelQueryError, query_model
 from .reviews import (
     PROMPT_VERSION,
@@ -67,7 +67,10 @@ def _index_to_alpha_label(index: int) -> str:
 
 
 async def stage1_collect_responses(
-    messages: list[dict[str, str]], council_models: list[str] | None = None
+    messages: list[dict[str, str]],
+    council_models: list[str] | None = None,
+    *,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -86,13 +89,16 @@ async def stage1_collect_responses(
         f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}"
     )
 
+    if catalog is None:
+        catalog = await _get_model_catalog()
+
     # Query all models in parallel with full conversation context
     async def collect(model):
         return await query_model(
             model,
             messages,
             max_tokens=4096,
-            context_limit=await model_context_limit(model),
+            context_limit=await model_context_limit(model, catalog=catalog),
         )
 
     responses = dict(
@@ -141,6 +147,7 @@ async def stage2_collect_rankings(
     council_models: list[str] | None = None,
     *,
     context: list[dict[str, str]] | None = None,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
     """Review evidence, retaining optional rankings for existing clients."""
     models = _normalize_council_models(council_models)
@@ -161,10 +168,8 @@ async def stage2_collect_rankings(
         *(context or [{"role": "user", "content": user_query}]),
         {"role": "user", "content": prompt},
     ]
-    try:
-        catalog = (await get_available_models()).models_by_id
-    except Exception:
-        catalog = {}
+    if catalog is None:
+        catalog = await _get_model_catalog()
 
     async def review(model):
         info = catalog.get(model.removesuffix(":online"))
@@ -176,7 +181,7 @@ async def stage2_collect_rankings(
             messages,
             max_tokens=4096,
             response_format=review_schema() if supported else None,
-            context_limit=info.context_length if info else 32000,
+            context_limit=await model_context_limit(model, catalog=catalog),
         )
 
     responses = await asyncio.gather(*(review(m) for m in models))
@@ -220,6 +225,7 @@ async def stage3_synthesize_final(
     chairman_model: str | None = None,
     *,
     context: list[dict[str, str]] | None = None,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Synthesize from anonymous candidates and evidence-focused reviews."""
     chairman_model = _normalize_chairman_model(chairman_model)
@@ -243,7 +249,7 @@ async def stage3_synthesize_final(
         chairman_model,
         messages,
         max_tokens=8192,
-        context_limit=await model_context_limit(chairman_model),
+        context_limit=await model_context_limit(chairman_model, catalog=catalog),
     )
     if isinstance(response, ModelQueryError):
         error = response.to_dict()
@@ -255,14 +261,20 @@ async def stage3_synthesize_final(
     return {**response, "model": chairman_model, "response": response["content"]}, []
 
 
-async def model_context_limit(model: str) -> int:
+async def _get_model_catalog() -> dict[str, ModelInfo]:
     try:
-        info = (await get_available_models()).models_by_id.get(
-            model.removesuffix(":online")
-        )
-        return info.context_length if info and info.context_length > 0 else 32000
+        return (await get_available_models()).models_by_id
     except Exception:
-        return 32000
+        return {}
+
+
+async def model_context_limit(
+    model: str, *, catalog: dict[str, ModelInfo] | None = None
+) -> int:
+    if catalog is None:
+        catalog = await _get_model_catalog()
+    info = catalog.get(model.removesuffix(":online"))
+    return info.context_length if info and info.context_length > 0 else 32000
 
 
 def parse_ranking_from_text(
@@ -748,6 +760,15 @@ async def run_full_council(
     chairman = config["chairman_model"]
     current = messages[-1]["content"]
     active_stage = "stage1"
+    catalog: dict[str, ModelInfo] | None = None
+
+    async def catalog_for_run() -> dict[str, ModelInfo]:
+        nonlocal catalog
+        # Empty means discovery failed; reuse the fallback for this run.
+        # Resolve lazily so a completed resume makes no discovery calls.
+        if catalog is None:
+            catalog = await _get_model_catalog()
+        return catalog
 
     def persist():
         if save_checkpoint:
@@ -766,7 +787,9 @@ async def run_full_council(
                 (
                     state["stage1"],
                     state["errors"]["stage1"],
-                ) = await stage1_collect_responses(messages, models)
+                ) = await stage1_collect_responses(
+                    messages, models, catalog=await catalog_for_run()
+                )
                 persist()
             await emit(
                 {
@@ -793,7 +816,11 @@ async def run_full_council(
                         state["label_to_model"],
                         state["errors"]["stage2"],
                     ) = await stage2_collect_rankings(
-                        current, state["stage1"], reviewers, context=messages
+                        current,
+                        state["stage1"],
+                        reviewers,
+                        context=messages,
+                        catalog=await catalog_for_run(),
                     )
                     persist()
                 mapping = state["label_to_model"]
@@ -826,6 +853,7 @@ async def run_full_council(
                         tournament,
                         chairman,
                         context=messages,
+                        catalog=await catalog_for_run(),
                     )
                     persist()
     except TimeoutError:

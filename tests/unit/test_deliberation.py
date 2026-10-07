@@ -131,10 +131,12 @@ async def test_failed_synthesis_resume_reuses_completed_stages(
     assert len(calls) == 4
 
 
-async def test_deadline_cancels_work_and_preserves_completed_panel(monkeypatch):
+async def test_deadline_cancels_work_and_preserves_completed_panel(
+    monkeypatch, fake_models
+):
     cancelled = asyncio.Event()
 
-    async def stage1(*args):
+    async def stage1(*args, **kwargs):
         return [{"model": "a", "response": "answer"}], []
 
     async def stage2(*args, **kwargs):
@@ -174,3 +176,62 @@ def test_finish_resume_replaces_failed_message_and_new_turn_invalidates_checkpoi
     assert conversation["messages"][-1]["stage3"]["response"] == "success"
     storage.add_user_message("test", "new question")
     assert "council_run" not in storage.get_conversation("test")
+
+
+@pytest.mark.parametrize("discovery_fails", [False, True])
+async def test_run_shares_discovery_across_stages_and_refreshes_next_run(
+    monkeypatch, discovery_fails
+):
+    from backend import models
+
+    discovery_calls = []
+    completions = []
+
+    async def fetch():
+        discovery_calls.append(True)
+        if discovery_fails:
+            raise TimeoutError("Catalog unavailable")
+        return [
+            models.ModelInfo(
+                id=model,
+                name=model,
+                provider="test",
+                context_length=100000,
+                pricing_prompt=0,
+                pricing_completion=0,
+                supported_parameters=["structured_outputs"],
+            )
+            for model in ["a", "b", "c", "d", "e", "f", "g", "chairman"]
+        ]
+
+    async def query(model, messages, **kwargs):
+        completions.append((model, kwargs))
+        assert kwargs["context_limit"] == (32000 if discovery_fails else 100000)
+        if messages[0]["content"] == council.REVIEW_POLICY:
+            assert bool(kwargs["response_format"]) is not discovery_fails
+            return {"content": '{"findings": [], "final_ranking": []}'}
+        return {"content": "answer"}
+
+    monkeypatch.setattr(models, "_cache", models.ModelsCache())
+    monkeypatch.setattr(models, "fetch_models_from_openrouter", fetch)
+    monkeypatch.setattr(council, "query_model", query)
+    inputs = [{"role": "user", "content": "question"}]
+    snapshots = []
+    for run in range(2):
+        # Expire successful discovery too, to check that each run resolves afresh.
+        models._cache.last_updated = None
+        result = await council.run_full_council(
+            inputs,
+            ["a", "b", "c", "d", "e", "f", "g"],
+            "chairman",
+            False,
+            save_checkpoint=snapshots.append,
+        )
+        assert result[3]["status"] == "complete"
+        assert len(discovery_calls) == run + 1
+        assert len(completions) == (run + 1) * 15
+
+    models._cache.last_updated = None
+    await council.run_full_council(inputs, checkpoint=snapshots[-1])
+    assert len(discovery_calls) == 2
+    assert len(completions) == 30
