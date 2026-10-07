@@ -2,6 +2,7 @@
 
 import json
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -159,8 +160,18 @@ def save_conversation(conversation: dict[str, Any]):
     """
     ensure_data_dir()
 
-    with _safe_open_write(conversation["id"]) as f:
-        json.dump(conversation, f, indent=2)
+    destination = _get_safe_path(conversation["id"])
+    # Replace atomically so interruption never leaves half-written JSON.
+    fd, temporary = tempfile.mkstemp(dir=Path(destination).parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(conversation, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def list_conversations() -> list[dict[str, Any]]:
@@ -214,6 +225,7 @@ def add_user_message(
         message["attachment"] = attachment
 
     conversation["messages"].append(message)
+    conversation.pop("council_run", None)
 
     save_conversation(conversation)
 
@@ -405,3 +417,36 @@ def delete_conversation(conversation_id: str) -> bool:
     path = _get_safe_path(conversation_id)
     os.remove(path)
     return True
+
+
+def save_council_checkpoint(conversation_id: str, state: dict):
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError("Conversation not found")
+    conversation["council_run"] = state
+    save_conversation(conversation)
+
+
+def finish_council_run(
+    conversation_id: str, stage1: list, stage2: list, stage3: dict, metadata: dict
+):
+    """Atomically record completion; resumption replaces the failed assistant turn."""
+    conversation = get_conversation(conversation_id)
+    if conversation is None:
+        raise ValueError("Conversation not found")
+    state = conversation["council_run"]
+    message = {
+        "role": "assistant",
+        "stage1": stage1,
+        "stage2": stage2,
+        "stage3": stage3,
+        "errors": metadata["errors"],
+        "metadata": metadata,
+    }
+    index = state.get("assistant_index")
+    if index is None:
+        state["assistant_index"] = len(conversation["messages"])
+        conversation["messages"].append(message)
+    else:
+        conversation["messages"][index] = message
+    save_conversation(conversation)

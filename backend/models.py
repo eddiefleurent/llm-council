@@ -28,6 +28,7 @@ class ModelInfo:
     pricing_completion: float  # per million tokens
     description: str | None = None
     created: int | None = None  # Unix timestamp
+    supported_parameters: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,6 +145,7 @@ def _parse_model(model_data: dict[str, Any]) -> ModelInfo | None:
         pricing_completion=completion_price,
         description=model_data.get("description"),
         created=model_data.get("created"),
+        supported_parameters=model_data.get("supported_parameters") or [],
     )
 
 

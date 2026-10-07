@@ -1,6 +1,10 @@
 """3-stage LLM Council orchestration."""
 
+import asyncio
+import copy
 import json
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .config import (
@@ -8,7 +12,16 @@ from .config import (
     get_council_config,
     get_effective_models,
 )
-from .openrouter import ModelQueryError, query_model, query_models_parallel
+from .models import ModelInfo, get_available_models
+from .openrouter import ModelQueryError, query_model
+from .reviews import (
+    PROMPT_VERSION,
+    REVIEW_POLICY,
+    SYNTHESIS_POLICY,
+    candidate_payload,
+    parse_review,
+    review_schema,
+)
 
 STAGE2_RUBRIC = """- Correctness/Factuality (weight 40%): Is the response accurate and free of clear errors?
 - Completeness (weight 25%): Does it cover key parts of the question and constraints?
@@ -54,7 +67,10 @@ def _index_to_alpha_label(index: int) -> str:
 
 
 async def stage1_collect_responses(
-    messages: list[dict[str, str]], council_models: list[str] | None = None
+    messages: list[dict[str, str]],
+    council_models: list[str] | None = None,
+    *,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -73,8 +89,25 @@ async def stage1_collect_responses(
         f"[Stage 1] Querying {len(council_models)} council models: {', '.join(council_models)}"
     )
 
+    if catalog is None:
+        catalog = await _get_model_catalog()
+
     # Query all models in parallel with full conversation context
-    responses = await query_models_parallel(council_models, messages)
+    async def collect(model):
+        return await query_model(
+            model,
+            messages,
+            max_tokens=4096,
+            context_limit=await model_context_limit(model, catalog=catalog),
+        )
+
+    responses = dict(
+        zip(
+            council_models,
+            await asyncio.gather(*(collect(model) for model in council_models)),
+            strict=True,
+        )
+    )
 
     # Format results, separating successes from errors
     stage1_results = []
@@ -84,7 +117,7 @@ async def stage1_collect_responses(
             stage1_errors.append(response.to_dict())
         elif isinstance(response, dict):
             stage1_results.append(
-                {"model": model, "response": response.get("content", "")}
+                {**response, "model": model, "response": response.get("content", "")}
             )
         else:
             stage1_errors.append(
@@ -112,123 +145,74 @@ async def stage2_collect_rankings(
     user_query: str,
     stage1_results: list[dict[str, Any]],
     council_models: list[str] | None = None,
+    *,
+    context: list[dict[str, str]] | None = None,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
-    """
-    Stage 2: Each model ranks the anonymized responses.
-
-    Args:
-        user_query: The original user query
-        stage1_results: Results from Stage 1
-        council_models: Optional list of model IDs to use (defaults to configured council)
-
-    Returns:
-        Tuple of (rankings list, label_to_model mapping, errors list)
-    """
-    council_models = _normalize_council_models(council_models)
-
-    # Log which models are being queried
-    print(
-        f"[Stage 2] Querying {len(council_models)} council models for rankings: {', '.join(council_models)}"
+    """Review evidence, retaining optional rankings for existing clients."""
+    models = _normalize_council_models(council_models)
+    labels = [
+        f"Response {_index_to_alpha_label(i)}" for i in range(len(stage1_results))
+    ]
+    mapping = dict(zip(labels, [r["model"] for r in stage1_results], strict=True))
+    prompt = (
+        "Candidate answers:\n"
+        + candidate_payload(stage1_results, labels)
+        + "\nAllowed labels: "
+        + json.dumps(labels)
+        + "\nOutput schema: "
+        + json.dumps(review_schema()["json_schema"]["schema"])
     )
+    messages = [
+        {"role": "system", "content": REVIEW_POLICY},
+        *(context or [{"role": "user", "content": user_query}]),
+        {"role": "user", "content": prompt},
+    ]
+    if catalog is None:
+        catalog = await _get_model_catalog()
 
-    # Create anonymized labels for responses (Response A..Z, AA, AB, etc.)
-    labels = [_index_to_alpha_label(i) for i in range(len(stage1_results))]
+    async def review(model):
+        info = catalog.get(model.removesuffix(":online"))
+        supported = (
+            info is not None and "structured_outputs" in info.supported_parameters
+        )
+        return await query_model(
+            model,
+            messages,
+            max_tokens=4096,
+            response_format=review_schema() if supported else None,
+            context_limit=await model_context_limit(model, catalog=catalog),
+        )
 
-    # Create mapping from label to model name
-    label_to_model = {
-        f"Response {label}": result["model"]
-        for label, result in zip(labels, stage1_results, strict=False)
-    }
-
-    # Build the ranking prompt
-    responses_text = "\n\n".join(
-        [
-            f"Response {label}:\n{result['response']}"
-            for label, result in zip(labels, stage1_results, strict=False)
-        ]
-    )
-    allowed_labels_json = json.dumps(list(label_to_model.keys()))
-
-    ranking_prompt = f"""You are an impartial expert judge evaluating anonymized
-responses to one user question.
-
-Question: {user_query}
-
-Here are the responses from different models (anonymized):
-
-{responses_text}
-
-Scoring rubric (use this strictly):
-{STAGE2_RUBRIC}
-
-Evaluation rules:
-- Judge only the content quality, not writing style alone.
-- Penalize hallucinations and unsupported claims heavily.
-- Prefer responses that acknowledge uncertainty over confident wrong claims.
-- Use each response label exactly once in your final ranking (no ties).
-- Keep output concise.
-
-Output requirements (STRICT):
-- Return exactly one valid JSON object and nothing else.
-- Do not include any text before or after the JSON. No preamble, no explanation.
-- Do not use markdown code fences.
-- Use this exact schema:
-  {{"final_ranking": ["Response X", "Response Y", "..."]}}
-- `final_ranking` must be an array containing each allowed label exactly once.
-- Allowed labels for this task are:
-  {allowed_labels_json}
-
-{{"""
-
-    messages = [{"role": "user", "content": ranking_prompt}]
-
-    # Get rankings from all council models in parallel
-    responses = await query_models_parallel(council_models, messages)
-
-    # Format results, separating successes from errors
-    stage2_results = []
-    stage2_errors = []
-    for model, response in responses.items():
+    responses = await asyncio.gather(*(review(m) for m in models))
+    results, errors = [], []
+    for model, response in zip(models, responses, strict=True):
         if isinstance(response, ModelQueryError):
-            stage2_errors.append(response.to_dict())
-        elif isinstance(response, dict):
-            full_text = response.get("content", "")
-            expected_labels = set(label_to_model.keys())
-            parsed = parse_ranking_from_text(full_text, expected_labels=expected_labels)
-            if not parsed:
-                stage2_errors.append(
-                    {
-                        "error_type": "parse_failure",
-                        "message": "Failed to parse ranking from response",
-                        "model": model,
-                        "raw_text": full_text,
-                        "expected_labels": sorted(expected_labels),
-                    }
-                )
-            else:
-                stage2_results.append(
-                    {"model": model, "ranking": full_text, "parsed_ranking": parsed}
-                )
-        else:
-            stage2_errors.append(
+            errors.append(response.to_dict())
+            continue
+        try:
+            parsed = parse_review(response["content"], set(labels))
+            results.append(
                 {
-                    "error_type": "unknown",
-                    "message": "Unknown error occurred",
+                    **response,
                     "model": model,
+                    "ranking": response["content"],
+                    "parsed_ranking": parsed.final_ranking,
+                    "review": parsed.model_dump(),
                 }
             )
-
-    # Log results
-    print(
-        f"[Stage 2] Results: {len(stage2_results)} successful, {len(stage2_errors)} failed"
-    )
-    if stage2_errors:
-        for error in stage2_errors:
-            print(
-                f"  ✗ {error.get('model', 'unknown')}: {error.get('error_type', 'unknown')} - {error.get('message', '')}"
+        except ValueError, TypeError, KeyError:
+            errors.append(
+                {
+                    "error_type": "parse_failure",
+                    "model": model,
+                    "message": "Invalid structured review",
+                    "raw_text": response.get("content"),
+                    "usage": response.get("usage", {}),
+                    "latency_seconds": response.get("latency_seconds"),
+                }
             )
-
-    return stage2_results, label_to_model, stage2_errors
+    return results, mapping, errors
 
 
 async def stage3_synthesize_final(
@@ -239,105 +223,58 @@ async def stage3_synthesize_final(
     aggregate_rankings: list[dict[str, Any]],
     tournament_rankings: list[dict[str, Any]],
     chairman_model: str | None = None,
+    *,
+    context: list[dict[str, str]] | None = None,
+    catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """
-    Stage 3: Chairman synthesizes final response.
-
-    Args:
-        user_query: The original user query
-        stage1_results: Individual model responses from Stage 1
-        stage2_results: Rankings from Stage 2
-        label_to_model: Mapping from anonymized label to model ID
-        aggregate_rankings: Mean-position ranking summary
-        tournament_rankings: Pairwise ranking summary
-        chairman_model: Optional model ID for chairman (defaults to configured
-            chairman)
-
-    Returns:
-        Tuple of (result dict with 'model' and 'response' keys, errors list)
-    """
+    """Synthesize from anonymous candidates and evidence-focused reviews."""
     chairman_model = _normalize_chairman_model(chairman_model)
-
-    # Log chairman model
-    print(f"[Stage 3] Chairman model: {chairman_model}")
-
-    # Build comprehensive context for chairman
-    stage1_text = "\n\n".join(
-        [
-            f"Model: {result['model']}\nResponse: {result['response']}"
-            for result in stage1_results
-        ]
+    labels = list(label_to_model)
+    reviews = [
+        r.get("review", {"final_ranking": r.get("parsed_ranking", [])})
+        for r in stage2_results
+    ]
+    prompt = (
+        "Candidate answers:\n"
+        + candidate_payload(stage1_results, labels)
+        + "\nIndependent reviews (may be incomplete):\n"
+        + json.dumps(reviews)
     )
-
-    ranker_preferences = _format_ranker_preferences(stage2_results, label_to_model)
-    aggregate_text = _format_aggregate_rankings(aggregate_rankings)
-    tournament_text = _format_tournament_rankings(tournament_rankings)
-
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models
-have provided responses to a user's question, and then ranked each other's
-responses.
-
-Original Question: {user_query}
-
-STAGE 1 - Individual Responses:
-{stage1_text}
-
-STAGE 2 - Ranking Signals:
-Per-ranker parsed preferences:
-{ranker_preferences}
-
-Aggregate mean-position ranking:
-{aggregate_text}
-
-Tournament pairwise ranking:
-{tournament_text}
-
-Synthesis policy:
-- Use rankings as weak evidence, not ground truth.
-- Prioritize factual correctness and internal consistency over popularity.
-- If top-ranked responses conflict, resolve explicitly and explain the tradeoff.
-- If uncertainty remains, state it clearly and suggest how to verify.
-- Include concrete steps/examples when useful.
-
-Provide a clear, well-reasoned final answer that represents the council's
-collective wisdom:"""
-
-    messages = [{"role": "user", "content": chairman_prompt}]
-
-    # Query the chairman model
-    response = await query_model(chairman_model, messages)
-
-    stage3_errors = []
+    messages = [
+        {"role": "system", "content": SYNTHESIS_POLICY},
+        *(context or [{"role": "user", "content": user_query}]),
+        {"role": "user", "content": prompt},
+    ]
+    response = await query_model(
+        chairman_model,
+        messages,
+        max_tokens=8192,
+        context_limit=await model_context_limit(chairman_model, catalog=catalog),
+    )
     if isinstance(response, ModelQueryError):
-        error_info = response.to_dict()
-        stage3_errors.append(error_info)
-        print(
-            f"[Stage 3] ✗ Chairman failed: {error_info.get('error_type', 'unknown')} - {error_info.get('message', '')}"
-        )
+        error = response.to_dict()
         return {
             "model": chairman_model,
-            "response": f"Error: {error_info['message']}",
-            "error": error_info,
-        }, stage3_errors
-    if not isinstance(response, dict):
-        stage3_errors.append(
-            {
-                "error_type": "unknown",
-                "message": "Unknown error occurred",
-                "model": chairman_model,
-            }
-        )
-        print("[Stage 3] ✗ Chairman failed: unknown error")
-        return {
-            "model": chairman_model,
-            "response": "Error: Unable to generate final synthesis.",
-        }, stage3_errors
+            "response": "Error: " + error["message"],
+            "error": error,
+        }, [error]
+    return {**response, "model": chairman_model, "response": response["content"]}, []
 
-    print("[Stage 3] ✓ Chairman synthesis complete")
-    return {
-        "model": chairman_model,
-        "response": response.get("content", ""),
-    }, stage3_errors
+
+async def _get_model_catalog() -> dict[str, ModelInfo]:
+    try:
+        return (await get_available_models()).models_by_id
+    except Exception:
+        return {}
+
+
+async def model_context_limit(
+    model: str, *, catalog: dict[str, ModelInfo] | None = None
+) -> int:
+    if catalog is None:
+        catalog = await _get_model_catalog()
+    info = catalog.get(model.removesuffix(":online"))
+    return info.context_length if info and info.context_length > 0 else 32000
 
 
 def parse_ranking_from_text(
@@ -698,7 +635,12 @@ async def chairman_direct_response(
     print(f"[Chairman Direct] Model: {chairman_model}")
 
     # Query the chairman model directly with conversation context
-    response = await query_model(chairman_model, messages)
+    response = await query_model(
+        chairman_model,
+        messages,
+        max_tokens=8192,
+        context_limit=await model_context_limit(chairman_model),
+    )
 
     errors = []
     if isinstance(response, ModelQueryError):
@@ -727,7 +669,11 @@ async def chairman_direct_response(
         }, errors
 
     print("[Chairman Direct] ✓ Response complete")
-    return {"model": chairman_model, "response": response.get("content", "")}, errors
+    return {
+        **response,
+        "model": chairman_model,
+        "response": response.get("content", ""),
+    }, errors
 
 
 async def generate_conversation_title(
@@ -755,7 +701,7 @@ Title:"""
     messages = [{"role": "user", "content": title_prompt}]
 
     # Use chairman model for title generation (configurable)
-    response = await query_model(chairman_model, messages, timeout=30.0)
+    response = await query_model(chairman_model, messages, timeout=10.0, max_tokens=128)
 
     if isinstance(response, ModelQueryError):
         # Fallback to a generic title
@@ -780,131 +726,176 @@ async def run_full_council(
     council_models: list[str] | None = None,
     chairman_model: str | None = None,
     web_search_enabled: bool | None = None,
+    *,
+    review_mode: str = "peer",
+    deadline_seconds: float = 240,
+    checkpoint: dict | None = None,
+    save_checkpoint: Callable[[dict], None] | None = None,
+    on_event: Callable[[dict], Awaitable[None]] | None = None,
 ) -> tuple[list, list, dict, dict]:
-    """
-    Run the complete 3-stage council process with conversation context.
-
-    Args:
-        messages: Full message history in OpenAI format
-        council_models: Optional list of model IDs for the council (defaults to configured)
-        chairman_model: Optional model ID for the chairman (defaults to configured)
-        web_search_enabled: Optional flag to enable web search (defaults to configured)
-
-    Returns:
-        Tuple of (stage1_results, stage2_results, stage3_result, metadata)
-        metadata includes 'errors' list with any failures from all stages
-    """
-    all_errors = []
-
-    # Defensive check: ensure messages is not empty
+    """One bounded, checkpointed pipeline for HTTP, SSE and resumed runs."""
     if not messages:
-        return (
-            [],
-            [],
-            {
-                "model": "error",
-                "response": "No messages provided. Please enter a query.",
-            },
-            {
-                "errors": {
-                    "stage1": [
-                        {"error_type": "validation", "message": "Empty messages list"}
-                    ],
-                    "stage2": [],
-                    "stage3": [],
-                }
-            },
-        )
-
-    # Get effective models (applies :online suffix if web search enabled)
-    effective = get_effective_models(council_models, chairman_model, web_search_enabled)
-    effective_council_models = effective["council_models"]
-    council_models = (
-        _normalize_council_models(effective_council_models)
-        if isinstance(effective_council_models, list)
-        else _normalize_council_models(None)
-    )
-    effective_chairman_model = effective["chairman_model"]
-    chairman_model = (
-        _normalize_chairman_model(effective_chairman_model)
-        if isinstance(effective_chairman_model, str)
-        else _normalize_chairman_model(None)
-    )
-    effective_web_search_enabled = effective.get("web_search_enabled")
-    web_search_enabled = (
-        effective_web_search_enabled
-        if isinstance(effective_web_search_enabled, bool)
-        else False
-    )
-
-    # Extract current query from messages
-    current_query = messages[-1]["content"]
-
-    # Stage 1: Collect individual responses (with full context)
-    stage1_results, stage1_errors = await stage1_collect_responses(
-        messages, council_models
-    )
-    all_errors.extend(stage1_errors)
-
-    # If no models responded successfully, return error with details
-    if not stage1_results:
-        error_summary = _summarize_errors(stage1_errors)
-        return (
-            [],
-            [],
-            {
-                "model": "error",
-                "response": f"All models failed to respond. {error_summary}",
-            },
-            {"errors": {"stage1": stage1_errors, "stage2": [], "stage3": []}},
-        )
-
-    # Stage 2: Collect rankings (uses current query only for ranking prompt)
-    stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
-        current_query, stage1_results, council_models
-    )
-    all_errors.extend(stage2_errors)
-
-    # Calculate aggregate rankings (both methods)
-    aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-    tournament_rankings = calculate_tournament_rankings(stage2_results, label_to_model)
-
-    # Stage 3: Synthesize final answer
-    stage3_result, stage3_errors = await stage3_synthesize_final(
-        current_query,
-        stage1_results,
-        stage2_results,
-        label_to_model,
-        aggregate_rankings,
-        tournament_rankings,
-        chairman_model,
-    )
-    all_errors.extend(stage3_errors)
-
-    # Prepare metadata with structured per-stage errors
-    metadata = {
-        "label_to_model": label_to_model,
-        "aggregate_rankings": aggregate_rankings,
-        "tournament_rankings": tournament_rankings,
-        "council_models": council_models,
-        "chairman_model": chairman_model,
-        "web_search_enabled": web_search_enabled,
-        "errors": {
-            "stage1": stage1_errors,
-            "stage2": stage2_errors,
-            "stage3": stage3_errors,
+        raise ValueError("No messages provided")
+    if review_mode not in ("peer", "analyst"):
+        raise ValueError("Unknown review mode")
+    started = time.monotonic()
+    state = (
+        copy.deepcopy(checkpoint)
+        if checkpoint
+        else {
+            "messages": messages,
+            "config": get_effective_models(
+                council_models, chairman_model, web_search_enabled
+            ),
+            "review_mode": review_mode,
+            "prompt_version": PROMPT_VERSION,
+            "errors": {"stage1": [], "stage2": [], "stage3": []},
         }
-        if any([stage1_errors, stage2_errors, stage3_errors])
-        else None,
+    )
+    if state["prompt_version"] != PROMPT_VERSION:
+        raise ValueError("Checkpoint prompt version is no longer supported")
+    messages = state["messages"]
+    config = state["config"]
+    models = config["council_models"]
+    chairman = config["chairman_model"]
+    current = messages[-1]["content"]
+    active_stage = "stage1"
+    catalog: dict[str, ModelInfo] | None = None
+
+    async def catalog_for_run() -> dict[str, ModelInfo]:
+        nonlocal catalog
+        # Empty means discovery failed; reuse the fallback for this run.
+        # Resolve lazily so a completed resume makes no discovery calls.
+        if catalog is None:
+            catalog = await _get_model_catalog()
+        return catalog
+
+    def persist():
+        if save_checkpoint:
+            save_checkpoint(copy.deepcopy(state))
+
+    async def emit(event):
+        if on_event:
+            await on_event(event)
+
+    state["status"] = "running"
+    persist()
+    try:
+        async with asyncio.timeout(deadline_seconds):
+            if not state.get("stage1"):
+                await emit({"type": "stage1_start"})
+                (
+                    state["stage1"],
+                    state["errors"]["stage1"],
+                ) = await stage1_collect_responses(
+                    messages, models, catalog=await catalog_for_run()
+                )
+                persist()
+            await emit(
+                {
+                    "type": "stage1_complete",
+                    "data": state["stage1"],
+                    "errors": state["errors"]["stage1"],
+                }
+            )
+            if not state["stage1"]:
+                state["stage3"] = {
+                    "model": chairman,
+                    "response": "All models failed to respond.",
+                    "error": True,
+                }
+            else:
+                active_stage = "stage2"
+                if "stage2" not in state:
+                    await emit({"type": "stage2_start"})
+                    reviewers = (
+                        [chairman] if state["review_mode"] == "analyst" else models
+                    )
+                    (
+                        state["stage2"],
+                        state["label_to_model"],
+                        state["errors"]["stage2"],
+                    ) = await stage2_collect_rankings(
+                        current,
+                        state["stage1"],
+                        reviewers,
+                        context=messages,
+                        catalog=await catalog_for_run(),
+                    )
+                    persist()
+                mapping = state["label_to_model"]
+                aggregate = calculate_aggregate_rankings(state["stage2"], mapping)
+                tournament = calculate_tournament_rankings(state["stage2"], mapping)
+                await emit(
+                    {
+                        "type": "stage2_complete",
+                        "data": state["stage2"],
+                        "errors": state["errors"]["stage2"],
+                        "metadata": {
+                            "label_to_model": mapping,
+                            "aggregate_rankings": aggregate,
+                            "tournament_rankings": tournament,
+                        },
+                    }
+                )
+                active_stage = "stage3"
+                if not state.get("stage3") or state["stage3"].get("error"):
+                    await emit({"type": "stage3_start"})
+                    (
+                        state["stage3"],
+                        state["errors"]["stage3"],
+                    ) = await stage3_synthesize_final(
+                        current,
+                        state["stage1"],
+                        state["stage2"],
+                        mapping,
+                        aggregate,
+                        tournament,
+                        chairman,
+                        context=messages,
+                        catalog=await catalog_for_run(),
+                    )
+                    persist()
+    except TimeoutError:
+        error = {
+            "error_type": "deadline",
+            "message": "Council deadline exceeded; completed stages can be resumed.",
+            "stage": active_stage,
+        }
+        state["errors"][active_stage] = [error]
+        state["stage3"] = {
+            "model": chairman,
+            "response": error["message"],
+            "error": error,
+        }
+    state["status"] = "failed" if state["stage3"].get("error") else "complete"
+    state["latency_seconds"] = round(time.monotonic() - started, 3)
+    persist()
+    mapping = state.get("label_to_model", {})
+    metadata = {
+        **config,
+        "prompt_version": PROMPT_VERSION,
+        "review_mode": state["review_mode"],
+        "label_to_model": mapping,
+        "errors": state["errors"],
+        "status": state["status"],
+        "aggregate_rankings": calculate_aggregate_rankings(
+            state.get("stage2", []), mapping
+        ),
+        "tournament_rankings": calculate_tournament_rankings(
+            state.get("stage2", []), mapping
+        ),
+        "latency_seconds": state["latency_seconds"],
     }
-
-    # Final summary
-    total_errors = len(all_errors)
-    print(f"[Council] Complete! Total errors: {total_errors}")
-    if total_errors > 0:
-        print(f"[Council] ⚠ {total_errors} model(s) failed during the process")
-
-    return stage1_results, stage2_results, stage3_result, metadata
+    await emit(
+        {
+            "type": "stage3_complete",
+            "data": state["stage3"],
+            "errors": state["errors"]["stage3"],
+            "metadata": metadata,
+        }
+    )
+    return state.get("stage1", []), state.get("stage2", []), state["stage3"], metadata
 
 
 def _summarize_errors(errors: list[dict[str, Any]]) -> str:

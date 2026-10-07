@@ -240,6 +240,12 @@ Both ranking methods appear in the metadata, and the Chairman sees both when syn
 
 ## Changelog
 
+### Evidence-focused council reviews
+- Reviews now identify factual errors, disagreements, missing requirements, and useful minority insights.
+- Follow-up context and attachments reach every council stage.
+- Failed council runs can resume from saved stages through the API; a single-analyst review mode is available for comparison.
+- See [backend deliberation and evaluation](docs/deliberation.md) for API usage and quality comparisons.
+
 Major improvements since forking from [karpathy/llm-council](https://github.com/karpathy/llm-council):
 
 ### 🎨 UI/UX Enhancements

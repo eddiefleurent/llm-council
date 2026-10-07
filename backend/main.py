@@ -22,16 +22,11 @@ from .config import (
     get_council_config,
     save_council_config,
 )
-from .context import build_context_messages
+from .context import ContextBudgetError, build_context_messages
 from .council import (
-    calculate_aggregate_rankings,
-    calculate_tournament_rankings,
     chairman_direct_response,
     generate_conversation_title,
     run_full_council,
-    stage1_collect_responses,
-    stage2_collect_rankings,
-    stage3_synthesize_final,
 )
 from .file_ingestion import (
     AttachmentPayload,
@@ -44,6 +39,7 @@ from .models import (
     get_models_grouped_by_provider,
     validate_model_ids,
 )
+from .reviews import PROMPT_VERSION
 from .transcription import GroqNotConfiguredError, transcribe_audio
 
 logger = logging.getLogger(__name__)
@@ -99,6 +95,7 @@ class SendMessageRequest(BaseModel):
     mode: Literal["council", "chairman"] = (
         "council"  # "council" (full 3-stage) or "chairman" (direct chairman only)
     )
+    review_mode: Literal["peer", "analyst"] = "peer"
     attachment: AttachmentPayload | None = None
 
     @model_validator(mode="after")
@@ -654,7 +651,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                         title = await title_task
                         storage.update_conversation_title(conversation_id, title)
                     except Exception:
-                        logger.exception("Failed to generate or update conversation title")
+                        logger.exception(
+                            "Failed to generate or update conversation title"
+                        )
                 return {
                     "mode": "chairman",
                     "stage3": result,
@@ -662,19 +661,25 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                 }
 
             # Full council mode
-            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+            (
+                stage1_results,
+                stage2_results,
+                stage3_result,
+                metadata,
+            ) = await run_full_council(
                 messages,
                 council_models=council_models,
                 chairman_model=chairman_model,
                 web_search_enabled=web_search_enabled,
+                review_mode=request.review_mode,
+                save_checkpoint=lambda state: storage.save_council_checkpoint(
+                    conversation_id, state
+                ),
             )
 
-            # Extract structured errors directly from metadata
-            errors = metadata.get("errors") or {"stage1": [], "stage2": [], "stage3": []}
-
             # Add assistant message with all stages and errors
-            storage.add_assistant_message(
-                conversation_id, stage1_results, stage2_results, stage3_result, errors
+            storage.finish_council_run(
+                conversation_id, stage1_results, stage2_results, stage3_result, metadata
             )
 
             if title_task:
@@ -692,12 +697,56 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
                 "stage3": stage3_result,
                 "metadata": metadata,
             }
+        except ContextBudgetError as exc:
+            if title_task is not None and not title_task.done():
+                title_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await title_task
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         except Exception:
             if title_task is not None and not title_task.done():
                 title_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await title_task
             raise
+    finally:
+        async with generations_lock:
+            active_generations.discard(conversation_id)
+
+
+@app.post("/api/conversations/{conversation_id}/resume")
+async def resume_council(conversation_id: str):
+    """Resume the latest council turn using its saved inputs and completed stages."""
+    async with generations_lock:
+        if conversation_id in active_generations:
+            raise HTTPException(status_code=409, detail="Generation already active")
+        conversation = storage.get_conversation(conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        checkpoint = conversation.get("council_run")
+        if not checkpoint:
+            raise HTTPException(status_code=409, detail="No council run to resume")
+        if checkpoint.get("prompt_version") != PROMPT_VERSION:
+            raise HTTPException(
+                status_code=409, detail="Checkpoint uses an unsupported prompt version"
+            )
+        active_generations.add(conversation_id)
+    try:
+        stage1, stage2, stage3, metadata = await run_full_council(
+            checkpoint["messages"],
+            checkpoint=checkpoint,
+            save_checkpoint=lambda state: storage.save_council_checkpoint(
+                conversation_id, state
+            ),
+        )
+        storage.finish_council_run(conversation_id, stage1, stage2, stage3, metadata)
+        return {
+            "mode": "council",
+            "stage1": stage1,
+            "stage2": stage2,
+            "stage3": stage3,
+            "metadata": metadata,
+        }
     finally:
         async with generations_lock:
             active_generations.discard(conversation_id)
@@ -778,6 +827,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 attachment_payload,
                 is_first_message,
                 event_queue,
+                request.review_mode,
             )
         )
         _attach_active_generation_cleanup(worker_task, conversation_id=conversation_id)
@@ -946,7 +996,8 @@ async def _run_chairman_stream_worker(
                 logger.exception("Failed to generate or update conversation title")
                 # Swallow error to avoid aborting the main success path
                 await _emit_stream_event(
-                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                    event_queue,
+                    {"type": "title_failed", "message": "Failed to generate title"},
                 )
 
         # Persist chairman message
@@ -955,7 +1006,7 @@ async def _run_chairman_stream_worker(
         )
 
         await _emit_stream_event(event_queue, {"type": "complete"})
-    except Exception:
+    except Exception as exc:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
@@ -966,7 +1017,9 @@ async def _run_chairman_stream_worker(
             event_queue,
             {
                 "type": "error",
-                "message": "An unexpected error occurred. Please try again.",
+                "message": str(exc)
+                if isinstance(exc, ContextBudgetError)
+                else "An unexpected error occurred. Please try again.",
             },
         )
     finally:
@@ -981,6 +1034,7 @@ async def _run_council_stream_worker(
     attachment: dict[str, Any] | None,
     is_first_message: bool,
     event_queue: asyncio.Queue[dict[str, Any] | None],
+    review_mode: str = "peer",
 ):
     """Run full council generation and enqueue stream events."""
     # Initialize title_task before any operation that could raise
@@ -1012,88 +1066,27 @@ async def _run_council_stream_worker(
         chairman_model = conv_config["chairman_model"]
         web_search_enabled = conv_config.get("web_search_enabled", False)
 
-        # Apply :online suffix if web search is enabled
-        if web_search_enabled:
-            from .config import apply_online_variant
+        async def emit(event):
+            await _emit_stream_event(event_queue, event)
 
-            council_models = [apply_online_variant(m) for m in council_models]
-            chairman_model = apply_online_variant(chairman_model)
-
-        # Stage 1: Collect responses with context
-        await _emit_stream_event(event_queue, {"type": "stage1_start"})
-        stage1_results, stage1_errors = await stage1_collect_responses(
-            messages, council_models
-        )
-        await _emit_stream_event(
-            event_queue,
-            {
-                "type": "stage1_complete",
-                "data": stage1_results,
-                "errors": stage1_errors if stage1_errors else None,
-            },
-        )
-
-        # Short-circuit if no successful stage1 results (mirrors run_full_council behavior)
-        if not stage1_results:
-            # Cancel title task if running and await it to prevent warnings
-            if title_task and not title_task.done():
-                title_task.cancel()
-                # Suppress cancellation from awaiting the cancelled title task.
-                with suppress(asyncio.CancelledError):
-                    await title_task
-            await _emit_stream_event(
-                event_queue,
-                {
-                    "type": "error",
-                    "message": "All models failed to respond. Please try again.",
-                    "errors": stage1_errors if stage1_errors else None,
-                },
-            )
-            return
-
-        # Stage 2: Collect rankings
-        await _emit_stream_event(event_queue, {"type": "stage2_start"})
-        stage2_results, label_to_model, stage2_errors = await stage2_collect_rankings(
-            content, stage1_results, council_models
-        )
-        aggregate_rankings = calculate_aggregate_rankings(
-            stage2_results, label_to_model
-        )
-        tournament_rankings = calculate_tournament_rankings(
-            stage2_results, label_to_model
-        )
-        await _emit_stream_event(
-            event_queue,
-            {
-                "type": "stage2_complete",
-                "data": stage2_results,
-                "metadata": {
-                    "label_to_model": label_to_model,
-                    "aggregate_rankings": aggregate_rankings,
-                    "tournament_rankings": tournament_rankings,
-                },
-                "errors": stage2_errors if stage2_errors else None,
-            },
-        )
-
-        # Stage 3: Synthesize final answer
-        await _emit_stream_event(event_queue, {"type": "stage3_start"})
-        stage3_result, stage3_errors = await stage3_synthesize_final(
-            content,
+        (
             stage1_results,
             stage2_results,
-            label_to_model,
-            aggregate_rankings,
-            tournament_rankings,
+            stage3_result,
+            metadata,
+        ) = await run_full_council(
+            messages,
+            council_models,
             chairman_model,
+            web_search_enabled,
+            review_mode=review_mode,
+            on_event=emit,
+            save_checkpoint=lambda state: storage.save_council_checkpoint(
+                conversation_id, state
+            ),
         )
-        await _emit_stream_event(
-            event_queue,
-            {
-                "type": "stage3_complete",
-                "data": stage3_result,
-                "errors": stage3_errors if stage3_errors else None,
-            },
+        storage.finish_council_run(
+            conversation_id, stage1_results, stage2_results, stage3_result, metadata
         )
 
         # Wait for title generation if it was started
@@ -1108,24 +1101,13 @@ async def _run_council_stream_worker(
                 logger.exception("Failed to generate or update conversation title")
                 # Swallow error to avoid aborting the main success path
                 await _emit_stream_event(
-                    event_queue, {"type": "title_failed", "message": "Failed to generate title"}
+                    event_queue,
+                    {"type": "title_failed", "message": "Failed to generate title"},
                 )
-
-        # Collect all errors for persistence
-        errors = {
-            "stage1": stage1_errors if stage1_errors else [],
-            "stage2": stage2_errors if stage2_errors else [],
-            "stage3": stage3_errors if stage3_errors else [],
-        }
-
-        # Save complete assistant message with errors
-        storage.add_assistant_message(
-            conversation_id, stage1_results, stage2_results, stage3_result, errors
-        )
 
         # Send completion event
         await _emit_stream_event(event_queue, {"type": "complete"})
-    except Exception:
+    except Exception as exc:
         # Cancel title task if running to prevent "Task was destroyed but it is pending" warnings
         if title_task and not title_task.done():
             title_task.cancel()
@@ -1137,7 +1119,9 @@ async def _run_council_stream_worker(
             event_queue,
             {
                 "type": "error",
-                "message": "An unexpected error occurred. Please try again.",
+                "message": str(exc)
+                if isinstance(exc, ContextBudgetError)
+                else "An unexpected error occurred. Please try again.",
             },
         )
     finally:

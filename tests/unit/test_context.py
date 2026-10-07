@@ -4,7 +4,6 @@ import pytest
 
 from backend.context import (
     MAX_SUMMARY_CHARS,
-    TRUNCATION_PREFIX,
     build_context_messages,
     format_user_message,
     summarize_older_messages,
@@ -41,32 +40,44 @@ def test_format_user_message_skips_invalid_attachment_payload():
 
 
 @pytest.mark.asyncio
-async def test_summarize_older_messages_truncates_and_keeps_most_recent_text(
-    monkeypatch,
-):
-    captured = {}
+async def test_summarize_older_messages_preserves_every_chunk(monkeypatch):
+    prompts = []
 
-    async def fake_query_model(_model, messages, _timeout=None, **_kwargs):
-        captured["prompt"] = messages[0]["content"]
-        return {"content": "summary"}
+    async def query(_model, messages, **kwargs):
+        prompts.append(messages[0]["content"])
+        return {"content": "memory"}
 
-    monkeypatch.setattr("backend.context.query_model", fake_query_model)
+    monkeypatch.setattr("backend.context.query_model", query)
+    content = "EARLY CONSTRAINT " + "A" * MAX_SUMMARY_CHARS + " LATEST FACT"
+    summary = await summarize_older_messages([{"role": "user", "content": content}])
+    assert summary == "memory\nmemory"
+    assert "EARLY CONSTRAINT" in prompts[0]
+    assert "LATEST FACT" in prompts[-1]
+    assert all("Preserve explicit" in prompt for prompt in prompts)
 
-    long_content = "A" * (MAX_SUMMARY_CHARS + 500)
-    messages = [{"role": "user", "content": long_content}]
 
-    summary = await summarize_older_messages(messages)
+@pytest.mark.asyncio
+async def test_context_budget_compacts_even_short_history(monkeypatch):
+    async def summarize(messages):
+        assert "budget=200" in messages[0]["content"]
+        return "budget=200"
 
-    assert summary == "summary"
-    prompt = captured["prompt"]
-    conversation_section = prompt.split("Conversation:\n", maxsplit=1)[1].split(
-        "\n\nConcise summary:",
-        maxsplit=1,
-    )[0]
-
-    expected_tail = f"User: {long_content}\n\n"
-    assert conversation_section.startswith(TRUNCATION_PREFIX)
-    assert conversation_section.endswith(
-        expected_tail[-(MAX_SUMMARY_CHARS - len(TRUNCATION_PREFIX)) :]
+    monkeypatch.setattr("backend.context.summarize_older_messages", summarize)
+    history = [{"role": "user", "content": "budget=200 " + "x" * 2000}]
+    messages = await build_context_messages(
+        history, "follow-up", max_context_tokens=200
     )
-    assert len(conversation_section) == MAX_SUMMARY_CHARS
+    assert "budget=200" in messages[0]["content"]
+    assert messages[-1]["content"] == "follow-up"
+
+
+@pytest.mark.asyncio
+async def test_context_budget_does_not_silently_drop_failed_summary(monkeypatch):
+    async def summarize(messages):
+        return messages[0]["content"]
+
+    monkeypatch.setattr("backend.context.summarize_older_messages", summarize)
+    with pytest.raises(ValueError, match="context budget"):
+        await build_context_messages(
+            [{"role": "user", "content": "x" * 2000}], "q", max_context_tokens=200
+        )
