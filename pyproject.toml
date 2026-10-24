@@ -13,7 +13,7 @@ dependencies = [
     "groq>=1.7.0",
     "python-multipart>=0.0.32",
     "tenacity>=9.2.1",
-    "pypdf>=6.20.1",
+    "pypdf>=6.21.1",
 ]
 
 [project.optional-dependencies]
