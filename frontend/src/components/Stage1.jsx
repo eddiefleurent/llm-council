@@ -15,6 +15,7 @@ export default function Stage1({ responses, errors }) {
 
   const totalQueried = responses.length + (errors?.length || 0);
   const hasFailed = errors && errors.length > 0;
+  const activeIndex = Math.min(activeTab, responses.length - 1);
 
   return (
     <div className="stage stage1">
@@ -56,7 +57,7 @@ export default function Stage1({ responses, errors }) {
           {responses.map((resp, index) => (
             <button
               key={index}
-              className={`tab ${activeTab === index ? 'active' : ''}`}
+              className={`tab ${activeIndex === index ? 'active' : ''}`}
               onClick={() => setActiveTab(index)}
             >
               {getModelDisplayName(resp.model)}
@@ -68,16 +69,16 @@ export default function Stage1({ responses, errors }) {
       {!isCollapsed && (
         <div className="tab-content">
           <div className="response-header">
-            <div className="model-name" title={responses[activeTab].model}>
-              {getModelDisplayName(responses[activeTab].model)}
+            <div className="model-name" title={responses[activeIndex].model}>
+              {getModelDisplayName(responses[activeIndex].model)}
             </div>
             <CopyButton
-              text={responses[activeTab].response}
+              text={responses[activeIndex].response}
               label="Copy markdown response"
             />
           </div>
           <div className="response-text markdown-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{responses[activeTab].response}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{responses[activeIndex].response}</ReactMarkdown>
           </div>
         </div>
       )}

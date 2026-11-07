@@ -8,41 +8,50 @@ import './VoiceButton.css';
  */
 export default function VoiceButton({ onTranscription, disabled, disabledReason }) {
   const [isRecording, setIsRecording] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState(null);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const mimeTypeRef = useRef('audio/webm'); // Default fallback
+  const startingRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   // Cleanup on unmount - release microphone stream
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.ondataavailable = null;
         mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current = null;
       }
     };
   }, []);
 
   const startRecording = useCallback(async () => {
-    try {
-      setError(null);
+    if (startingRef.current || isRecording || stoppingRef.current) {
+      return;
+    }
 
+    startingRef.current = true;
+    setIsStarting(true);
+    setError(null);
+
+    let stream;
+    let mediaRecorder;
+    try {
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
         }
       });
-
-      // Store stream for cleanup
-      streamRef.current = stream;
 
       // Create MediaRecorder with best available format (Safari compatibility)
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -51,62 +60,77 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
           ? 'audio/mp4'
           : undefined; // Let browser choose default
 
-      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-
-      // Store actual MIME type from recorder for later use
-      mimeTypeRef.current = mediaRecorder.mimeType || 'audio/webm';
-
-      chunksRef.current = [];
+      mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      const recordingMimeType = mediaRecorder.mimeType || 'audio/webm';
+      const chunks = [];
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
+          chunks.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
         // Stop all tracks to release the microphone
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current === stream) {
           streamRef.current = null;
         }
-
-        if (chunksRef.current.length === 0) {
-          setError('No audio recorded');
-          return;
+        if (mediaRecorderRef.current === mediaRecorder) {
+          mediaRecorderRef.current = null;
         }
 
-        // Create blob from chunks using actual MIME type
-        const audioBlob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
-
-        // Generate filename with correct extension based on MIME type
-        const extension = mimeTypeRef.current.includes('mp4') ? 'mp4' : 'webm';
-        const filename = `recording.${extension}`;
-
-        // Transcribe the audio
-        setIsTranscribing(true);
         try {
-          const result = await api.transcribeAudio(audioBlob, filename);
-          if (result.text && result.text.trim()) {
-            onTranscription(result.text);
+          if (chunks.length === 0) {
+            setError('No audio recorded');
+            return;
           }
-        } catch (err) {
-          console.error('Transcription error:', err);
-          // Check if it's a setup/configuration error (503)
-          if (err.message && err.message.includes('GROQ_API_KEY')) {
-            setShowSetupModal(true);
-          } else {
-            setError(err.message || 'Failed to transcribe audio');
+
+          const audioBlob = new Blob(chunks, { type: recordingMimeType });
+
+          // Generate filename with correct extension based on MIME type
+          const extension = recordingMimeType.includes('mp4') ? 'mp4' : 'webm';
+          const filename = `recording.${extension}`;
+
+          // Transcribe the audio
+          setIsTranscribing(true);
+          try {
+            const result = await api.transcribeAudio(audioBlob, filename);
+            if (result.text && result.text.trim()) {
+              onTranscription(result.text);
+            }
+          } catch (err) {
+            console.error('Transcription error:', err);
+            // Check if it's a setup/configuration error (503)
+            if (err.message && err.message.includes('GROQ_API_KEY')) {
+              setShowSetupModal(true);
+            } else {
+              setError(err.message || 'Failed to transcribe audio');
+            }
+          } finally {
+            setIsTranscribing(false);
           }
         } finally {
-          setIsTranscribing(false);
+          stoppingRef.current = false;
+          setIsStopping(false);
         }
       };
 
+      // Store stream for cleanup
+      streamRef.current = stream;
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (stream && streamRef.current === stream) {
+        streamRef.current = null;
+      }
+      if (mediaRecorder && mediaRecorderRef.current === mediaRecorder) {
+        mediaRecorderRef.current = null;
+      }
       console.error('Failed to start recording:', err);
       if (err.name === 'NotAllowedError') {
         setError('Microphone access denied. Please allow microphone access.');
@@ -115,34 +139,54 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
       } else {
         setError('Failed to access microphone');
       }
+    } finally {
+      startingRef.current = false;
+      setIsStarting(false);
     }
-  }, [onTranscription]);
+  }, [isRecording, onTranscription]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+    if (stoppingRef.current) {
+      return;
+    }
+    const mediaRecorder = mediaRecorderRef.current;
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stoppingRef.current = true;
+      setIsStopping(true);
+      try {
+        mediaRecorder.stop();
+      } catch (err) {
+        stoppingRef.current = false;
+        setIsStopping(false);
+        console.error('Failed to stop recording:', err);
+      }
       setIsRecording(false);
     }
   }, []);
 
   const handleClick = useCallback(() => {
+    if (isStarting || isStopping) {
+      return;
+    }
     if (isRecording) {
       stopRecording();
     } else {
       startRecording();
     }
-  }, [isRecording, startRecording, stopRecording]);
+  }, [isRecording, isStarting, isStopping, startRecording, stopRecording]);
 
   // Determine button state
-  const isDisabled = disabled || isTranscribing;
+  const isDisabled = disabled || isStarting || isStopping || isTranscribing;
   const buttonClass = `voice-button ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`;
   const buttonLabel = disabled && disabledReason
     ? disabledReason
-    : isRecording
-      ? 'Stop recording'
-      : isTranscribing
-        ? 'Transcribing...'
-        : 'Start voice dictation';
+    : isStarting
+      ? 'Starting voice dictation...'
+      : isRecording
+        ? 'Stop recording'
+        : isTranscribing || isStopping
+          ? 'Transcribing...'
+          : 'Start voice dictation';
 
   return (
     <div className="voice-button-container">

@@ -576,6 +576,7 @@ function App() {
         onSendMessage={handleSendMessage}
         isLoading={isCurrentConversationGenerating}
         isSendLocked={isSendLockedByOtherConversation}
+        isMutatingConversations={isMutatingConversations}
         messageMode={messageMode}
         onSetMessageMode={setMessageMode}
         onToggleSidebar={toggleSidebar}

@@ -447,17 +447,29 @@ async def delete_conversations(confirm: bool = False):
         raise HTTPException(
             status_code=400, detail="Pass ?confirm=true to delete all conversations"
         )
-    storage.delete_all_conversations()
+    async with generations_lock:
+        if active_generations:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete conversations while responses are in progress.",
+            )
+        storage.delete_all_conversations()
     return {"status": "ok"}
 
 
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(conversation_id: str):
     """Delete a single conversation from storage."""
-    try:
-        deleted = storage.delete_conversation(conversation_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    async with generations_lock:
+        if conversation_id in active_generations:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete a conversation while its response is in progress.",
+            )
+        try:
+            deleted = storage.delete_conversation(conversation_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -606,17 +618,15 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
             detail=f"Invalid mode: {request.mode}. Must be 'council' or 'chairman'.",
         )
 
-    # Check if conversation exists
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
     async with generations_lock:
         if conversation_id in active_generations:
             raise HTTPException(
                 status_code=409,
                 detail="A response is already being generated for this conversation.",
             )
+        conversation = storage.get_conversation(conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         active_generations.add(conversation_id)
 
     try:
@@ -792,17 +802,15 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
     user_content_for_context, attachment_payload = _normalize_request_input(request)
 
-    # Check if conversation exists
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
     async with generations_lock:
         if conversation_id in active_generations:
             raise HTTPException(
                 status_code=409,
                 detail="A response is already being generated for this conversation.",
             )
+        conversation = storage.get_conversation(conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         active_generations.add(conversation_id)
 
     # Check if this is the first message
