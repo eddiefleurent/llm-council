@@ -19,22 +19,22 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
   const provider = getProviderFromModelId(modelId);
   const colors = getProviderColor(provider);
   const displayName = getModelDisplayName(modelId);
-  
+
   return (
-    <div 
+    <div
       className="model-chip"
-      style={{ 
+      style={{
         borderColor: colors.bg,
         backgroundColor: `${colors.bg}15`
       }}
     >
-      <span 
+      <span
         className="provider-dot"
         style={{ backgroundColor: colors.bg }}
       />
       <span className="chip-name">{displayName}</span>
       {showRemove && (
-        <button 
+        <button
           className="chip-remove"
           aria-label={`Remove model ${displayName}`}
           onClick={(e) => {
@@ -81,7 +81,6 @@ export default function CouncilConfig({
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [selectorMode, setSelectorMode] = useState('council'); // 'council' or 'chairman'
-  const [hasChanges, setHasChanges] = useState(false);
 
   // Load config when opened
   const loadConfig = useCallback(async () => {
@@ -118,20 +117,19 @@ export default function CouncilConfig({
     }
   }, [isDraftMode, draftConfig, conversationId]);
 
+  // Load config when opened. Deferred to a microtask so the synchronous
+  // loading-state updates inside loadConfig don't run in the effect body.
   useEffect(() => {
     if (isOpen) {
-      loadConfig();
+      queueMicrotask(loadConfig);
     }
   }, [isOpen, loadConfig]);
 
   // Track changes against the loaded (persisted) config, not the factory defaults
-  useEffect(() => {
-    const configChanged =
-      JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
-      chairmanModel !== loadedConfig.chairman_model ||
-      webSearchEnabled !== loadedConfig.web_search_enabled;
-    setHasChanges(configChanged);
-  }, [councilModels, chairmanModel, webSearchEnabled, loadedConfig]);
+  const hasChanges =
+    JSON.stringify(councilModels) !== JSON.stringify(loadedConfig.council_models) ||
+    chairmanModel !== loadedConfig.chairman_model ||
+    webSearchEnabled !== loadedConfig.web_search_enabled;
 
   const handleSave = async () => {
     if (councilModels.length === 0) {
@@ -264,7 +262,7 @@ export default function CouncilConfig({
           web_search_enabled: result.web_search_enabled || false
         });
       }
-      // If not persisted, loadedConfig stays as-is, creating hasChanges=true
+      // If not persisted, loadedConfig stays as-is, creating unsaved changes
     } catch {
       setError('Failed to reset configuration');
     } finally {
@@ -376,7 +374,7 @@ export default function CouncilConfig({
                     Models that respond to queries and rank each other
                   </span>
                 </div>
-                
+
                 <div className="models-grid">
                   {councilModels.map((modelId) => (
                     <ModelChip
@@ -386,8 +384,8 @@ export default function CouncilConfig({
                       showRemove={councilModels.length > 1}
                     />
                   ))}
-                  
-                  <button 
+
+                  <button
                     className="add-model-btn"
                     onClick={handleAddCouncilModel}
                   >
@@ -404,7 +402,7 @@ export default function CouncilConfig({
                     Model that synthesizes the final response
                   </span>
                 </div>
-                
+
                 <div className="chairman-select" onClick={handleSelectChairman}>
                   {chairmanModel ? (
                     <ModelChip modelId={chairmanModel} showRemove={false} />
@@ -423,7 +421,7 @@ export default function CouncilConfig({
                     Enable real-time web search for up-to-date information
                   </span>
                 </div>
-                
+
                 <label className="toggle-row">
                   <span className="toggle-label">
                     <span className="toggle-icon">🌐</span>
