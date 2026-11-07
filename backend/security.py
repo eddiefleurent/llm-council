@@ -61,13 +61,6 @@ def get_api_token() -> str:
     return _generated_token
 
 
-def api_token_source() -> str:
-    """Describe where the active API token comes from (for startup logging)."""
-    if os.getenv(API_TOKEN_ENV, "").strip():
-        return f"${API_TOKEN_ENV}"
-    return API_TOKEN_FILE
-
-
 async def require_api_token(request: Request) -> None:
     """Reject /api requests that do not carry the configured bearer token."""
     if not request.url.path.startswith("/api"):
