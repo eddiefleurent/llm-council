@@ -109,6 +109,20 @@ def test_generated_token_is_persisted_with_private_permissions(monkeypatch, tmp_
     assert security.get_api_token() == token
 
 
+def test_login_link_contains_encoded_token(monkeypatch, tmp_path):
+    url_file = tmp_path / "data" / "api_url"
+    monkeypatch.setenv(security.API_TOKEN_ENV, "a+b&c#d")
+    monkeypatch.setattr(security, "API_URL_FILE", str(url_file))
+    monkeypatch.setattr(security, "_generated_token", None)
+
+    path = security.write_login_link("http://localhost:5173")
+
+    assert path == str(url_file)
+    link = url_file.read_text().strip()
+    assert link == "http://localhost:5173/?token=a%2Bb%26c%23d"
+    assert stat.S_IMODE(os.stat(url_file).st_mode) == 0o600
+
+
 async def test_council_size_is_capped(client):
     models = [f"provider/model-{i}" for i in range(security.MAX_COUNCIL_MODELS + 1)]
     response = await client.put(

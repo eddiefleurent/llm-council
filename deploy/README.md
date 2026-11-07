@@ -30,7 +30,7 @@
    docker compose up -d
    ```
 
-5. Open the link printed in the logs (`docker logs llm-council | grep "Open the UI"`).
+5. Open the login link saved to `data/api_url` (`docker exec llm-council cat data/api_url`, or `cat data/api_url` on the host).
    It contains the API token, which the UI then remembers. The token is also in `data/api_token`.
 
 ### API token, CORS, and LAN access

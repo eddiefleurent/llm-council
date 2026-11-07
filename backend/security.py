@@ -3,6 +3,7 @@
 import logging
 import os
 import secrets
+import urllib.parse
 from pathlib import Path
 
 from fastapi import HTTPException, Request
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 API_TOKEN_ENV = "LLM_COUNCIL_API_TOKEN"
 CORS_ORIGINS_ENV = "LLM_COUNCIL_CORS_ORIGINS"
 API_TOKEN_FILE = "data/api_token"
+API_URL_FILE = "data/api_url"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 MAX_COUNCIL_MODELS = 12
 
@@ -79,3 +81,14 @@ async def require_api_token(request: Request) -> None:
             detail="Missing or invalid API token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def write_login_link(frontend_origin: str) -> str:
+    """Persist the one-click UI login link (token included) next to the token."""
+    path = Path(API_URL_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = urllib.parse.quote(get_api_token(), safe="")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(f"{frontend_origin}/?token={token}\n")
+    return str(path)

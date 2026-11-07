@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import urllib.parse
 import uuid
 from contextlib import asynccontextmanager, suppress
 from typing import Any, Literal
@@ -44,9 +43,9 @@ from .reviews import PROMPT_VERSION
 from .security import (
     MAX_COUNCIL_MODELS,
     api_token_source,
-    get_api_token,
     get_cors_origins,
     require_api_token,
+    write_login_link,
 )
 from .transcription import GroqNotConfiguredError, transcribe_audio
 
@@ -72,13 +71,10 @@ async def lifespan(app: FastAPI):
         print(f"  {i}. {model}")
     print(f"\nChairman Model: {config['chairman_model']}")
     origins = get_cors_origins()
-    print(  # codeql[py/clear-text-logging-sensitive-data] generated token is shown to the local operator; file has 0600 perms
-        f"\nAPI token ({api_token_source()}): {get_api_token()}"
-    )
-    encoded = urllib.parse.quote(get_api_token(), safe="")
-    print(  # codeql[py/clear-text-logging-sensitive-data] same one-line UI handoff link
-        f"Open the UI with: {origins[0]}/?token={encoded}"
-    )
+    link_path = write_login_link(origins[0])
+    print(f"\nAPI token is stored in {api_token_source()}")
+    print(f"To open the UI, use the login link in {link_path}")
+    print("  (e.g. `cat data/api_url` or `docker exec llm-council cat data/api_url`)")
     print(f"Allowed CORS origins: {', '.join(origins)}")
     print("=" * 60 + "\n")
     yield
