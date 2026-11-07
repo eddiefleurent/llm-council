@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import urllib.parse
 import uuid
 from contextlib import asynccontextmanager, suppress
 from typing import Any, Literal
@@ -71,8 +72,11 @@ async def lifespan(app: FastAPI):
         print(f"  {i}. {model}")
     print(f"\nChairman Model: {config['chairman_model']}")
     origins = get_cors_origins()
+    # codeql[py/clear-text-logging-sensitive-data] the generated token is
+    # printed for the local operator's convenience (file has 0600 perms)
     print(f"\nAPI token ({api_token_source()}): {get_api_token()}")
-    print(f"Open the UI with: {origins[0]}/?token={get_api_token()}")
+    encoded = urllib.parse.quote(get_api_token(), safe="")
+    print(f"Open the UI with: {origins[0]}/?token={encoded}")
     print(f"Allowed CORS origins: {', '.join(origins)}")
     print("=" * 60 + "\n")
     yield

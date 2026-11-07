@@ -35,6 +35,10 @@ def _load_or_create_token_file() -> str:
     if path.exists():
         token = path.read_text(encoding="utf-8").strip()
         if token:
+            try:
+                os.chmod(path, 0o600)
+            except OSError as e:
+                logger.warning(f"Could not restrict permissions on {path}: {e}")
             return token
     path.parent.mkdir(parents=True, exist_ok=True)
     token = secrets.token_urlsafe(32)
