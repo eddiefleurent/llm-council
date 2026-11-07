@@ -48,14 +48,10 @@ export default function ChatInterface({
     scrollToBottom();
   }, [conversation]);
 
-  const loadConversationConfig = useCallback(async () => {
-    if (!conversation?.id) return;
-
-    // Clear stale config before loading
-    setConversationConfig(null);
+  const loadConversationConfig = useCallback(async (conversationId) => {
     setLoadingConfig(true);
     try {
-      const config = await api.getConversationConfig(conversation.id);
+      const config = await api.getConversationConfig(conversationId);
       setConversationConfig(config);
     } catch (error) {
       console.error('Failed to load conversation config:', error);
@@ -63,11 +59,9 @@ export default function ChatInterface({
     } finally {
       setLoadingConfig(false);
     }
-  }, [conversation?.id]);
+  }, []);
 
   const loadGlobalConfigForDraft = useCallback(async () => {
-    // Clear stale config before loading
-    setConversationConfig(null);
     setLoadingConfig(true);
     try {
       const config = await api.getCouncilConfig();
@@ -84,25 +78,29 @@ export default function ChatInterface({
     }
   }, []);
 
-  // Load conversation config when conversation changes
+  // Draft config comes straight from props; fetched config lives in state.
+  const effectiveConfig = isDraftMode && draftConfig ? draftConfig : conversationConfig;
+
+  // Load conversation config when conversation changes, and reset
+  // per-conversation UI state (attachment, file input). Deferred to a
+  // microtask so the synchronous state updates don't run in the effect body.
   useEffect(() => {
-    setAttachment(null);
-    setAttachmentError('');
-    setIsUploadingAttachment(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    queueMicrotask(() => {
+      setAttachment(null);
+      setAttachmentError('');
+      setIsUploadingAttachment(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    });
 
     if (conversation?.id) {
-      loadConversationConfig();
-    } else if (isDraftMode && draftConfig) {
-      // Use draft config for display
-      setConversationConfig(draftConfig);
-    } else if (isDraftMode) {
+      queueMicrotask(() => loadConversationConfig(conversation.id));
+    } else if (isDraftMode && !draftConfig) {
       // Load global config for draft mode
-      loadGlobalConfigForDraft();
+      queueMicrotask(loadGlobalConfigForDraft);
     } else {
-      setConversationConfig(null);
+      queueMicrotask(() => setConversationConfig(null));
     }
   }, [conversation?.id, isDraftMode, draftConfig, loadConversationConfig, loadGlobalConfigForDraft]);
 
@@ -141,10 +139,10 @@ export default function ChatInterface({
     }
   }, [input]);
 
-  const isWebSearchEnabled = !!conversationConfig?.web_search_enabled;
-  const councilCount = Array.isArray(conversationConfig?.council_models) ? conversationConfig.council_models.length : 0;
-  const hasChairman = !!conversationConfig?.chairman_model;
-  const chairmanName = hasChairman ? getModelDisplayName(conversationConfig.chairman_model) : 'None';
+  const isWebSearchEnabled = !!effectiveConfig?.web_search_enabled;
+  const councilCount = Array.isArray(effectiveConfig?.council_models) ? effectiveConfig.council_models.length : 0;
+  const hasChairman = !!effectiveConfig?.chairman_model;
+  const chairmanName = hasChairman ? getModelDisplayName(effectiveConfig.chairman_model) : 'None';
   const isLocked = isLoading || isUploadingAttachment || isSendLocked;
   const lockReason = isUploadingAttachment
     ? "during upload"
@@ -375,8 +373,8 @@ export default function ChatInterface({
               Chairman
             </button>
           </div>
-          
-          {conversationConfig && !loadingConfig && (
+
+          {effectiveConfig && !loadingConfig && (
             <div className="model-indicator-compact">
               <span className="indicator-label">
                 {isWebSearchEnabled && '🌐 '}
@@ -506,7 +504,7 @@ export default function ChatInterface({
         onClose={() => {
           setShowConfig(false);
           if (conversation?.id) {
-            loadConversationConfig(); // Reload config after closing
+            loadConversationConfig(conversation.id); // Reload config after closing
           } else if (isDraftMode && !draftConfig) {
             // Only reload global config if no custom draft config exists
             loadGlobalConfigForDraft();

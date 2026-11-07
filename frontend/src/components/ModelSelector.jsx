@@ -40,7 +40,7 @@ function formatPrice(price) {
 
 /**
  * Model selector component with provider grouping.
- * 
+ *
  * @param {Object} props
  * @param {boolean} props.isOpen - Whether the selector is open
  * @param {Function} props.onClose - Called when selector is closed
@@ -48,10 +48,10 @@ function formatPrice(price) {
  * @param {string[]} props.selectedModels - Currently selected model IDs (for highlighting)
  * @param {string} props.title - Title for the selector (e.g., "Add Council Member")
  */
-export default function ModelSelector({ 
-  isOpen, 
-  onClose, 
-  onSelect, 
+export default function ModelSelector({
+  isOpen,
+  onClose,
+  onSelect,
   selectedModels = [],
   title = 'Select Model'
 }) {
@@ -60,21 +60,9 @@ export default function ModelSelector({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load providers when opened
-  useEffect(() => {
-    if (isOpen) {
-      loadProviders();
-    }
-  }, [isOpen]);
-
-  // Reset to provider list when closed and reopened
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedProvider(null);
-    }
-  }, [isOpen]);
-
   const loadProviders = async () => {
+    // Always start from the provider grid when (re)loading
+    setSelectedProvider(null);
     setLoading(true);
     setError(null);
     try {
@@ -87,6 +75,14 @@ export default function ModelSelector({
       setLoading(false);
     }
   };
+
+  // Load providers when opened. Deferred to a microtask so the synchronous
+  // state resets inside loadProviders don't run in the effect body.
+  useEffect(() => {
+    if (isOpen) {
+      queueMicrotask(loadProviders);
+    }
+  }, [isOpen]);
 
   const handleProviderClick = (provider) => {
     setSelectedProvider(provider);
@@ -127,7 +123,7 @@ export default function ModelSelector({
           {loading && (
             <div className="loading-state">Loading models...</div>
           )}
-          
+
           {error && (
             <div className="error-state">
               {error}
@@ -143,9 +139,9 @@ export default function ModelSelector({
                   <button
                     key={provider.id}
                     className="provider-btn"
-                    style={{ 
-                      backgroundColor: colors.bg, 
-                      color: colors.text 
+                    style={{
+                      backgroundColor: colors.bg,
+                      color: colors.text
                     }}
                     onClick={() => handleProviderClick(provider)}
                   >
