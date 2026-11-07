@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-10-04.
+ * All model IDs were validated against the OpenRouter API on 2026-11-07.
  */
 export const MODEL_PRESETS = [
   {
@@ -21,7 +21,7 @@ export const MODEL_PRESETS = [
     council_models: [
       'anthropic/claude-opus-5.5',
       'openai/gpt-6-astra',
-      'google/gemini-3.1-pro-preview',
+      'google/gemini-4-argon',
       'x-ai/grok-4.7',
     ],
     chairman_model: 'anthropic/claude-opus-5.5',
@@ -38,7 +38,7 @@ export const MODEL_PRESETS = [
       'x-ai/grok-4.7',
       'moonshotai/kimi-k3',
     ],
-    chairman_model: 'google/gemini-3.1-pro-preview',
+    chairman_model: 'google/gemini-4-argon',
   },
   {
     id: 'budget',
@@ -50,7 +50,7 @@ export const MODEL_PRESETS = [
       'z-ai/glm-5.3-flash',
       'moonshotai/kimi-k3',
       'google/gemini-3.8-flash',
-      'minimax/minimax-m3',
+      'minimax/minimax-m3.1-flash',
       'nvidia/nemotron-3-ultra-550b-a55b',
     ],
     chairman_model: 'google/gemini-3.8-flash',
@@ -69,7 +69,7 @@ export const MODEL_PRESETS = [
       'z-ai/glm-5.3',
       'nvidia/nemotron-3-ultra-550b-a55b',
     ],
-    chairman_model: 'google/gemini-3.1-pro-preview',
+    chairman_model: 'google/gemini-4-argon',
   },
   {
     id: 'speed',

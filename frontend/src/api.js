@@ -7,13 +7,13 @@
 // - Direct access (HTTP or explicit port): Use same hostname but port 8001
 const getApiBase = () => {
   const { protocol, hostname, port } = window.location;
-  
+
   // If we're on HTTPS with default port (443), assume reverse proxy handles /api/* routing
   // This avoids mixed-content issues when Caddy/nginx proxies both frontend and backend
   if (protocol === 'https:' && (port === '' || port === '443')) {
     return '';  // Use relative URLs - same origin
   }
-  
+
   // Direct access (development or Docker without reverse proxy)
   const host = hostname.includes(':') && !hostname.startsWith('[') ? `[${hostname}]` : hostname;
   return `${protocol}//${host}:8001`;
@@ -25,7 +25,7 @@ export const api = {
   // ============================================================================
   // Model Discovery
   // ============================================================================
-  
+
   /**
    * Get all available models grouped by provider.
    * Returns providers sorted with priority providers first.
@@ -266,7 +266,7 @@ export const api = {
       _dispatchSseEvent(buffer, onEvent);
     }
   },
-  
+
   /**
    * Get the configuration for a specific conversation.
    * @param {string} conversationId - The conversation ID

@@ -19,7 +19,7 @@ const RETIRED_FROM_PRESETS = [
   'nvidia/nemotron-3-super-120b-a12b',
 ];
 
-test('presets use the October 2026 model lineup', () => {
+test('presets use the November 2026 model lineup', () => {
   const modelIds = MODEL_PRESETS.flatMap((preset) => [
     ...preset.council_models,
     preset.chairman_model,
@@ -33,6 +33,8 @@ test('presets use the October 2026 model lineup', () => {
   assert.ok(modelIds.includes('anthropic/claude-opus-5.5'));
   assert.ok(modelIds.includes('openai/gpt-6-astra'));
   assert.ok(modelIds.includes('openai/gpt-6-luna'));
+  assert.ok(modelIds.includes('google/gemini-4-argon'));
+  assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
 });
 
 test('flagship preset does not include deepseek', () => {

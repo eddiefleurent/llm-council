@@ -20,13 +20,13 @@ if not OPENROUTER_API_KEY:
 # Default council members - list of OpenRouter model identifiers
 # These are used when no custom council is configured
 DEFAULT_COUNCIL_MODELS = [
-    "google/gemini-3.1-pro-preview",
+    "google/gemini-4-argon",
     "anthropic/claude-opus-5.5",
     "x-ai/grok-4.7",
 ]
 
 # Default chairman model - synthesizes final response
-DEFAULT_CHAIRMAN_MODEL = "google/gemini-3.1-pro-preview"
+DEFAULT_CHAIRMAN_MODEL = "google/gemini-4-argon"
 
 # OpenRouter API endpoint
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -88,7 +88,9 @@ def get_council_config() -> dict[str, Any]:
                     "chairman_model": chairman,
                     "web_search_enabled": web_search_enabled,
                 }
-        except OSError, json.JSONDecodeError:
+        except OSError:
+            pass
+        except json.JSONDecodeError:
             pass
 
     # Return defaults (defensive copies)
