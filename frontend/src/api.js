@@ -7,13 +7,13 @@
 // - Direct access (HTTP or explicit port): Use same hostname but port 8001
 const getApiBase = () => {
   const { protocol, hostname, port } = window.location;
-  
+
   // If we're on HTTPS with default port (443), assume reverse proxy handles /api/* routing
   // This avoids mixed-content issues when Caddy/nginx proxies both frontend and backend
   if (protocol === 'https:' && (port === '' || port === '443')) {
     return '';  // Use relative URLs - same origin
   }
-  
+
   // Direct access (development or Docker without reverse proxy)
   const host = hostname.includes(':') && !hostname.startsWith('[') ? `[${hostname}]` : hostname;
   return `${protocol}//${host}:8001`;
@@ -21,17 +21,73 @@ const getApiBase = () => {
 
 const API_BASE = getApiBase();
 
+const API_TOKEN_STORAGE_KEY = 'llmCouncilApiToken';
+
+// Accept a one-time ?token=... link (printed by the backend at startup),
+// persist it, and strip it from the address bar.
+const captureTokenFromUrl = () => {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get('token');
+  if (!token) return;
+  localStorage.setItem(API_TOKEN_STORAGE_KEY, token);
+  url.searchParams.delete('token');
+  window.history.replaceState(window.history.state, '', url.toString());
+};
+
+captureTokenFromUrl();
+
+let tokenPromptPromise = null;
+
+const promptForToken = () => {
+  if (!tokenPromptPromise) {
+    tokenPromptPromise = Promise.resolve().then(() => {
+      const token = window.prompt(
+        'Enter the LLM Council API token (shown in the backend startup logs and stored in data/api_token):'
+      );
+      tokenPromptPromise = null;
+      const trimmed = token?.trim();
+      if (trimmed) {
+        localStorage.setItem(API_TOKEN_STORAGE_KEY, trimmed);
+      }
+      return trimmed || null;
+    });
+  }
+  return tokenPromptPromise;
+};
+
+const withAuth = (options, token) => {
+  const headers = new Headers(options.headers || {});
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return { ...options, headers };
+};
+
+async function apiFetch(url, options = {}) {
+  const token = localStorage.getItem(API_TOKEN_STORAGE_KEY);
+  const response = await fetch(url, withAuth(options, token));
+  if (response.status !== 401) {
+    return response;
+  }
+  localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  const newToken = await promptForToken();
+  if (!newToken) {
+    return response;
+  }
+  return fetch(url, withAuth(options, newToken));
+}
+
 export const api = {
   // ============================================================================
   // Model Discovery
   // ============================================================================
-  
+
   /**
    * Get all available models grouped by provider.
    * Returns providers sorted with priority providers first.
    */
   async getModels() {
-    const response = await fetch(`${API_BASE}/api/models`);
+    const response = await apiFetch(`${API_BASE}/api/models`);
     if (!response.ok) {
       throw new Error('Failed to fetch models');
     }
@@ -42,7 +98,7 @@ export const api = {
    * Get models for a specific provider.
    */
   async getModelsForProvider(providerId) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/models/${encodeURIComponent(providerId)}`
     );
     if (!response.ok) {
@@ -55,7 +111,7 @@ export const api = {
    * Force refresh the models cache from OpenRouter.
    */
   async refreshModels() {
-    const response = await fetch(`${API_BASE}/api/models/refresh`, {
+    const response = await apiFetch(`${API_BASE}/api/models/refresh`, {
       method: 'POST',
     });
     if (!response.ok) {
@@ -72,7 +128,7 @@ export const api = {
    * Get the current council configuration.
    */
   async getCouncilConfig() {
-    const response = await fetch(`${API_BASE}/api/council/config`);
+    const response = await apiFetch(`${API_BASE}/api/council/config`);
     if (!response.ok) {
       throw new Error('Failed to get council config');
     }
@@ -83,7 +139,7 @@ export const api = {
    * Update the council configuration.
    */
   async updateCouncilConfig(councilModels, chairmanModel, webSearchEnabled = false) {
-    const response = await fetch(`${API_BASE}/api/council/config`, {
+    const response = await apiFetch(`${API_BASE}/api/council/config`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -116,7 +172,7 @@ export const api = {
    * Reset council configuration to defaults.
    */
   async resetCouncilConfig() {
-    const response = await fetch(`${API_BASE}/api/council/config/reset`, {
+    const response = await apiFetch(`${API_BASE}/api/council/config/reset`, {
       method: 'POST',
     });
     if (!response.ok) {
@@ -133,7 +189,7 @@ export const api = {
    * List all conversations.
    */
   async listConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations`);
+    const response = await apiFetch(`${API_BASE}/api/conversations`);
     if (!response.ok) {
       throw new Error('Failed to list conversations');
     }
@@ -145,7 +201,7 @@ export const api = {
    * @param {Object} config - Optional config {council_models, chairman_model, web_search_enabled}
    */
   async createConversation(config = null) {
-    const response = await fetch(`${API_BASE}/api/conversations`, {
+    const response = await apiFetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -162,7 +218,7 @@ export const api = {
    * Get a specific conversation.
    */
   async getConversation(conversationId) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}`
     );
     if (!response.ok) {
@@ -180,7 +236,7 @@ export const api = {
    * @param {string} mode - "council" (full 3-stage) or "chairman" (direct chairman only)
    */
   async sendMessage(conversationId, content, mode = 'council', attachment = null) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
         method: 'POST',
@@ -218,7 +274,7 @@ export const api = {
     mode = 'council',
     attachment = null
   ) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
@@ -266,14 +322,14 @@ export const api = {
       _dispatchSseEvent(buffer, onEvent);
     }
   },
-  
+
   /**
    * Get the configuration for a specific conversation.
    * @param {string} conversationId - The conversation ID
    * @returns {Promise<{council_models: string[], chairman_model: string, web_search_enabled: boolean}>}
    */
   async getConversationConfig(conversationId) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/config`
     );
     if (!response.ok) {
@@ -289,7 +345,7 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE}/api/files/extract`, {
+    const response = await apiFetch(`${API_BASE}/api/files/extract`, {
       method: 'POST',
       body: formData,
     });
@@ -316,7 +372,7 @@ export const api = {
    * @param {boolean} webSearchEnabled - Whether web search is enabled
    */
   async updateConversationConfig(conversationId, councilModels, chairmanModel, webSearchEnabled = false) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}/config`,
       {
         method: 'PUT',
@@ -352,7 +408,7 @@ export const api = {
    * Requires confirm=true query parameter to prevent accidental deletion.
    */
   async deleteAllConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations?confirm=true`, {
+    const response = await apiFetch(`${API_BASE}/api/conversations?confirm=true`, {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -366,7 +422,7 @@ export const api = {
    * @param {string} conversationId - The conversation ID
    */
   async deleteConversation(conversationId) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/conversations/${conversationId}`,
       {
         method: 'DELETE',
@@ -392,7 +448,7 @@ export const api = {
     const formData = new FormData();
     formData.append('audio', audioBlob, filename);
 
-    const response = await fetch(`${API_BASE}/api/transcribe`, {
+    const response = await apiFetch(`${API_BASE}/api/transcribe`, {
       method: 'POST',
       body: formData,
     });

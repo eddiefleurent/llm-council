@@ -39,6 +39,7 @@ RUN mkdir -p /app/data
 EXPOSE 8001 5173
 
 # Start both backend and frontend
-# Backend: uvicorn on 8001
+# Backend: uvicorn on 8001 (binds all container interfaces so Docker port
+# publishing works; every /api route requires the API bearer token)
 # Frontend: Python http.server on 5173
 CMD ["sh", "-c", "uv run uvicorn backend.main:app --host 0.0.0.0 --port 8001 & python3 -m http.server 5173 --bind 0.0.0.0 --directory frontend/dist"]

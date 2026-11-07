@@ -74,7 +74,8 @@ nano deploy/.env  # Add your OPENROUTER_API_KEY
 # Start the container
 docker compose up -d
 
-# Access at http://localhost:5173
+# Get the API token link, then open it
+docker logs llm-council | grep "Open the UI"
 ```
 
 ### Using Docker Run
@@ -82,8 +83,8 @@ docker compose up -d
 ```bash
 docker run -d \
   --name llm-council \
-  -p 5173:5173 \
-  -p 8001:8001 \
+  -p 127.0.0.1:5173:5173 \
+  -p 127.0.0.1:8001:8001 \
   -v ./data:/app/data \
   -e OPENROUTER_API_KEY=sk-or-v1-your-key-here \
   --restart unless-stopped \
@@ -100,6 +101,16 @@ Install using the template or docker-compose. See [unraid/README.md](unraid/READ
 ---
 
 For detailed deployment options, troubleshooting, and updates, see [deploy/README.md](deploy/README.md).
+
+## API Access & Security
+
+The backend API controls your conversation history and spends your OpenRouter credits, so it is locked down by default:
+
+- **API token**: every `/api` request needs `Authorization: Bearer <token>`. This is *not* your OpenRouter key; it's a separate password for LLM Council itself. Set `LLM_COUNCIL_API_TOKEN`, or leave it unset and the backend generates one, saves it to `data/api_token`, and prints it (plus a `http://localhost:5173/?token=...` link) at startup. The UI asks for the token once and stores it in the browser.
+- **CORS allowlist**: only origins in `LLM_COUNCIL_CORS_ORIGINS` (comma-separated, default `http://localhost:5173,http://127.0.0.1:5173`) may call the API from a browser.
+- **Loopback by default**: `python -m backend.main` binds `127.0.0.1` (override with `LLM_COUNCIL_HOST`), and `docker-compose.yml` publishes ports on `127.0.0.1` only.
+- **LAN access (opt-in)**: remove the `127.0.0.1:` prefixes in `docker-compose.yml` (or use `-p 5173:5173 -p 8001:8001`), and set `LLM_COUNCIL_CORS_ORIGINS` to the URL you open the UI at, e.g. `http://192.168.1.50:5173`.
+- A council can have at most 12 models.
 
 ## Local Development Setup
 
@@ -162,7 +173,7 @@ cd frontend
 pnpm run dev
 ```
 
-Then open <http://localhost:5173> in your browser.
+Then open the `http://localhost:5173/?token=...` link printed by the backend (see [API Access & Security](#api-access--security)).
 
 **Option 3: Use Make commands**
 ```bash

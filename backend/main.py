@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any, Literal
 
 from anyio import to_thread
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, model_validator
@@ -40,6 +40,13 @@ from .models import (
     validate_model_ids,
 )
 from .reviews import PROMPT_VERSION
+from .security import (
+    MAX_COUNCIL_MODELS,
+    api_token_source,
+    get_api_token,
+    get_cors_origins,
+    require_api_token,
+)
 from .transcription import GroqNotConfiguredError, transcribe_audio
 
 logger = logging.getLogger(__name__)
@@ -63,20 +70,27 @@ async def lifespan(app: FastAPI):
     for i, model in enumerate(config["council_models"], 1):
         print(f"  {i}. {model}")
     print(f"\nChairman Model: {config['chairman_model']}")
+    origins = get_cors_origins()
+    print(f"\nAPI token ({api_token_source()}): {get_api_token()}")
+    print(f"Open the UI with: {origins[0]}/?token={get_api_token()}")
+    print(f"Allowed CORS origins: {', '.join(origins)}")
     print("=" * 60 + "\n")
     yield
     # Shutdown: Nothing to clean up currently
 
 
-app = FastAPI(title="LLM Council API", lifespan=lifespan)
+app = FastAPI(
+    title="LLM Council API",
+    lifespan=lifespan,
+    dependencies=[Depends(require_api_token)],
+)
 
-# Enable CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for Docker/network access
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=get_cors_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -313,6 +327,12 @@ async def _validate_and_dedupe_models(
         if model_id not in seen:
             seen.add(model_id)
             deduped_council_models.append(model_id)
+
+    if len(deduped_council_models) > MAX_COUNCIL_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MAX_COUNCIL_MODELS} council models are allowed",
+        )
 
     # Validate model ID format (provider/model)
     def validate_model_id_format(model_id: str) -> bool:
@@ -1132,4 +1152,4 @@ async def _run_council_stream_worker(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host=os.getenv("LLM_COUNCIL_HOST", "127.0.0.1"), port=8001)
