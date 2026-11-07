@@ -30,6 +30,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
 
   const totalQueried = rankings.length + (errors?.length || 0);
   const hasFailed = errors && errors.length > 0;
+  const activeIndex = Math.min(activeTab, rankings.length - 1);
 
   return (
     <div className="stage stage2">
@@ -81,7 +82,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
             {rankings.map((rank, index) => (
               <button
                 key={index}
-                className={`tab ${activeTab === index ? 'active' : ''}`}
+                className={`tab ${activeIndex === index ? 'active' : ''}`}
                 onClick={() => setActiveTab(index)}
               >
                 {getModelDisplayName(rank.model)}
@@ -91,20 +92,20 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
 
           <div className="tab-content">
             <div className="ranking-model">
-              {rankings[activeTab].model}
+              {rankings[activeIndex].model}
             </div>
             <div className="ranking-content markdown-content">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {deAnonymizeText(rankings[activeTab].ranking, labelToModel)}
+                {deAnonymizeText(rankings[activeIndex].ranking, labelToModel)}
               </ReactMarkdown>
             </div>
 
-            {rankings[activeTab].parsed_ranking &&
-              rankings[activeTab].parsed_ranking.length > 0 && (
+            {rankings[activeIndex].parsed_ranking &&
+              rankings[activeIndex].parsed_ranking.length > 0 && (
                 <div className="parsed-ranking">
                   <strong>Extracted Ranking:</strong>
                   <ol>
-                    {rankings[activeTab].parsed_ranking.map((label, i) => (
+                    {rankings[activeIndex].parsed_ranking.map((label, i) => (
                       <li key={i}>
                         {labelToModel && labelToModel[label]
                           ? getModelDisplayName(labelToModel[label])

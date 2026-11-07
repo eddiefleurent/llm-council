@@ -1,5 +1,6 @@
 """HTTP/SSE parity and recovery tests with an entirely mocked model layer."""
 
+import asyncio
 import json
 
 import httpx
@@ -85,3 +86,81 @@ async def test_resume_rejects_missing_stale_and_active_runs(app_client):
     main.active_generations.add("test")
     assert (await app_client.post("/api/conversations/test/resume")).status_code == 409
     main.active_generations.clear()
+
+
+async def test_message_endpoints_reject_active_generations(app_client):
+    storage.create_conversation("busy")
+    main.active_generations.add("busy")
+
+    for path in ("/message", "/message/stream"):
+        response = await app_client.post(
+            f"/api/conversations/busy{path}", json={"content": "hello"}
+        )
+        assert response.status_code == 409
+
+    main.active_generations.clear()
+
+
+async def test_delete_endpoints_reject_active_generations(app_client):
+    storage.create_conversation("active")
+    storage.create_conversation("idle")
+    main.active_generations.add("active")
+
+    response = await app_client.delete("/api/conversations/active")
+    assert response.status_code == 409
+    assert storage.get_conversation("active") is not None
+
+    response = await app_client.delete("/api/conversations/idle")
+    assert response.status_code == 200
+    assert storage.get_conversation("idle") is None
+
+    response = await app_client.delete("/api/conversations?confirm=true")
+    assert response.status_code == 409
+    assert storage.get_conversation("active") is not None
+
+    main.active_generations.clear()
+    response = await app_client.delete("/api/conversations?confirm=true")
+    assert response.status_code == 200
+    assert storage.get_conversation("active") is None
+
+
+async def test_stream_generation_blocks_conversation_deletion(monkeypatch, app_client):
+    storage.create_conversation("stream")
+    release_worker = asyncio.Event()
+
+    async def slow_worker(
+        conversation_id,
+        content,
+        content_for_context,
+        attachment,
+        is_first_message,
+        event_queue,
+        review_mode="peer",
+    ):
+        await release_worker.wait()
+        await event_queue.put({"type": "complete"})
+        await event_queue.put(None)
+
+    monkeypatch.setattr(main, "_run_council_stream_worker", slow_worker)
+    request_task = asyncio.create_task(
+        app_client.post(
+            "/api/conversations/stream/message/stream", json={"content": "hello"}
+        )
+    )
+    try:
+        for _ in range(100):
+            if "stream" in main.active_generations:
+                break
+            await asyncio.sleep(0.01)
+        assert "stream" in main.active_generations
+
+        response = await app_client.delete("/api/conversations/stream")
+        assert response.status_code == 409
+        assert storage.get_conversation("stream") is not None
+    finally:
+        release_worker.set()
+
+    response = await request_task
+    assert response.status_code == 200
+    assert '"type": "complete"' in response.text
+    assert "stream" not in main.active_generations

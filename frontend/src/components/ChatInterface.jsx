@@ -20,6 +20,7 @@ export default function ChatInterface({
   onSendMessage,
   isLoading,
   isSendLocked = false,
+  isMutatingConversations = false,
   messageMode,
   onSetMessageMode,
   onToggleSidebar,
@@ -106,7 +107,7 @@ export default function ChatInterface({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (hasSendContent && !isLoading && !isUploadingAttachment && !isSendLocked) {
+    if (hasSendContent && !isLoading && !isUploadingAttachment && !isSendLocked && !isMutatingConversations) {
       onSendMessage(input, attachment);
       setInput('');
       setAttachment(null);
@@ -143,14 +144,16 @@ export default function ChatInterface({
   const councilCount = Array.isArray(effectiveConfig?.council_models) ? effectiveConfig.council_models.length : 0;
   const hasChairman = !!effectiveConfig?.chairman_model;
   const chairmanName = hasChairman ? getModelDisplayName(effectiveConfig.chairman_model) : 'None';
-  const isLocked = isLoading || isUploadingAttachment || isSendLocked;
+  const isLocked = isLoading || isUploadingAttachment || isSendLocked || isMutatingConversations;
   const lockReason = isUploadingAttachment
     ? "during upload"
-    : isSendLocked
-      ? "while message is being sent externally"
-      : isLoading
-        ? "while responding"
-        : "";
+    : isMutatingConversations
+      ? "while conversations are being updated"
+      : isSendLocked
+        ? "while message is being sent externally"
+        : isLoading
+          ? "while responding"
+          : "";
 
   const hasSendContent = !!(input.trim() || attachment);
   const attachTooltip = isLocked ? `Attachments disabled ${lockReason}` : "Attach file";
