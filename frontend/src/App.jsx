@@ -17,6 +17,11 @@ function App() {
   const [conversations, setConversations] = useState([]);
   // Initialize from persisted session state so the first render already
   // reflects fresh-load vs refresh-restore; the restore itself is async.
+  // NB: isRestoringConversation must be declared first — its initializer
+  // reads appLoaded before the isDraftMode initializer writes it.
+  const [isRestoringConversation, setIsRestoringConversation] = useState(
+    () => Boolean(sessionStorage.getItem('appLoaded') && localStorage.getItem('lastConversationId'))
+  );
   const [isDraftMode, setIsDraftMode] = useState(() => {
     if (sessionStorage.getItem('appLoaded')) {
       return !localStorage.getItem('lastConversationId');
@@ -24,9 +29,6 @@ function App() {
     sessionStorage.setItem('appLoaded', 'true');
     return true;
   });
-  const [isRestoringConversation, setIsRestoringConversation] = useState(
-    () => Boolean(sessionStorage.getItem('appLoaded') && localStorage.getItem('lastConversationId'))
-  );
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(createDraftConversation);
   const [activeGenerationConversationId, setActiveGenerationConversationId] =
@@ -122,16 +124,10 @@ function App() {
       })
       .catch((error) => {
         console.error('Failed to restore conversation:', error);
-        setIsRestoringConversation(false);
-
-        // Only start fresh for 404 (conversation deleted).
-        // For network errors or 5xx errors, keep existing state.
-        if (error.status === 404) {
-          resetToDraftConversation();
-        } else {
-          // Network error or server error - keep state, stay in draft view
-          console.warn('Could not restore last conversation due to network/server error');
-        }
+        // Any restore failure (404, network, 5xx) falls back to a fresh
+        // draft so the composer never ends up in a non-draft state with
+        // no conversation selected.
+        resetToDraftConversation();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps intentional - run once on mount
