@@ -91,7 +91,9 @@ baseline, not an exact reconstruction of historical provider behavior.
 Add real tasks as JSON objects containing `id`, OpenAI-style `messages`, and an
 explicit `rubric`. The supplied cases cover prior constraints, conflicting source
 records and a correct minority position. Outputs include answers, per-call usage,
-latency and blank human scoring fields. Score correctness, constraint adherence,
+latency, automated sanity checks and blank human scoring fields. Automated checks
+flag incomplete runs, empty answers and model errors; pass `--fail-on-checks` to
+make those checks gate the command. Score correctness, constraint adherence,
 citation support and usefulness on a consistent 0–4 scale. Blind the mode labels
 while judging; repeat runs before drawing conclusions. Unit tests establish
 behavior and recovery, not answer-quality gains.
@@ -100,7 +102,19 @@ Results are flushed after each mode to a new JSONL file. Missing cost data is
 marked incomplete, never assumed to be free. Reported cost is only known returned
 usage; timeout/retry charges can be missing. Title and summary costs are excluded
 because the harness accepts already-prepared messages. No paid evaluation is run
-by the test suite.
+by the default test suite.
+
+For a small paid smoke test of the live OpenRouter path, run the opt-in pytest
+suite with real credentials:
+
+```bash
+RUN_LIVE_OPENROUTER=1 OPENROUTER_API_KEY=... uv run pytest tests/live -m live
+```
+
+The live suite checks model discovery, a chairman-direct call, and one analyst
+council run using cheap preferred models unless `LIVE_COUNCIL_MODELS` and
+`LIVE_CHAIRMAN_MODEL` are set. It is skipped unless `RUN_LIVE_OPENROUTER=1` and a
+real key are present.
 
 Design references:
 - [OpenRouter Fusion](https://openrouter.ai/docs/guides/routing/routers/fusion-router)
