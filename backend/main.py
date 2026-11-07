@@ -42,7 +42,6 @@ from .models import (
 from .reviews import PROMPT_VERSION
 from .security import (
     MAX_COUNCIL_MODELS,
-    api_token_source,
     get_cors_origins,
     require_api_token,
     write_login_link,
@@ -72,8 +71,7 @@ async def lifespan(app: FastAPI):
     print(f"\nChairman Model: {config['chairman_model']}")
     origins = get_cors_origins()
     link_path = write_login_link(origins[0])
-    print(f"\nAPI token is stored in {api_token_source()}")
-    print(f"To open the UI, use the login link in {link_path}")
+    print(f"\nTo open the UI, use the login link in {link_path}")
     print("  (e.g. `cat data/api_url` or `docker exec llm-council cat data/api_url`)")
     print(f"Allowed CORS origins: {', '.join(origins)}")
     print("=" * 60 + "\n")

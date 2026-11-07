@@ -91,4 +91,8 @@ def write_login_link(frontend_origin: str) -> str:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(f"{frontend_origin}/?token={token}\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError as e:
+        logger.warning(f"Could not restrict permissions on {path}: {e}")
     return str(path)
