@@ -35,6 +35,8 @@ test('presets use the November 2026 model lineup', () => {
   assert.ok(modelIds.includes('openai/gpt-6-luna'));
   assert.ok(modelIds.includes('google/gemini-4-argon'));
   assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
+  assert.ok(modelIds.includes('moonshotai/kimi-k3.1-pro'));
+  assert.ok(modelIds.includes('deepseek/deepseek-v4.1-flash-1017'));
 });
 
 test('flagship preset does not include deepseek', () => {
@@ -44,5 +46,13 @@ test('flagship preset does not include deepseek', () => {
   assert.ok(
     !flagship.council_models.some((modelId) => modelId.startsWith('deepseek/')),
     'did not expect flagship preset to include a deepseek model'
+  );
+
+  const budget = MODEL_PRESETS.find((preset) => preset.id === 'budget');
+
+  assert.ok(budget, 'expected budget preset to exist');
+  assert.ok(
+    budget.council_models.includes('deepseek/deepseek-v4.1-flash-1017'),
+    'expected budget preset to include the latest DeepSeek Flash model'
   );
 });
