@@ -29,10 +29,5 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "vite": "^8.3.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "minimatch@<11.0.1": ">=11.0.1"
-    }
   }
 }
