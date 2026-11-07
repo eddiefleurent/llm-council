@@ -104,7 +104,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Audio never written to disk - handled entirely in memory during request lifecycle
 
 **`main.py`**
-- FastAPI app with CORS enabled for localhost:5173 and localhost:3000
+- CORS allowlist from `LLM_COUNCIL_CORS_ORIGINS` (default localhost:5173 / 127.0.0.1:5173); see `security.py`
+- Every `/api` route requires `Authorization: Bearer <token>` via the app-level `require_api_token` dependency (`security.py`); token from `LLM_COUNCIL_API_TOKEN` or generated into `data/api_token`
+- `python -m backend.main` binds `LLM_COUNCIL_HOST` (default `127.0.0.1`); council size capped at `MAX_COUNCIL_MODELS` (12)
 - POST `/api/conversations` - Create conversation (accepts optional config: council_models, chairman_model, web_search_enabled)
 - POST `/api/conversations/{id}/message` - Send message (uses conversation-specific config)
 - POST `/api/conversations/{id}/message/stream` - Stream message (uses conversation-specific config)
@@ -464,7 +466,7 @@ The project includes a `Makefile` with common development commands:
 ## Common Gotchas
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
-2. **CORS Issues**: Frontend must match allowed origins in `main.py`
+2. **CORS Issues**: Frontend origin must be listed in `LLM_COUNCIL_CORS_ORIGINS` (see `backend/security.py`)
 3. **Ranking Parse Failures**: Parser is strict JSON-only — returns empty on invalid JSON (no fallback regex). Failed parses are recorded as `parse_failure` errors in Stage 2.
 4. **Metadata Persistence**: Council metadata and errors are persisted on assistant messages; the latest checkpoint is stored as `council_run`.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`

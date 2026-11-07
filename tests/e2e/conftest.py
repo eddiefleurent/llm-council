@@ -7,11 +7,12 @@ from typing import Any
 import httpx
 import pytest
 
-from backend import config, council, main, storage
+from backend import config, council, main, security, storage
 from backend.openrouter import ModelQueryError
 
 COUNCIL_MODELS = ["test/model-a", "test/model-b"]
 CHAIRMAN_MODEL = "test/chairman"
+TEST_API_TOKEN = "test-api-token"
 
 
 def _allowed_labels(prompt: str) -> list[str]:
@@ -112,10 +113,13 @@ async def harness(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     monkeypatch.setattr(config, "COUNCIL_CONFIG_FILE", str(config_path))
+    monkeypatch.setenv(security.API_TOKEN_ENV, TEST_API_TOKEN)
     main.active_generations.clear()
 
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=main.app), base_url="http://test"
+        transport=httpx.ASGITransport(app=main.app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {TEST_API_TOKEN}"},
     ) as client:
         try:
             yield SimpleNamespace(client=client, fake=fake)

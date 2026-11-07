@@ -32,5 +32,9 @@
 
   <Config Name="OpenRouter API Key" Target="OPENROUTER_API_KEY" Default="" Mode="" Description="REQUIRED: Your OpenRouter API key (get from openrouter.ai)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
 
+  <Config Name="API Token" Target="LLM_COUNCIL_API_TOKEN" Default="" Mode="" Description="OPTIONAL: Password for the LLM Council API (not your OpenRouter key). If empty, one is generated, saved to data/api_token, and printed in the container log; the web UI asks for it once." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+
+  <Config Name="Allowed Origins" Target="LLM_COUNCIL_CORS_ORIGINS" Default="" Mode="" Description="REQUIRED for LAN access: the URL you open the web UI at, e.g. http://192.168.1.50:5173 (comma-separate multiple)." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+
   <Config Name="Groq API Key" Target="GROQ_API_KEY" Default="" Mode="" Description="OPTIONAL: Groq API key for voice transcription (get from console.groq.com)" Type="Variable" Display="always" Required="false" Mask="true"></Config>
 </Container>

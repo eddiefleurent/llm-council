@@ -5,15 +5,20 @@ import json
 import httpx
 import pytest
 
-from backend import main, storage
+from backend import main, security, storage
+
+TEST_API_TOKEN = "test-api-token"
 
 
 @pytest.fixture
 async def app_client(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "DATA_DIR", str(tmp_path))
+    monkeypatch.setenv(security.API_TOKEN_ENV, TEST_API_TOKEN)
     main.active_generations.clear()
     async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=main.app), base_url="http://test"
+        transport=httpx.ASGITransport(app=main.app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {TEST_API_TOKEN}"},
     ) as client:
         yield client
 

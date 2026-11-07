@@ -15,7 +15,7 @@ LLM Council is a self-hostable web app for sending a prompt to several models, c
 ## Trust boundaries and entry points
 
 1. Browser clients reach the static UI on port 5173 and the FastAPI API on port 8001. The Docker image binds both services to all container interfaces, and Compose publishes both ports without a host-address restriction. Therefore, cloning and running the app locally does not itself guarantee loopback-only access; actual reachability depends on how each user runs it and on host/network controls.
-2. The API accepts HTTP requests for conversations, model configuration, file extraction, audio transcription, and message generation. `backend/main.py` configures CORS for all origins. No application authentication layer is apparent in the inspected API routes; deployment controls are not defined by this repository.
+2. The API accepts HTTP requests for conversations, model configuration, file extraction, audio transcription, and message generation. Every `/api` request requires a bearer token: `LLM_COUNCIL_API_TOKEN` from the environment, or a random token generated at startup, persisted to `data/api_token` (0600), with a one-click `?token=` login link written to `data/api_url` (0600). CORS is restricted to the origins listed in `LLM_COUNCIL_CORS_ORIGINS` (comma-separated; defaults `http://localhost:5173` and `http://127.0.0.1:5173`; `*` is rejected). `python -m backend.main` binds `LLM_COUNCIL_HOST` (default `127.0.0.1`), and `docker-compose.yml` publishes ports on `127.0.0.1` only; LAN exposure is opt-in by changing the published ports and the origins list.
 3. The LLM integrations send prompt and conversation context to OpenRouter; optional transcription sends audio to Groq. These providers are outside the app's host boundary.
 4. The API reads and writes persistent JSON files on the host-mounted data directory and reads provider credentials from environment variables.
 
@@ -40,7 +40,8 @@ The project owner treats these assets as equally important:
 - Attachment extraction supports text, Markdown, PDF, JSON, and CSV; uploads are limited to 5 MiB and extracted text to 30,000 characters. Attachment content is explicitly delimited as document data in prompt context.
 - Conversation paths are constrained to the data directory; conversation/config writes use temporary files and replacement.
 - OpenRouter credentials are read from environment configuration; Groq is optional and initialized only when used.
-- Deployment files provide a host-mounted data directory and configurable port mappings. These are deployment mechanisms, not network access controls.
+- API authentication and CORS are enforced by `backend/security.py`; councils are capped at `MAX_COUNCIL_MODELS` (12) models.
+- Deployment files provide a host-mounted data directory and configurable port mappings; the Compose file publishes on `127.0.0.1` by default.
 
 ## User-stated scope and accepted risk
 
@@ -51,6 +52,5 @@ The project owner treats these assets as equally important:
 
 ## Open questions
 
-- Does “run locally” mean loopback-only for one user, or can the Docker-published ports be reached by other trusted-private-network hosts?
-- Are users on that private network all equally trusted, or should some users be treated as adversarial?
+- Are users on a private network (when LAN exposure is opted into) all equally trusted, or should some be treated as adversarial? The API token applies to all of them equally.
 - Should provider-side retention/processing, malicious provider responses, and host/container compromise be included in a future revision?
