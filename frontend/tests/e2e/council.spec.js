@@ -23,8 +23,8 @@ test('chairman mode renders a direct chairman response', async ({ page }) => {
   await page.getByPlaceholder('Chat with the chairman...').fill('Make it shorter');
   await page.getByRole('button', { name: 'Send message' }).click();
 
-  await expect(page.getByText('Chairman Direct')).toBeVisible();
-  await expect(page.getByText('Chairman Response')).toBeVisible();
+  await expect(page.getByText('Chairman Direct', { exact: true })).toBeVisible();
+  await expect(page.getByText('Chairman Response', { exact: true })).toBeVisible();
   await expect(page.getByText('Chairman direct answer')).toBeVisible();
   await expect(page.getByText('Stage 1: Individual Responses')).toHaveCount(0);
 });
