@@ -193,9 +193,15 @@ make format-check   # Check formatting without changes
 
 **Testing:**
 ```bash
-make test           # Run pytest tests
+make test           # Run pytest tests, including deterministic backend E2E
 make test-cov       # Run tests with coverage report
+
+cd frontend
+pnpm test           # Frontend preset unit tests
+pnpm test:e2e       # Playwright browser smoke tests with mocked API
 ```
+
+Live OpenRouter checks are opt-in and spend money; see `docs/deliberation.md`.
 
 **Setup:**
 ```bash
