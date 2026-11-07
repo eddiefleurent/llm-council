@@ -65,8 +65,8 @@ export default function Sidebar({
             </button>
           </div>
         </div>
-        <button 
-          className="new-conversation-btn" 
+        <button
+          className="new-conversation-btn"
           onClick={handleNewConversation}
           disabled={isMutating}
         >

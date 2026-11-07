@@ -375,7 +375,7 @@ export default function ChatInterface({
               Chairman
             </button>
           </div>
-          
+
           {conversationConfig && !loadingConfig && (
             <div className="model-indicator-compact">
               <span className="indicator-label">

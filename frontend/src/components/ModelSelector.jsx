@@ -40,7 +40,7 @@ function formatPrice(price) {
 
 /**
  * Model selector component with provider grouping.
- * 
+ *
  * @param {Object} props
  * @param {boolean} props.isOpen - Whether the selector is open
  * @param {Function} props.onClose - Called when selector is closed
@@ -48,10 +48,10 @@ function formatPrice(price) {
  * @param {string[]} props.selectedModels - Currently selected model IDs (for highlighting)
  * @param {string} props.title - Title for the selector (e.g., "Add Council Member")
  */
-export default function ModelSelector({ 
-  isOpen, 
-  onClose, 
-  onSelect, 
+export default function ModelSelector({
+  isOpen,
+  onClose,
+  onSelect,
   selectedModels = [],
   title = 'Select Model'
 }) {
@@ -127,7 +127,7 @@ export default function ModelSelector({
           {loading && (
             <div className="loading-state">Loading models...</div>
           )}
-          
+
           {error && (
             <div className="error-state">
               {error}
@@ -143,9 +143,9 @@ export default function ModelSelector({
                   <button
                     key={provider.id}
                     className="provider-btn"
-                    style={{ 
-                      backgroundColor: colors.bg, 
-                      color: colors.text 
+                    style={{
+                      backgroundColor: colors.bg,
+                      color: colors.text
                     }}
                     onClick={() => handleProviderClick(provider)}
                   >
