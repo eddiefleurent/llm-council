@@ -12,7 +12,6 @@ repos:
         args: [--fix]
       # Run the formatter
       - id: ruff-format
-        exclude: ^backend/(config|context|models)\.py$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

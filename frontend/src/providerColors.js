@@ -16,7 +16,7 @@ export const PROVIDER_COLORS = {
 /**
  * Get the color scheme for a provider.
  * Returns a default gray color for unknown providers.
- *
+ * 
  * @param {string} providerId - The provider identifier
  * @returns {{ bg: string, text: string }} The color scheme
  */

@@ -19,22 +19,22 @@ function ModelChip({ modelId, onRemove, showRemove = true }) {
   const provider = getProviderFromModelId(modelId);
   const colors = getProviderColor(provider);
   const displayName = getModelDisplayName(modelId);
-
+  
   return (
-    <div
+    <div 
       className="model-chip"
-      style={{
+      style={{ 
         borderColor: colors.bg,
         backgroundColor: `${colors.bg}15`
       }}
     >
-      <span
+      <span 
         className="provider-dot"
         style={{ backgroundColor: colors.bg }}
       />
       <span className="chip-name">{displayName}</span>
       {showRemove && (
-        <button
+        <button 
           className="chip-remove"
           aria-label={`Remove model ${displayName}`}
           onClick={(e) => {
@@ -376,7 +376,7 @@ export default function CouncilConfig({
                     Models that respond to queries and rank each other
                   </span>
                 </div>
-
+                
                 <div className="models-grid">
                   {councilModels.map((modelId) => (
                     <ModelChip
@@ -386,8 +386,8 @@ export default function CouncilConfig({
                       showRemove={councilModels.length > 1}
                     />
                   ))}
-
-                  <button
+                  
+                  <button 
                     className="add-model-btn"
                     onClick={handleAddCouncilModel}
                   >
@@ -404,7 +404,7 @@ export default function CouncilConfig({
                     Model that synthesizes the final response
                   </span>
                 </div>
-
+                
                 <div className="chairman-select" onClick={handleSelectChairman}>
                   {chairmanModel ? (
                     <ModelChip modelId={chairmanModel} showRemove={false} />
@@ -423,7 +423,7 @@ export default function CouncilConfig({
                     Enable real-time web search for up-to-date information
                   </span>
                 </div>
-
+                
                 <label className="toggle-row">
                   <span className="toggle-label">
                     <span className="toggle-icon">🌐</span>

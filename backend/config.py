@@ -88,9 +88,7 @@ def get_council_config() -> dict[str, Any]:
                     "chairman_model": chairman,
                     "web_search_enabled": web_search_enabled,
                 }
-        except OSError:
-            pass
-        except json.JSONDecodeError:
+        except OSError, json.JSONDecodeError:
             pass
 
     # Return defaults (defensive copies)
