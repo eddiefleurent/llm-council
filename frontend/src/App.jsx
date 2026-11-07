@@ -1,17 +1,37 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import { api } from './api';
 import './App.css';
 
+function createDraftConversation() {
+  return {
+    id: null,
+    created_at: new Date().toISOString(),
+    title: 'New Conversation',
+    messages: [],
+  };
+}
+
 function App() {
   const [conversations, setConversations] = useState([]);
+  // Initialize from persisted session state so the first render already
+  // reflects fresh-load vs refresh-restore; the restore itself is async.
+  const [isDraftMode, setIsDraftMode] = useState(() => {
+    if (sessionStorage.getItem('appLoaded')) {
+      return !localStorage.getItem('lastConversationId');
+    }
+    sessionStorage.setItem('appLoaded', 'true');
+    return true;
+  });
+  const [isRestoringConversation, setIsRestoringConversation] = useState(
+    () => Boolean(sessionStorage.getItem('appLoaded') && localStorage.getItem('lastConversationId'))
+  );
   const [currentConversationId, setCurrentConversationId] = useState(null);
-  const [currentConversation, setCurrentConversation] = useState(null);
+  const [currentConversation, setCurrentConversation] = useState(createDraftConversation);
   const [activeGenerationConversationId, setActiveGenerationConversationId] =
     useState(null);
   const [isMutatingConversations, setIsMutatingConversations] = useState(false);
-  const [isDraftMode, setIsDraftMode] = useState(false);
 
   // Draft conversation config (used before conversation is created)
   const [draftConfig, setDraftConfig] = useState(null);
@@ -54,78 +74,66 @@ function App() {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
-  // Load conversations on mount
-  useEffect(() => {
-    loadConversations();
+  const resetToDraftConversation = () => {
+    setIsDraftMode(true);
+    setIsRestoringConversation(false);
+    setCurrentConversationId(null);
+    setCurrentConversation(createDraftConversation());
+    setMessageMode('council');
+  };
+
+  const loadConversations = useCallback(async () => {
+    try {
+      const convs = await api.listConversations();
+      setConversations(convs);
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+    }
   }, []);
 
-  // Fresh-load vs refresh detection
-  useEffect(() => {
-    const isRefresh = sessionStorage.getItem('appLoaded');
-
-    if (!isRefresh) {
-      // Fresh page load - start with new draft conversation
-      sessionStorage.setItem('appLoaded', 'true');
-      // Set draft mode directly instead of calling handleNewConversation
-      setIsDraftMode(true);
-      setCurrentConversationId(null);
-      setCurrentConversation({
-        id: null,
-        created_at: new Date().toISOString(),
-        title: 'New Conversation',
-        messages: [],
-      });
-    } else {
-      // Browser refresh - try to restore last conversation
-      const lastId = localStorage.getItem('lastConversationId');
-      if (lastId) {
-        // Check if conversation still exists
-        api.getConversation(lastId)
-          .then(() => {
-            setCurrentConversationId(lastId);
-            setIsDraftMode(false);
-          })
-          .catch((error) => {
-            console.error('Failed to restore conversation:', error);
-
-            // Only clear state for 404 (conversation not found)
-            // For network errors or 5xx errors, keep existing state
-            if (error.status === 404) {
-              // Conversation was deleted, start fresh
-              setIsDraftMode(true);
-              setCurrentConversationId(null);
-              setCurrentConversation({
-                id: null,
-                created_at: new Date().toISOString(),
-                title: 'New Conversation',
-                messages: [],
-              });
-            } else {
-              // Network error or server error - show user a message but keep state
-              console.warn('Could not restore last conversation due to network/server error');
-              // Fall back to draft mode for safety
-              setIsDraftMode(true);
-              setCurrentConversationId(null);
-              setCurrentConversation({
-                id: null,
-                created_at: new Date().toISOString(),
-                title: 'New Conversation',
-                messages: [],
-              });
-            }
-          });
-      } else {
-        // No last conversation, start fresh
-        setIsDraftMode(true);
-        setCurrentConversationId(null);
-        setCurrentConversation({
-          id: null,
-          created_at: new Date().toISOString(),
-          title: 'New Conversation',
-          messages: [],
-        });
-      }
+  const loadConversation = useCallback(async (id) => {
+    try {
+      const conv = await api.getConversation(id);
+      setCurrentConversation(conv);
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
     }
+  }, []);
+
+  // Load conversations on mount. Deferred to a microtask so the state
+  // updates inside loadConversations don't run synchronously in the effect.
+  useEffect(() => {
+    queueMicrotask(loadConversations);
+  }, [loadConversations]);
+
+  // On browser refresh, restore the last conversation (if it still exists).
+  // Runs once on mount; all state updates happen after the async fetch.
+  useEffect(() => {
+    const lastId = localStorage.getItem('lastConversationId');
+    if (!isRestoringConversation || !lastId) {
+      return;
+    }
+
+    api.getConversation(lastId)
+      .then(() => {
+        setIsRestoringConversation(false);
+        setIsDraftMode(false);
+        setCurrentConversationId(lastId);
+      })
+      .catch((error) => {
+        console.error('Failed to restore conversation:', error);
+        setIsRestoringConversation(false);
+
+        // Only start fresh for 404 (conversation deleted).
+        // For network errors or 5xx errors, keep existing state.
+        if (error.status === 404) {
+          resetToDraftConversation();
+        } else {
+          // Network error or server error - keep state, stay in draft view
+          console.warn('Could not restore last conversation due to network/server error');
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps intentional - run once on mount
 
   // Save current conversation ID to localStorage for refresh recovery
@@ -139,7 +147,7 @@ function App() {
   // Avoid re-fetching while this same conversation is actively streaming
   // to preserve optimistic in-progress UI state.
   useEffect(() => {
-    if (!currentConversationId || isDraftMode) {
+    if (!currentConversationId || isDraftMode || isRestoringConversation) {
       return;
     }
 
@@ -148,48 +156,27 @@ function App() {
       currentConversation?.id === currentConversationId;
 
     if (!isStreamingConversationVisible) {
-      loadConversation(currentConversationId);
+      // Deferred to a microtask so the state updates inside loadConversation
+      // don't run synchronously in the effect.
+      queueMicrotask(() => loadConversation(currentConversationId));
     }
   }, [
     currentConversationId,
     isDraftMode,
+    isRestoringConversation,
     activeGenerationConversationId,
     currentConversation?.id,
+    loadConversation,
   ]);
-
-  const loadConversations = async () => {
-    try {
-      const convs = await api.listConversations();
-      setConversations(convs);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    }
-  };
-
-  const loadConversation = async (id) => {
-    try {
-      const conv = await api.getConversation(id);
-      setCurrentConversation(conv);
-    } catch (error) {
-      console.error('Failed to load conversation:', error);
-    }
-  };
 
   const handleNewConversation = () => {
     // Set draft mode instead of creating conversation immediately
-    setIsDraftMode(true);
-    setCurrentConversationId(null);
-    setCurrentConversation({
-      id: null,
-      created_at: new Date().toISOString(),
-      title: 'New Conversation',
-      messages: [],
-    });
-    setMessageMode('council');
+    resetToDraftConversation();
   };
 
   const handleSelectConversation = (id) => {
     const isSwitchingConversation = id !== currentConversationId;
+    setIsRestoringConversation(false);
     setIsDraftMode(false);
     setCurrentConversationId(id);
     if (isSwitchingConversation) {
@@ -214,8 +201,7 @@ function App() {
       await api.deleteAllConversations();
       setConversations([]);
       setCurrentConversationId(null);
-      setCurrentConversation(null);
-      setIsDraftMode(false);
+      resetToDraftConversation();
     } catch (error) {
       console.error('Failed to clear conversations:', error);
     } finally {
@@ -249,16 +235,10 @@ function App() {
       if (currentConversationId === conversationId) {
         if (remainingConversations.length > 0) {
           setIsDraftMode(false);
+          setIsRestoringConversation(false);
           setCurrentConversationId(remainingConversations[0].id);
         } else {
-          setIsDraftMode(true);
-          setCurrentConversationId(null);
-          setCurrentConversation({
-            id: null,
-            created_at: new Date().toISOString(),
-            title: 'New Conversation',
-            messages: [],
-          });
+          resetToDraftConversation();
         }
       }
     } catch (error) {
