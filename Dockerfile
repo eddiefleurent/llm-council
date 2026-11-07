@@ -3,7 +3,7 @@ FROM node:alpine AS builder-frontend
 WORKDIR /frontend
 
 # Copy package files
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 
 # Install pnpm and dependencies
 RUN npm install -g pnpm@10.18.0 && \
