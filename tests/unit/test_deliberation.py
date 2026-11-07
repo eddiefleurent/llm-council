@@ -8,7 +8,7 @@ import pytest
 
 from backend import council, storage
 from backend.openrouter import ModelQueryError
-from backend.reviews import parse_review
+from backend.reviews import candidate_payload, parse_review
 
 
 @pytest.fixture
@@ -82,11 +82,12 @@ async def test_reviews_and_synthesis_keep_context_and_hide_model_ids(
     result, errors = await council.stage3_synthesize_final(
         "Compare options", candidates, reviews, labels, [], [], "a", context=context
     )
+    expected_payload = candidate_payload(candidates, list(labels))
     for _, messages, _ in calls:
         assert messages[0]["role"] == "system"
         assert messages[1:4] == context
         assert "secret/model-a" not in json.dumps(messages)
-        assert "https://example.com" in json.dumps(messages)
+        assert expected_payload in messages[-1]["content"]
     assert result["usage"]["cost"] == 0.1
 
 
