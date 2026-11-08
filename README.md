@@ -1,8 +1,8 @@
 # LLM Council
 
-![llmcouncil](header.png)
+![LLM Council's three-stage deliberation workflow](header.svg)
 
-The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, eg.c), you can group them into your "LLM Council". This repo is a simple, local web app that essentially looks like ChatGPT except it uses OpenRouter to send your query to multiple LLMs, it then asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
+Instead of asking one model from a single provider (such as OpenAI, Google, Anthropic, or xAI), group several models into an "LLM Council." This local web app uses OpenRouter to send your query to multiple LLMs, asks them to review and rank each other's work, and has a Chairman model produce the final response.
 
 In a bit more detail, here is what happens when you submit a query:
 
@@ -78,6 +78,8 @@ docker compose up -d
 docker exec llm-council cat data/api_url   # or: cat data/api_url
 ```
 
+Docker Compose persists conversations, configuration, and the API token in the host-side `./data` directory. Back up this directory to preserve your data.
+
 ### Using Docker Run
 
 ```bash
@@ -100,11 +102,13 @@ Install using the template or docker-compose. See [unraid/README.md](unraid/READ
 
 ---
 
-For detailed deployment options, troubleshooting, and updates, see [deploy/README.md](deploy/README.md).
+For detailed deployment options and updates, see [deploy/README.md](deploy/README.md), including its [troubleshooting guide](deploy/README.md#troubleshooting).
 
 ## API Access & Security
 
 The backend API controls your conversation history and spends your OpenRouter credits, so it is locked down by default:
+
+LLM Council is intended for local self-hosting, not direct exposure to the public internet. See the [security model](SECURITY_MODEL.md) before enabling network access.
 
 - **API token**: every `/api` request needs `Authorization: Bearer <token>`. This is *not* your OpenRouter key; it's a separate password for LLM Council itself. Set `LLM_COUNCIL_API_TOKEN`, or leave it unset and the backend generates one, saves it to `data/api_token`, and writes a `http://localhost:5173/?token=...` login link to `data/api_url` (also printed in the startup output). The UI asks for the token once and stores it in the browser.
 - **CORS allowlist**: only origins in `LLM_COUNCIL_CORS_ORIGINS` (comma-separated, default `http://localhost:5173,http://127.0.0.1:5173`) may call the API from a browser.
@@ -116,7 +120,7 @@ The backend API controls your conversation history and spends your OpenRouter cr
 
 ### 1. Install Dependencies
 
-The project uses [uv](https://docs.astral.sh/uv/) for project management.
+Local development requires Python 3.14 or newer, [uv](https://docs.astral.sh/uv/) for Python dependencies, and Node.js with pnpm for the frontend.
 
 **Backend:**
 ```bash
@@ -145,13 +149,13 @@ For voice transcription (optional), get a free Groq API key at [console.groq.com
 
 ### 3. Configure Models (Optional)
 
-Models are configured through the **UI** using the gear icon in the sidebar. You can:
+Models are configured in the chat composer using the gear icon. Settings can be customized per conversation; global defaults are used for new conversations. You can:
 - Add/remove council members from any OpenRouter provider
 - Select the chairman model
 - Enable web search (`:online` variant) for real-time information
 - Models are auto-discovered from OpenRouter's API
 
-Configuration is saved to `data/council_config.json`. Default models are defined in `backend/config.py`.
+Global defaults are saved to `data/council_config.json`; conversation-specific settings are stored with each conversation. Default models are defined in `backend/config.py`. A council can have up to 12 models.
 
 ## Running the Application
 
@@ -208,7 +212,7 @@ make test           # Run pytest tests, including deterministic backend E2E
 make test-cov       # Run tests with coverage report
 
 cd frontend
-pnpm test           # Frontend preset unit tests
+pnpm test           # Frontend unit tests (preset validation)
 pnpm test:e2e       # Playwright browser smoke tests with mocked API
 ```
 
@@ -227,7 +231,7 @@ make clean          # Remove cache and build artifacts
 
 ### Ruff Linter & Formatter
 
-The project uses [Ruff](https://docs.astral.sh/ruff/) (v0.15.0) for fast Python linting and formatting:
+The project uses [Ruff](https://docs.astral.sh/ruff/) for fast Python linting and formatting (currently 0.17.3, managed by `pyproject.toml` and `uv.lock`):
 - **Line length**: 88 characters (Black/Ruff standard)
 - **Target**: Python 3.14+
 - **Replaces**: flake8, black, isort, pyupgrade, and more
