@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-11-07.
+ * All model IDs were validated against the OpenRouter API on 2026-11-09.
  */
 export const MODEL_PRESETS = [
   {
@@ -46,7 +46,7 @@ export const MODEL_PRESETS = [
     description: 'Cost-effective models for everyday use',
     icon: '💰',
     council_models: [
-      'anthropic/claude-haiku-4.5',
+      'anthropic/claude-haiku-5.5',
       'z-ai/glm-5.3-flash',
       'moonshotai/kimi-k3',
       'deepseek/deepseek-v4.1-flash-1017',
@@ -78,10 +78,10 @@ export const MODEL_PRESETS = [
     description: 'Fastest responses with lightweight models',
     icon: '⚡',
     council_models: [
-      'anthropic/claude-haiku-4.5',
+      'anthropic/claude-haiku-5.5',
       'openai/gpt-6-luna',
-      'google/gemini-3.5-flash-lite',
+      'google/gemini-3.8-flash',
     ],
-    chairman_model: 'google/gemini-3.5-flash-lite',
+    chairman_model: 'google/gemini-3.8-flash',
   },
 ];
