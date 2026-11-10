@@ -41,18 +41,24 @@ test('presets use the November 2026 model lineup', () => {
   assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
   assert.ok(modelIds.includes('moonshotai/kimi-k3.1-pro'));
   assert.ok(modelIds.includes('deepseek/deepseek-v4.1-flash-1017'));
+  assert.ok(modelIds.includes('nvidia/nemotron-3.5-super-vl'));
 });
 
 test('balanced, budget, and speed presets use role-aligned current models', () => {
   const balanced = MODEL_PRESETS.find((preset) => preset.id === 'balanced');
   const budget = MODEL_PRESETS.find((preset) => preset.id === 'budget');
+  const largeCouncil = MODEL_PRESETS.find((preset) => preset.id === 'large-council');
   const speed = MODEL_PRESETS.find((preset) => preset.id === 'speed');
 
   assert.ok(balanced, 'expected balanced preset to exist');
   assert.ok(budget, 'expected budget preset to exist');
+  assert.ok(largeCouncil, 'expected large council preset to exist');
   assert.ok(speed, 'expected speed preset to exist');
   assert.ok(balanced.council_models.includes('openai/gpt-6.1-sol'));
   assert.ok(!balanced.council_models.includes('openai/gpt-6.1-terra'));
+  assert.ok(budget.council_models.includes('nvidia/nemotron-3.5-super-vl'));
+  assert.ok(!budget.council_models.includes('nvidia/nemotron-3-ultra-550b-a55b'));
+  assert.ok(largeCouncil.council_models.includes('nvidia/nemotron-3-ultra-550b-a55b'));
 
   assert.ok(speed.council_models.includes('google/gemini-3.8-flash'));
   assert.ok(!speed.council_models.includes('google/gemini-3.5-flash-lite'));
