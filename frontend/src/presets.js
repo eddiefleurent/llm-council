@@ -10,7 +10,7 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-11-10.
+ * All model IDs were validated against the OpenRouter API on 2026-11-12.
  */
 export const MODEL_PRESETS = [
   {
