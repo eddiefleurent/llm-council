@@ -9,7 +9,8 @@ import './CouncilConfig.css';
 function getProviderFromModelId(modelId) {
   if (!modelId || typeof modelId !== 'string') return null;
   const parts = modelId.split('/');
-  return parts.length > 1 ? parts[0] : null;
+  // Strip the '~' prefix used by always-latest aliases (e.g. "~openai/...")
+  return parts.length > 1 ? parts[0].replace(/^~/, '') : null;
 }
 
 /**

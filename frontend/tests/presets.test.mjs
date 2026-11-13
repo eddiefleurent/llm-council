@@ -29,19 +29,20 @@ test('presets use the November 2026 model lineup', () => {
     assert.ok(!modelIds.includes(retired), `did not expect retired ${retired}`);
   }
 
-  assert.ok(modelIds.includes('x-ai/grok-4.7'));
-  assert.ok(modelIds.includes('anthropic/claude-opus-5.5'));
-  assert.ok(modelIds.includes('openai/gpt-6-astra'));
-  assert.ok(modelIds.includes('openai/gpt-6-luna'));
-  assert.ok(modelIds.includes('openai/gpt-6.1-sol'));
+  assert.ok(modelIds.includes('~x-ai/grok-latest'));
+  assert.ok(modelIds.includes('~anthropic/claude-opus-latest'));
+  assert.ok(modelIds.includes('~openai/gpt-astra-latest'));
+  assert.ok(modelIds.includes('~openai/gpt-luna-latest'));
+  assert.ok(modelIds.includes('~openai/gpt-sol-latest'));
   assert.ok(modelIds.includes('google/gemini-4-argon'));
   assert.ok(modelIds.includes('google/gemini-3.8-flash'));
   assert.ok(!modelIds.includes('google/gemini-3.5-flash-lite'));
-  assert.ok(modelIds.includes('anthropic/claude-haiku-5.5'));
+  assert.ok(modelIds.includes('~anthropic/claude-haiku-latest'));
   assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
-  assert.ok(modelIds.includes('moonshotai/kimi-k3.1-pro'));
-  assert.ok(modelIds.includes('deepseek/deepseek-v4.1-flash-1017'));
+  assert.ok(modelIds.includes('~moonshotai/kimi-latest'));
+  assert.ok(modelIds.includes('~deepseek/deepseek-v4-flash-latest'));
   assert.ok(modelIds.includes('nvidia/nemotron-3.5-super-vl'));
+  assert.ok(modelIds.includes('thinkingmachines/inkling-2-small'));
 });
 
 test('balanced, budget, and speed presets use role-aligned current models', () => {
@@ -54,7 +55,7 @@ test('balanced, budget, and speed presets use role-aligned current models', () =
   assert.ok(budget, 'expected budget preset to exist');
   assert.ok(largeCouncil, 'expected large council preset to exist');
   assert.ok(speed, 'expected speed preset to exist');
-  assert.ok(balanced.council_models.includes('openai/gpt-6.1-sol'));
+  assert.ok(balanced.council_models.includes('~openai/gpt-sol-latest'));
   assert.ok(!balanced.council_models.includes('openai/gpt-6.1-terra'));
   assert.ok(budget.council_models.includes('nvidia/nemotron-3.5-super-vl'));
   assert.ok(!budget.council_models.includes('nvidia/nemotron-3-ultra-550b-a55b'));
@@ -65,7 +66,7 @@ test('balanced, budget, and speed presets use role-aligned current models', () =
   assert.equal(speed.chairman_model, 'google/gemini-3.8-flash');
 
   for (const preset of [budget, speed]) {
-    assert.ok(preset.council_models.includes('anthropic/claude-haiku-5.5'));
+    assert.ok(preset.council_models.includes('~anthropic/claude-haiku-latest'));
     assert.ok(!preset.council_models.includes('anthropic/claude-haiku-4.5'));
   }
 });
@@ -83,7 +84,7 @@ test('flagship preset does not include deepseek', () => {
 
   assert.ok(budget, 'expected budget preset to exist');
   assert.ok(
-    budget.council_models.includes('deepseek/deepseek-v4.1-flash-1017'),
+    budget.council_models.includes('~deepseek/deepseek-v4-flash-latest'),
     'expected budget preset to include the latest DeepSeek Flash model'
   );
 });

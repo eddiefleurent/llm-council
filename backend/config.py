@@ -21,8 +21,8 @@ if not OPENROUTER_API_KEY:
 # These are used when no custom council is configured
 DEFAULT_COUNCIL_MODELS = [
     "google/gemini-4-argon",
-    "anthropic/claude-opus-5.5",
-    "x-ai/grok-4.7",
+    "~anthropic/claude-opus-latest",
+    "~x-ai/grok-latest",
 ]
 
 # Default chairman model - synthesizes final response
