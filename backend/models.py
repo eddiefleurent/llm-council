@@ -119,7 +119,9 @@ def _parse_model(model_data: dict[str, Any]) -> ModelInfo | None:
     if "/" not in model_id:
         return None
 
-    provider = model_id.split("/")[0]
+    # Strip the '~' alias prefix ("~openai/gpt-astra-latest" -> "openai") so
+    # always-latest aliases group with their real provider in the selector.
+    provider = model_id.split("/")[0].removeprefix("~")
 
     # Get pricing info (per million tokens)
     # Guard against pricing being None or non-dict
