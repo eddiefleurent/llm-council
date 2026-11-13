@@ -40,7 +40,7 @@ test('presets use the November 2026 model lineup', () => {
   assert.ok(modelIds.includes('~anthropic/claude-haiku-latest'));
   assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
   assert.ok(modelIds.includes('~moonshotai/kimi-latest'));
-  assert.ok(modelIds.includes('~deepseek/deepseek-v4-flash-latest'));
+  assert.ok(modelIds.includes('~deepseek/deepseek-flash-latest'));
   assert.ok(modelIds.includes('nvidia/nemotron-3.5-super-vl'));
   assert.ok(modelIds.includes('thinkingmachines/inkling-2-small'));
 });
@@ -84,7 +84,7 @@ test('flagship preset does not include deepseek', () => {
 
   assert.ok(budget, 'expected budget preset to exist');
   assert.ok(
-    budget.council_models.includes('~deepseek/deepseek-v4-flash-latest'),
+    budget.council_models.includes('~deepseek/deepseek-flash-latest'),
     'expected budget preset to include the latest DeepSeek Flash model'
   );
 });

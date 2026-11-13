@@ -53,7 +53,7 @@ export const MODEL_PRESETS = [
       '~anthropic/claude-haiku-latest',
       '~z-ai/glm-flash-latest',
       '~moonshotai/kimi-latest',
-      '~deepseek/deepseek-v4-flash-latest',
+      '~deepseek/deepseek-flash-latest',
       'google/gemini-3.8-flash',
       'minimax/minimax-m3.1-flash',
       'nvidia/nemotron-3.5-super-vl',
