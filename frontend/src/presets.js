@@ -10,7 +10,11 @@
  * Run the app and try saving each preset — backend validation will flag
  * any stale IDs immediately.
  *
- * All model IDs were validated against the OpenRouter API on 2026-11-10.
+ * Models with a `~provider/family-latest` alias are pinned to that alias,
+ * which always redirects to the newest model in the family, so those
+ * presets never need version bumps.
+ *
+ * All model IDs were validated against the OpenRouter API on 2026-11-13.
  */
 export const MODEL_PRESETS = [
   {
@@ -19,12 +23,13 @@ export const MODEL_PRESETS = [
     description: 'Top-tier models for maximum quality',
     icon: '⭐',
     council_models: [
-      'anthropic/claude-opus-5.5',
-      'openai/gpt-6-astra',
+      '~anthropic/claude-opus-latest',
+      '~openai/gpt-astra-latest',
       'google/gemini-4-argon',
-      'x-ai/grok-4.7',
+      'google/gemini-4-carbon',
+      '~x-ai/grok-latest',
     ],
-    chairman_model: 'anthropic/claude-opus-5.5',
+    chairman_model: '~anthropic/claude-opus-latest',
   },
   {
     id: 'balanced',
@@ -32,11 +37,11 @@ export const MODEL_PRESETS = [
     description: 'Great quality at reasonable cost',
     icon: '⚖️',
     council_models: [
-      'anthropic/claude-sonnet-5.5',
-      'openai/gpt-6.1-sol',
-      'google/gemini-3.8-flash',
-      'x-ai/grok-4.7',
-      'moonshotai/kimi-k3.1-pro',
+      '~anthropic/claude-sonnet-latest',
+      '~openai/gpt-sol-latest',
+      'google/gemini-4-hydrogen',
+      '~x-ai/grok-latest',
+      '~moonshotai/kimi-latest',
     ],
     chairman_model: 'google/gemini-4-argon',
   },
@@ -46,15 +51,16 @@ export const MODEL_PRESETS = [
     description: 'Cost-effective models for everyday use',
     icon: '💰',
     council_models: [
-      'anthropic/claude-haiku-5.5',
-      'z-ai/glm-5.3-flash',
-      'moonshotai/kimi-k3',
-      'deepseek/deepseek-v4.1-flash-1017',
-      'google/gemini-3.8-flash',
+      '~anthropic/claude-haiku-latest',
+      '~z-ai/glm-flash-latest',
+      '~moonshotai/kimi-latest',
+      '~deepseek/deepseek-flash-latest',
+      'google/gemini-4-hydrogen',
       'minimax/minimax-m3.1-flash',
       'nvidia/nemotron-3.5-super-vl',
+      'thinkingmachines/inkling-2-small',
     ],
-    chairman_model: 'google/gemini-3.8-flash',
+    chairman_model: 'google/gemini-4-hydrogen',
   },
   {
     id: 'large-council',
@@ -62,12 +68,12 @@ export const MODEL_PRESETS = [
     description: 'Seven diverse models for broad consensus',
     icon: '🏛️',
     council_models: [
-      'anthropic/claude-sonnet-5.5',
-      'openai/gpt-6-astra',
-      'google/gemini-3.8-flash',
-      'x-ai/grok-4.7',
-      'moonshotai/kimi-k3.1-pro',
-      'z-ai/glm-5.3',
+      '~anthropic/claude-sonnet-latest',
+      '~openai/gpt-astra-latest',
+      'google/gemini-4-hydrogen',
+      '~x-ai/grok-latest',
+      '~moonshotai/kimi-latest',
+      '~z-ai/glm-latest',
       'nvidia/nemotron-3-ultra-550b-a55b',
     ],
     chairman_model: 'google/gemini-4-argon',
@@ -78,10 +84,10 @@ export const MODEL_PRESETS = [
     description: 'Fastest responses with lightweight models',
     icon: '⚡',
     council_models: [
-      'anthropic/claude-haiku-5.5',
-      'openai/gpt-6-luna',
-      'google/gemini-3.8-flash',
+      '~anthropic/claude-haiku-latest',
+      '~openai/gpt-luna-latest',
+      'google/gemini-4-hydrogen',
     ],
-    chairman_model: 'google/gemini-3.8-flash',
+    chairman_model: 'google/gemini-4-hydrogen',
   },
 ];
