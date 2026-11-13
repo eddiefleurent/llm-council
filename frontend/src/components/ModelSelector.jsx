@@ -57,12 +57,14 @@ export default function ModelSelector({
 }) {
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadProviders = async () => {
     // Always start from the provider grid when (re)loading
     setSelectedProvider(null);
+    setSearchQuery('');
     setLoading(true);
     setError(null);
     try {
@@ -99,6 +101,55 @@ export default function ModelSelector({
 
   if (!isOpen) return null;
 
+  const query = searchQuery.trim().toLowerCase();
+  const searchResults = query
+    ? providers.flatMap((provider) =>
+        provider.models
+          .filter(
+            (model) =>
+              model.id.toLowerCase().includes(query) ||
+              (model.name || '').toLowerCase().includes(query)
+          )
+          .map((model) => ({ ...model, providerName: provider.name }))
+      )
+    : null;
+
+  const renderModelButton = (model, showProvider) => {
+    const isSelected = selectedModels.includes(model.id);
+    return (
+      <button
+        key={model.id}
+        className={`model-btn ${isSelected ? 'selected' : ''}`}
+        onClick={() => handleModelClick(model)}
+      >
+        <div className="model-info">
+          <span className="model-name">
+            {getModelDisplayName(model)}
+            {showProvider && (
+              <span className="model-provider-tag">{model.providerName}</span>
+            )}
+          </span>
+          <span className="model-id">{model.id}</span>
+        </div>
+        <div className="model-meta">
+          <span className="context-length">
+            {(() => {
+              const ctxLen = Number(model.context_length);
+              if (isFinite(ctxLen) && ctxLen > 0) {
+                return `${(ctxLen / 1000).toFixed(0)}k ctx`;
+              }
+              return 'N/A ctx';
+            })()}
+          </span>
+          <span className="pricing-info" title="Input / Output per 1M tokens">
+            {formatPrice(model.pricing?.prompt)} / {formatPrice(model.pricing?.completion)}
+          </span>
+          {isSelected && <span className="selected-badge">Selected</span>}
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="model-selector-overlay" onClick={onClose}>
       <div className="model-selector-panel" onClick={(e) => e.stopPropagation()}>
@@ -131,7 +182,28 @@ export default function ModelSelector({
             </div>
           )}
 
-          {!loading && !error && !selectedProvider && (
+          {!loading && !error && (
+            <input
+              className="model-search"
+              type="search"
+              placeholder="Search models..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+          )}
+
+          {!loading && !error && searchResults && (
+            <div className="model-list">
+              {searchResults.length === 0 ? (
+                <div className="empty-state">No models match “{searchQuery}”</div>
+              ) : (
+                searchResults.map((model) => renderModelButton(model, true))
+              )}
+            </div>
+          )}
+
+          {!loading && !error && !searchResults && !selectedProvider && (
             <div className="provider-grid">
               {providers.map((provider) => {
                 const colors = getProviderColor(provider.id);
@@ -139,52 +211,25 @@ export default function ModelSelector({
                   <button
                     key={provider.id}
                     className="provider-btn"
-                    style={{
-                      backgroundColor: colors.bg,
-                      color: colors.text
-                    }}
                     onClick={() => handleProviderClick(provider)}
                   >
-                    <span className="provider-name">{provider.name}</span>
-                    <span className="provider-count">{provider.model_count} models</span>
+                    <span
+                      className="provider-dot"
+                      style={{ backgroundColor: colors.bg }}
+                    />
+                    <span className="provider-text">
+                      <span className="provider-name">{provider.name}</span>
+                      <span className="provider-count">{provider.model_count} models</span>
+                    </span>
                   </button>
                 );
               })}
             </div>
           )}
 
-          {!loading && !error && selectedProvider && (
+          {!loading && !error && !searchResults && selectedProvider && (
             <div className="model-list">
-              {selectedProvider.models.map((model) => {
-                const isSelected = selectedModels.includes(model.id);
-                return (
-                  <button
-                    key={model.id}
-                    className={`model-btn ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleModelClick(model)}
-                  >
-                    <div className="model-info">
-                      <span className="model-name">{getModelDisplayName(model)}</span>
-                      <span className="model-id">{model.id}</span>
-                    </div>
-                    <div className="model-meta">
-                      <span className="context-length">
-                        {(() => {
-                          const ctxLen = Number(model.context_length);
-                          if (isFinite(ctxLen) && ctxLen > 0) {
-                            return `${(ctxLen / 1000).toFixed(0)}k ctx`;
-                          }
-                          return 'N/A ctx';
-                        })()}
-                      </span>
-                      <span className="pricing-info" title="Input / Output per 1M tokens">
-                        {formatPrice(model.pricing?.prompt)} / {formatPrice(model.pricing?.completion)}
-                      </span>
-                      {isSelected && <span className="selected-badge">Selected</span>}
-                    </div>
-                  </button>
-                );
-              })}
+              {selectedProvider.models.map((model) => renderModelButton(model, false))}
             </div>
           )}
         </div>
