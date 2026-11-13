@@ -203,29 +203,29 @@
 .model-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .model-btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 12px;
+  padding: 14px 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
   text-align: left;
   width: 100%;
 }
 
 @media (max-width: 768px) {
   .model-btn {
-    padding: 8px 10px;
+    padding: 12px;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 8px;
   }
 
   .model-meta {
@@ -247,13 +247,13 @@
 .model-info {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
 
 .model-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -273,7 +273,7 @@
 }
 
 .model-id {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -283,23 +283,23 @@
 .model-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
-  margin-left: 10px;
+  margin-left: 12px;
 }
 
 .context-length {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-tertiary);
-  padding: 1px 5px;
+  padding: 2px 6px;
   background: var(--bg-secondary);
   border-radius: 4px;
 }
 
 .pricing-info {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
-  padding: 1px 5px;
+  padding: 2px 6px;
   background: var(--bg-secondary);
   border-radius: 4px;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
@@ -307,7 +307,7 @@
 }
 
 .selected-badge {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--accent-primary);
   padding: 2px 6px;
   background: var(--accent-light);
