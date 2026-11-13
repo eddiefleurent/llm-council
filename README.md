@@ -42,8 +42,6 @@ Models are auto-discovered from OpenRouter's API. Browse providers and select fr
 
 ![OpenRouter Providers](docs/images/config-openrouter-labs.png)
 
-![OpenRouter Models](docs/images/config-openrouter-models.png)
-
 ## Resources
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/eddiefleurent/llm-council)
