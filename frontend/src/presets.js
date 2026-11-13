@@ -26,6 +26,7 @@ export const MODEL_PRESETS = [
       '~anthropic/claude-opus-latest',
       '~openai/gpt-astra-latest',
       'google/gemini-4-argon',
+      'google/gemini-4-carbon',
       '~x-ai/grok-latest',
     ],
     chairman_model: '~anthropic/claude-opus-latest',
@@ -38,7 +39,7 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-sonnet-latest',
       '~openai/gpt-sol-latest',
-      'google/gemini-3.8-flash',
+      'google/gemini-4-hydrogen',
       '~x-ai/grok-latest',
       '~moonshotai/kimi-latest',
     ],
@@ -54,12 +55,12 @@ export const MODEL_PRESETS = [
       '~z-ai/glm-flash-latest',
       '~moonshotai/kimi-latest',
       '~deepseek/deepseek-flash-latest',
-      'google/gemini-3.8-flash',
+      'google/gemini-4-hydrogen',
       'minimax/minimax-m3.1-flash',
       'nvidia/nemotron-3.5-super-vl',
       'thinkingmachines/inkling-2-small',
     ],
-    chairman_model: 'google/gemini-3.8-flash',
+    chairman_model: 'google/gemini-4-hydrogen',
   },
   {
     id: 'large-council',
@@ -69,7 +70,7 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-sonnet-latest',
       '~openai/gpt-astra-latest',
-      'google/gemini-3.8-flash',
+      'google/gemini-4-hydrogen',
       '~x-ai/grok-latest',
       '~moonshotai/kimi-latest',
       '~z-ai/glm-latest',
@@ -85,8 +86,8 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-haiku-latest',
       '~openai/gpt-luna-latest',
-      'google/gemini-3.8-flash',
+      'google/gemini-4-hydrogen',
     ],
-    chairman_model: 'google/gemini-3.8-flash',
+    chairman_model: 'google/gemini-4-hydrogen',
   },
 ];

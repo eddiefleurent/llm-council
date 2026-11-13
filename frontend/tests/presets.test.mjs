@@ -35,7 +35,8 @@ test('presets use the November 2026 model lineup', () => {
   assert.ok(modelIds.includes('~openai/gpt-luna-latest'));
   assert.ok(modelIds.includes('~openai/gpt-sol-latest'));
   assert.ok(modelIds.includes('google/gemini-4-argon'));
-  assert.ok(modelIds.includes('google/gemini-3.8-flash'));
+  assert.ok(modelIds.includes('google/gemini-4-carbon'));
+  assert.ok(modelIds.includes('google/gemini-4-hydrogen'));
   assert.ok(!modelIds.includes('google/gemini-3.5-flash-lite'));
   assert.ok(modelIds.includes('~anthropic/claude-haiku-latest'));
   assert.ok(modelIds.includes('minimax/minimax-m3.1-flash'));
@@ -61,9 +62,9 @@ test('balanced, budget, and speed presets use role-aligned current models', () =
   assert.ok(!budget.council_models.includes('nvidia/nemotron-3-ultra-550b-a55b'));
   assert.ok(largeCouncil.council_models.includes('nvidia/nemotron-3-ultra-550b-a55b'));
 
-  assert.ok(speed.council_models.includes('google/gemini-3.8-flash'));
+  assert.ok(speed.council_models.includes('google/gemini-4-hydrogen'));
   assert.ok(!speed.council_models.includes('google/gemini-3.5-flash-lite'));
-  assert.equal(speed.chairman_model, 'google/gemini-3.8-flash');
+  assert.equal(speed.chairman_model, 'google/gemini-4-hydrogen');
 
   for (const preset of [budget, speed]) {
     assert.ok(preset.council_models.includes('~anthropic/claude-haiku-latest'));
