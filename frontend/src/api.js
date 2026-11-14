@@ -41,6 +41,13 @@ let tokenPromptPromise = null;
 const promptForToken = () => {
   if (!tokenPromptPromise) {
     tokenPromptPromise = Promise.resolve().then(() => {
+      // A parallel request that got its 401 first may have already
+      // prompted and stored a token — reuse it instead of prompting again.
+      const existing = localStorage.getItem(API_TOKEN_STORAGE_KEY);
+      if (existing) {
+        tokenPromptPromise = null;
+        return existing;
+      }
       const token = window.prompt(
         'Enter your LLM Council API token — the LLM_COUNCIL_API_TOKEN value if you set one, ' +
           'otherwise shown in the backend startup logs and stored in data/api_token.\n\n' +
@@ -71,7 +78,11 @@ async function apiFetch(url, options = {}) {
   if (response.status !== 401) {
     return response;
   }
-  localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  // Drop the rejected token, but only if it's still the stored value —
+  // a parallel request may have already replaced it with a working one.
+  if (token && localStorage.getItem(API_TOKEN_STORAGE_KEY) === token) {
+    localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  }
   const newToken = await promptForToken();
   if (!newToken) {
     return response;
