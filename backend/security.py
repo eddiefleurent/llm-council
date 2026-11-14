@@ -11,6 +11,7 @@ from fastapi import HTTPException, Request
 logger = logging.getLogger(__name__)
 
 API_TOKEN_ENV = "LLM_COUNCIL_API_TOKEN"
+AUTH_DISABLED_ENV = "LLM_COUNCIL_AUTH_DISABLED"
 CORS_ORIGINS_ENV = "LLM_COUNCIL_CORS_ORIGINS"
 API_TOKEN_FILE = "data/api_token"
 API_URL_FILE = "data/api_url"
@@ -61,9 +62,19 @@ def get_api_token() -> str:
     return _generated_token
 
 
+def auth_disabled() -> bool:
+    """Return True when bearer-token auth is explicitly turned off."""
+    return os.getenv(AUTH_DISABLED_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 async def require_api_token(request: Request) -> None:
     """Reject /api requests that do not carry the configured bearer token."""
-    if not request.url.path.startswith("/api"):
+    if auth_disabled() or not request.url.path.startswith("/api"):
         return
     scheme, _, credentials = request.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer" or not secrets.compare_digest(
@@ -80,10 +91,13 @@ def write_login_link(frontend_origin: str) -> str:
     """Persist the one-click UI login link (token included) next to the token."""
     path = Path(API_URL_FILE)
     path.parent.mkdir(parents=True, exist_ok=True)
-    token = urllib.parse.quote(get_api_token(), safe="")
+    url = frontend_origin
+    if not auth_disabled():
+        token = urllib.parse.quote(get_api_token(), safe="")
+        url = f"{frontend_origin}/?token={token}"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(f"{frontend_origin}/?token={token}\n")
+        f.write(f"{url}\n")
     try:
         os.chmod(path, 0o600)
     except OSError as e:

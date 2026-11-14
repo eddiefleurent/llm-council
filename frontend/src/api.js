@@ -42,7 +42,9 @@ const promptForToken = () => {
   if (!tokenPromptPromise) {
     tokenPromptPromise = Promise.resolve().then(() => {
       const token = window.prompt(
-        'Enter the LLM Council API token (shown in the backend startup logs and stored in data/api_token):'
+        'Enter your LLM Council API token — the LLM_COUNCIL_API_TOKEN value if you set one, ' +
+          'otherwise shown in the backend startup logs and stored in data/api_token.\n\n' +
+          'Tip: set LLM_COUNCIL_API_TOKEN to a password you choose, or LLM_COUNCIL_AUTH_DISABLED=1 on a trusted network, to stop seeing this.'
       );
       tokenPromptPromise = null;
       const trimmed = token?.trim();

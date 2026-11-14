@@ -42,6 +42,7 @@ from .models import (
 from .reviews import PROMPT_VERSION
 from .security import (
     MAX_COUNCIL_MODELS,
+    auth_disabled,
     get_cors_origins,
     require_api_token,
     write_login_link,
@@ -73,6 +74,11 @@ async def lifespan(app: FastAPI):
     link_path = write_login_link(origins[0])
     print(f"\nTo open the UI, use the login link in {link_path}")
     print("  (e.g. `cat data/api_url` or `docker exec llm-council cat data/api_url`)")
+    if auth_disabled():
+        print(
+            "WARNING: API auth is disabled (LLM_COUNCIL_AUTH_DISABLED) — "
+            "anyone who can reach the API port can use it."
+        )
     print(f"Allowed CORS origins: {', '.join(origins)}")
     print("=" * 60 + "\n")
     yield

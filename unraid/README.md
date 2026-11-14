@@ -15,7 +15,7 @@
 6. Click **Apply**
 
 The container will be available at `http://your-unraid-ip:5173`. Set **Allowed Origins** to that exact URL (and any Tailscale URL you use, comma-separated).
-On first load the UI asks for the API token: use **API Token** if you set one, otherwise copy it from `data/api_token`, or open the login link in `data/api_url`.
+On first load the UI asks for the API token. Set **API Token** to a password you choose so you never have to fetch it, or copy the generated one from `data/api_token` / the login link in `data/api_url`. To skip the token entirely on a trusted network, set **Disable API Auth** (`LLM_COUNCIL_AUTH_DISABLED=1`).
 
 ## Or Use Docker Compose
 

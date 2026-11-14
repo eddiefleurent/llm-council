@@ -48,6 +48,25 @@ async def test_valid_token_is_accepted(client):
     assert response.status_code == 200
 
 
+@pytest.mark.parametrize("value", ["1", "true", "Yes", "ON"])
+async def test_auth_disabled_allows_unauthenticated_requests(
+    client, monkeypatch, value
+):
+    monkeypatch.setenv(security.AUTH_DISABLED_ENV, value)
+    response = await client.get("/api/conversations")
+    assert response.status_code == 200
+
+
+async def test_auth_disabled_writes_login_link_without_token(monkeypatch, tmp_path):
+    url_file = tmp_path / "data" / "api_url"
+    monkeypatch.setenv(security.AUTH_DISABLED_ENV, "1")
+    monkeypatch.setattr(security, "API_URL_FILE", str(url_file))
+
+    security.write_login_link("http://localhost:5173")
+
+    assert url_file.read_text().strip() == "http://localhost:5173"
+
+
 async def test_health_check_is_public(client):
     assert (await client.get("/")).status_code == 200
 
