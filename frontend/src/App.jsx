@@ -403,7 +403,10 @@ function App() {
             case 'error':
               receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
-              setSendError(event.message || 'The chairman response failed.');
+              setSendError({
+                conversationId,
+                message: event.message || 'The chairman response failed.',
+              });
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
               }
@@ -519,7 +522,10 @@ function App() {
             case 'error':
               receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
-              setSendError(event.message || 'The council response failed.');
+              setSendError({
+                conversationId,
+                message: event.message || 'The council response failed.',
+              });
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
               }
@@ -547,9 +553,10 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      setSendError(
-        error?.message || 'Failed to send message. Please try again.'
-      );
+      setSendError({
+        conversationId,
+        message: error?.message || 'Failed to send message. Please try again.',
+      });
       if (!messageQueued) {
         // Nothing was persisted — give the draft back to the composer.
         callbacks.onSendFailed?.();
@@ -602,7 +609,11 @@ function App() {
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
-        sendError={sendError}
+        sendError={
+          sendError && sendError.conversationId === currentConversationId
+            ? sendError.message
+            : null
+        }
         onDismissSendError={() => setSendError(null)}
         isLoading={isCurrentConversationGenerating}
         isSendLocked={isSendLockedByOtherConversation}
