@@ -32,10 +32,12 @@
 
 5. Open the login link saved to `data/api_url` (`docker exec llm-council cat data/api_url`, or `cat data/api_url` on the host).
    It contains the API token, which the UI then remembers. The token is also in `data/api_token`.
+   To avoid ever fetching it, set `LLM_COUNCIL_API_TOKEN` to a password you choose in `deploy/.env` — the UI asks for it once per browser.
 
 ### API token, CORS, and LAN access
 
 - Every `/api` request requires the API token (`LLM_COUNCIL_API_TOKEN`, or the generated `data/api_token`). It is separate from your OpenRouter key.
+- On a network you fully trust (e.g. home LAN or Tailscale), set `LLM_COUNCIL_AUTH_DISABLED=1` to skip the token check entirely — no prompts, but anyone who can reach the API port can use it.
 - Compose publishes ports on `127.0.0.1` only. To reach the UI from other devices, change the port lines to `"5173:5173"` / `"8001:8001"` and set `LLM_COUNCIL_CORS_ORIGINS` to the URL you browse to, e.g. `LLM_COUNCIL_CORS_ORIGINS=http://192.168.1.50:5173`.
 - Behind an HTTPS reverse proxy that serves `/api` on the same origin, no CORS setting is needed.
 
