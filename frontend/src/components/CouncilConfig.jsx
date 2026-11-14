@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api';
 import { MODEL_PRESETS } from '../presets';
 import ModelSelector from './ModelSelector';
@@ -74,7 +74,8 @@ export default function CouncilConfig({
   const [councilModels, setCouncilModels] = useState([]);
   const [chairmanModel, setChairmanModel] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [setAsDefault, setSetAsDefault] = useState(true); // For new conversations only
+  const [setAsDefault, setSetAsDefault] = useState(false); // For new conversations only
+  const panelRef = useRef(null);
   // loadedConfig is the baseline for detecting changes (the persisted/saved state)
   const [loadedConfig, setLoadedConfig] = useState({ council_models: [], chairman_model: '', web_search_enabled: false });
   const [loading, setLoading] = useState(false);
@@ -123,8 +124,21 @@ export default function CouncilConfig({
   useEffect(() => {
     if (isOpen) {
       queueMicrotask(loadConfig);
+      // Move focus into the dialog so Esc/Tab behave predictably.
+      panelRef.current?.focus();
     }
   }, [isOpen, loadConfig]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event) => {
+      // The nested model selector closes itself; Esc must not bubble up to
+      // this dialog and discard unsaved changes.
+      if (event.key === 'Escape' && !showModelSelector) onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose, showModelSelector]);
 
   // Track changes against the loaded (persisted) config, not the factory defaults
   const hasChanges =
@@ -325,7 +339,15 @@ export default function CouncilConfig({
   return (
     <>
       <div className="council-config-overlay" onClick={onClose}>
-        <div className="council-config-panel" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="council-config-panel"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Council configuration"
+          ref={panelRef}
+          tabIndex={-1}
+        >
           <div className="council-config-header">
             <h2>{isDraftMode || isNewConversation ? 'Configure New Conversation' : 'Conversation Settings'}</h2>
             <button className="close-btn" aria-label="Close" onClick={onClose}>×</button>
@@ -404,14 +426,19 @@ export default function CouncilConfig({
                   </span>
                 </div>
 
-                <div className="chairman-select" onClick={handleSelectChairman}>
+                <button
+                  type="button"
+                  className="chairman-select"
+                  onClick={handleSelectChairman}
+                  aria-label="Select chairman model"
+                >
                   {chairmanModel ? (
                     <ModelChip modelId={chairmanModel} showRemove={false} />
                   ) : (
                     <span className="placeholder">Select a chairman model</span>
                   )}
                   <span className="change-btn">Change</span>
-                </div>
+                </button>
               </section>
 
               {/* Web Search Section */}
@@ -456,7 +483,7 @@ export default function CouncilConfig({
                       disabled={saving}
                     />
                     <span className="checkbox-label">
-                      Set as default for future conversations
+                      Also save as the default for future conversations
                     </span>
                   </label>
                   <div className="checkbox-description">

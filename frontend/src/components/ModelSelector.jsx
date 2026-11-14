@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { getProviderColor } from '../providerColors';
 import { getModelDisplayName as getDisplayName } from '../utils';
@@ -60,6 +60,7 @@ export default function ModelSelector({
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const panelRef = useRef(null);
 
   const loadProviders = async () => {
     // Always start from the provider grid when (re)loading
@@ -83,8 +84,18 @@ export default function ModelSelector({
   useEffect(() => {
     if (isOpen) {
       queueMicrotask(loadProviders);
+      panelRef.current?.focus();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   const handleProviderClick = (provider) => {
     setSelectedProvider(provider);
@@ -152,7 +163,15 @@ export default function ModelSelector({
 
   return (
     <div className="model-selector-overlay" onClick={onClose}>
-      <div className="model-selector-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="model-selector-panel"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Select a model"
+        ref={panelRef}
+        tabIndex={-1}
+      >
         <div className="model-selector-header">
           {selectedProvider ? (
             <>
@@ -219,7 +238,7 @@ export default function ModelSelector({
                     />
                     <span className="provider-text">
                       <span className="provider-name">{provider.name}</span>
-                      <span className="provider-count">{provider.model_count} models</span>
+                      <span className="provider-count">{provider.model_count} model{provider.model_count === 1 ? '' : 's'}</span>
                     </span>
                   </button>
                 );

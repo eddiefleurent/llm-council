@@ -13,6 +13,7 @@ export default function Sidebar({
   theme,
   onToggleTheme,
   isMobileOpen = false,
+  onCloseSidebar,
 }) {
   const handleConversationClick = (id) => {
     onSelectConversation(id);
@@ -30,7 +31,7 @@ export default function Sidebar({
   };
 
   const isClearHistoryDisabled =
-    isMutating || activeGenerationConversationId !== null;
+    isMutating || activeGenerationConversationId !== null || conversations.length === 0;
 
   return (
     <div className={`sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
@@ -38,6 +39,14 @@ export default function Sidebar({
         <div className="header-title-row">
           <h1>LLM Council</h1>
           <div className="header-actions">
+            <button
+              type="button"
+              className="sidebar-close-btn"
+              onClick={onCloseSidebar}
+              aria-label="Close sidebar"
+            >
+              ×
+            </button>
             <button
               type="button"
               className="theme-toggle-btn"
@@ -129,7 +138,7 @@ export default function Sidebar({
                 </button>
               </div>
               <div className="conversation-meta">
-                {conv.message_count} messages
+                {conv.message_count} message{conv.message_count === 1 ? '' : 's'}
               </div>
             </div>
           ))

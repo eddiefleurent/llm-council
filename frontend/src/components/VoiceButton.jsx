@@ -13,6 +13,15 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState(null);
   const [showSetupModal, setShowSetupModal] = useState(false);
+
+  useEffect(() => {
+    if (!showSetupModal) return;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setShowSetupModal(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showSetupModal]);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const startingRef = useRef(false);
@@ -222,8 +231,14 @@ export default function VoiceButton({ onTranscription, disabled, disabledReason 
       {/* Setup Modal for missing GROQ_API_KEY */}
       {showSetupModal && (
         <div className="voice-modal-overlay" onClick={() => setShowSetupModal(false)}>
-          <div className="voice-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Voice Transcription Setup</h3>
+          <div
+            className="voice-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Voice transcription setup"
+          >
+            <h2>Voice Transcription Setup</h2>
             <p>
               Voice dictation requires a Groq API key for speech-to-text transcription.
             </p>

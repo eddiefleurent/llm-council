@@ -34,6 +34,7 @@ function App() {
   const [activeGenerationConversationId, setActiveGenerationConversationId] =
     useState(null);
   const [isMutatingConversations, setIsMutatingConversations] = useState(false);
+  const [sendError, setSendError] = useState(null);
 
   // Draft conversation config (used before conversation is created)
   const [draftConfig, setDraftConfig] = useState(null);
@@ -278,13 +279,18 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content, attachment = null) => {
+  const handleSendMessage = async (content, attachment = null, callbacks = {}) => {
     if (activeGenerationConversationId) return;
 
     const effectiveMode = messageMode;
     let conversationId = currentConversationId;
     let generationStarted = false;
     let receivedTerminalEvent = false;
+    // Whether the optimistic user message made it into state; if a failure
+    // happens before this, the draft should be restored to the composer.
+    let messageQueued = false;
+
+    setSendError(null);
 
     try {
       // If in draft mode, create the conversation first
@@ -339,6 +345,7 @@ function App() {
           messages: [...prev.messages, userMessage],
         };
       });
+      messageQueued = true;
 
       if (effectiveMode === 'chairman') {
         // Chairman-only mode: simpler assistant message
@@ -396,6 +403,10 @@ function App() {
             case 'error':
               receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
+              setSendError({
+                conversationId,
+                message: event.message || 'The chairman response failed.',
+              });
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
               }
@@ -511,6 +522,10 @@ function App() {
             case 'error':
               receivedTerminalEvent = true;
               console.error('Stream error:', event.message);
+              setSendError({
+                conversationId,
+                message: event.message || 'The council response failed.',
+              });
               if (currentConversationIdRef.current === conversationId) {
                 loadConversation(conversationId);
               }
@@ -538,9 +553,29 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to send message:', error);
+      setSendError({
+        conversationId,
+        message: error?.message || 'Failed to send message. Please try again.',
+      });
+      if (!messageQueued) {
+        // Nothing was persisted — give the draft back to the composer.
+        callbacks.onSendFailed?.();
+      }
       if (conversationId && currentConversationIdRef.current === conversationId) {
         loadConversation(conversationId);
       }
+      // If the resync fails (e.g. backend unreachable), clear any stale
+      // "Running stage…" indicators left on the optimistic message.
+      updateCurrentAssistantMessage(conversationId, (lastMsg) =>
+        lastMsg.loading
+          ? {
+              ...lastMsg,
+              loading: Object.fromEntries(
+                Object.keys(lastMsg.loading).map((key) => [key, false])
+              ),
+            }
+          : lastMsg
+      );
       if (generationStarted) {
         setActiveGenerationConversationId((prev) =>
           prev === conversationId ? null : prev
@@ -574,6 +609,12 @@ function App() {
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
+        sendError={
+          sendError && sendError.conversationId === currentConversationId
+            ? sendError.message
+            : null
+        }
+        onDismissSendError={() => setSendError(null)}
         isLoading={isCurrentConversationGenerating}
         isSendLocked={isSendLockedByOtherConversation}
         isMutatingConversations={isMutatingConversations}
