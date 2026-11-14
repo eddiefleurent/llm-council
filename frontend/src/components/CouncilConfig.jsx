@@ -132,11 +132,13 @@ export default function CouncilConfig({
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      // The nested model selector closes itself; Esc must not bubble up to
+      // this dialog and discard unsaved changes.
+      if (event.key === 'Escape' && !showModelSelector) onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, showModelSelector]);
 
   // Track changes against the loaded (persisted) config, not the factory defaults
   const hasChanges =

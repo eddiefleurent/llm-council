@@ -103,7 +103,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
             </div>
           )}
 
-          {tournamentRankings && tournamentRankings.length > 0 && (
+          {tournamentRankings && tournamentRankings.length > 0 &&
+            tournamentRankings.some((entry) => entry.total_matchups > 0) && (
             <div className="aggregate-rankings tournament-rankings">
               <h3>Tournament Rankings</h3>
               <p className="stage-description">
