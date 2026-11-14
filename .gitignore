@@ -28,3 +28,6 @@ deploy/config.conf
 deploy/*.sh
 !deploy/*.example
 !deploy/README.md
+
+# Impeccable design engine binary (downloaded on demand, per-platform)
+.devin/skills/impeccable/scripts/bin/
