@@ -14,7 +14,7 @@
  * which always redirects to the newest model in the family, so those
  * presets never need version bumps.
  *
- * All model IDs were validated against the OpenRouter API on 2026-11-13.
+ * All model IDs were validated against the OpenRouter API on 2026-11-14.
  */
 export const MODEL_PRESETS = [
   {
@@ -25,8 +25,8 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-opus-latest',
       '~openai/gpt-astra-latest',
-      'google/gemini-4-argon',
-      'google/gemini-4-carbon',
+      '~openai/gpt-terra-latest',
+      '~z-ai/glm-latest',
       '~x-ai/grok-latest',
     ],
     chairman_model: '~anthropic/claude-opus-latest',
@@ -39,11 +39,11 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-sonnet-latest',
       '~openai/gpt-sol-latest',
-      'google/gemini-4-hydrogen',
+      '~z-ai/glm-latest',
       '~x-ai/grok-latest',
       '~moonshotai/kimi-latest',
     ],
-    chairman_model: 'google/gemini-4-argon',
+    chairman_model: '~openai/gpt-astra-latest',
   },
   {
     id: 'budget',
@@ -55,12 +55,12 @@ export const MODEL_PRESETS = [
       '~z-ai/glm-flash-latest',
       '~moonshotai/kimi-latest',
       '~deepseek/deepseek-flash-latest',
-      'google/gemini-4-hydrogen',
+      '~openai/gpt-mini-latest',
       'minimax/minimax-m3.1-flash',
       'nvidia/nemotron-3.5-super-vl',
       'thinkingmachines/inkling-2-small',
     ],
-    chairman_model: 'google/gemini-4-hydrogen',
+    chairman_model: '~openai/gpt-mini-latest',
   },
   {
     id: 'large-council',
@@ -70,13 +70,13 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-sonnet-latest',
       '~openai/gpt-astra-latest',
-      'google/gemini-4-hydrogen',
+      '~deepseek/deepseek-pro-latest',
       '~x-ai/grok-latest',
       '~moonshotai/kimi-latest',
       '~z-ai/glm-latest',
       'nvidia/nemotron-3-ultra-550b-a55b',
     ],
-    chairman_model: 'google/gemini-4-argon',
+    chairman_model: '~openai/gpt-astra-latest',
   },
   {
     id: 'speed',
@@ -86,8 +86,8 @@ export const MODEL_PRESETS = [
     council_models: [
       '~anthropic/claude-haiku-latest',
       '~openai/gpt-luna-latest',
-      'google/gemini-4-hydrogen',
+      '~openai/gpt-mini-latest',
     ],
-    chairman_model: 'google/gemini-4-hydrogen',
+    chairman_model: '~openai/gpt-mini-latest',
   },
 ];

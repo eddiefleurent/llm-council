@@ -5,9 +5,16 @@ import CopyButton from './CopyButton';
 import { getModelDisplayName, getErrorMessage } from '../utils';
 import './Stage1.css';
 
-export default function Stage1({ responses, errors }) {
+export default function Stage1({ responses, errors, autoCollapse = false }) {
   const [activeTab, setActiveTab] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(autoCollapse);
+
+  // Collapse once the final answer lands (adjusting state when props change).
+  const [prevAutoCollapse, setPrevAutoCollapse] = useState(autoCollapse);
+  if (autoCollapse !== prevAutoCollapse) {
+    setPrevAutoCollapse(autoCollapse);
+    if (autoCollapse) setIsCollapsed(true);
+  }
 
   if (!responses || responses.length === 0) {
     return null;
@@ -20,13 +27,13 @@ export default function Stage1({ responses, errors }) {
   return (
     <div className="stage stage1">
       <div className="stage-header">
-        <h3 className="stage-title">
+        <h2 className="stage-title">
           Stage 1: Individual Responses
           <span className="model-count">
-            {' '}[{totalQueried} models queried, {responses.length} successful
+            {' '}[{totalQueried} model{totalQueried === 1 ? '' : 's'} queried, {responses.length} successful
             {hasFailed && `, ${errors.length} failed`}]
           </span>
-        </h3>
+        </h2>
         <button
           type="button"
           className="stage-collapse-btn"

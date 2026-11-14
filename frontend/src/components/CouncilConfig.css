@@ -245,7 +245,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: 12px 16px;
+  font: inherit;
+  text-align: left;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;

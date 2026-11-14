@@ -107,7 +107,7 @@
   background: var(--bg-primary);
   padding: 16px;
   border-radius: 6px;
-  border: 1px solid var(--border-primary);
+  border-top: 1px solid var(--border-primary);
   margin-bottom: 20px;
 }
 
@@ -189,4 +189,46 @@
   .stage2 .tab-content {
     padding: 12px;
   }
+}
+
+.label-map {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.label-map-item {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.raw-output-details {
+  border-top: 1px solid var(--border-primary);
+  padding-top: 12px;
+}
+
+.raw-output-details summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.raw-output-details summary:hover {
+  color: var(--text-primary);
+}
+
+.raw-output-details[open] summary {
+  margin-bottom: 12px;
+}
+
+.tournament-rankings {
+  margin-top: 12px;
 }

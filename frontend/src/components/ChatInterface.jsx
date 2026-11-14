@@ -27,6 +27,8 @@ export default function ChatInterface({
   isDraftMode = false,
   draftConfig = null,
   onDraftConfigChange,
+  sendError = null,
+  onDismissSendError,
 }) {
   const [input, setInput] = useState('');
   const [showConfig, setShowConfig] = useState(false);
@@ -108,7 +110,12 @@ export default function ChatInterface({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (hasSendContent && !isLoading && !isUploadingAttachment && !isSendLocked && !isMutatingConversations) {
-      onSendMessage(input, attachment);
+      const sentInput = input;
+      onSendMessage(input, attachment, {
+        // If the send fails before anything is queued, restore the draft
+        // so the user's text is never lost.
+        onSendFailed: () => setInput(sentInput),
+      });
       setInput('');
       setAttachment(null);
       setAttachmentError('');
@@ -313,7 +320,7 @@ export default function ChatInterface({
                         <span>Running Stage 1: Collecting individual responses...</span>
                       </div>
                     )}
-                    {msg.stage1 && <Stage1 responses={msg.stage1} errors={msg.errors?.stage1} />}
+                    {msg.stage1 && <Stage1 responses={msg.stage1} errors={msg.errors?.stage1} autoCollapse={!!msg.stage3} />}
 
                     {/* Stage 2 */}
                     {msg.loading?.stage2 && (
@@ -327,7 +334,9 @@ export default function ChatInterface({
                         rankings={msg.stage2}
                         labelToModel={msg.metadata?.label_to_model}
                         aggregateRankings={msg.metadata?.aggregate_rankings}
+                        tournamentRankings={msg.metadata?.tournament_rankings}
                         errors={msg.errors?.stage2}
+                        autoCollapse={!!msg.stage3}
                       />
                     )}
 
@@ -356,6 +365,20 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
+      {sendError && (
+        <div className="send-error-banner" role="alert">
+          <span className="send-error-text">{sendError}</span>
+          <button
+            type="button"
+            className="send-error-dismiss"
+            onClick={onDismissSendError}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <form className="input-form" onSubmit={handleSubmit}>
         <div className="input-header">
           <div className="mode-toggle">
@@ -379,12 +402,17 @@ export default function ChatInterface({
 
           {effectiveConfig && !loadingConfig && (
             <div className="model-indicator-compact">
+              {messageMode === 'council' && (
+                <>
+                  <span className="indicator-label">
+                    {isWebSearchEnabled && '🌐 '}
+                    Council: {councilCount} model{councilCount === 1 ? '' : 's'}
+                  </span>
+                  <span className="indicator-separator">•</span>
+                </>
+              )}
               <span className="indicator-label">
-                {isWebSearchEnabled && '🌐 '}
-                Council: {councilCount} model{councilCount === 1 ? '' : 's'}
-              </span>
-              <span className="indicator-separator">•</span>
-              <span className="indicator-label">
+                {isWebSearchEnabled && messageMode === 'chairman' && '🌐 '}
                 Chairman: {chairmanName}
               </span>
             </div>

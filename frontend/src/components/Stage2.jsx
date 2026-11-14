@@ -20,9 +20,16 @@ function deAnonymizeText(text, labelToModel) {
   return result;
 }
 
-export default function Stage2({ rankings, labelToModel, aggregateRankings, errors }) {
+export default function Stage2({ rankings, labelToModel, aggregateRankings, tournamentRankings, errors, autoCollapse = false }) {
   const [activeTab, setActiveTab] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(autoCollapse);
+
+  // Collapse once the final answer lands (adjusting state when props change).
+  const [prevAutoCollapse, setPrevAutoCollapse] = useState(autoCollapse);
+  if (autoCollapse !== prevAutoCollapse) {
+    setPrevAutoCollapse(autoCollapse);
+    if (autoCollapse) setIsCollapsed(true);
+  }
 
   if (!rankings || rankings.length === 0) {
     return null;
@@ -35,15 +42,15 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
   return (
     <div className="stage stage2">
       <div className="stage-header">
-        <h3 className="stage-title">
+        <h2 className="stage-title">
           Stage 2: Evidence Review
           {totalQueried > 0 && (
             <span className="model-count">
-              {' '}[{totalQueried} models queried, {rankings.length} successful
+              {' '}[{totalQueried} model{totalQueried === 1 ? '' : 's'} queried, {rankings.length} successful
               {hasFailed && `, ${errors.length} failed`}]
             </span>
           )}
-        </h3>
+        </h2>
         <button
           type="button"
           className="stage-collapse-btn"
@@ -71,55 +78,9 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
             </div>
           )}
 
-          <h4>Raw Model Output</h4>
-          <p className="stage-description">
-            Reviewers identify errors, disagreements, gaps, and useful insights using anonymized labels
-            (Response A, B, C, etc.), with optional rankings. Below, model names are shown in <strong>bold</strong>
-            for readability, but the original output uses anonymous labels.
-          </p>
-
-          <div className="tabs">
-            {rankings.map((rank, index) => (
-              <button
-                key={index}
-                className={`tab ${activeIndex === index ? 'active' : ''}`}
-                onClick={() => setActiveTab(index)}
-              >
-                {getModelDisplayName(rank.model)}
-              </button>
-            ))}
-          </div>
-
-          <div className="tab-content">
-            <div className="ranking-model">
-              {rankings[activeIndex].model}
-            </div>
-            <div className="ranking-content markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {deAnonymizeText(rankings[activeIndex].ranking, labelToModel)}
-              </ReactMarkdown>
-            </div>
-
-            {rankings[activeIndex].parsed_ranking &&
-              rankings[activeIndex].parsed_ranking.length > 0 && (
-                <div className="parsed-ranking">
-                  <strong>Extracted Ranking:</strong>
-                  <ol>
-                    {rankings[activeIndex].parsed_ranking.map((label, i) => (
-                      <li key={i}>
-                        {labelToModel && labelToModel[label]
-                          ? getModelDisplayName(labelToModel[label])
-                          : label}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-          </div>
-
           {aggregateRankings && aggregateRankings.length > 0 && (
             <div className="aggregate-rankings">
-              <h4>Aggregate Rankings (Street Cred)</h4>
+              <h3>Council Rankings</h3>
               <p className="stage-description">
                 Combined results across all peer evaluations (lower score is better):
               </p>
@@ -141,6 +102,93 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, erro
               </div>
             </div>
           )}
+
+          {tournamentRankings && tournamentRankings.length > 0 && (
+            <div className="aggregate-rankings tournament-rankings">
+              <h3>Tournament Rankings</h3>
+              <p className="stage-description">
+                Head-to-head pairwise wins across all peer evaluations:
+              </p>
+              <div className="aggregate-list">
+                {tournamentRankings.map((entry, index) => (
+                  <div key={index} className="aggregate-item">
+                    <span className="rank-position">#{index + 1}</span>
+                    <span className="rank-model">
+                      {getModelDisplayName(entry.model)}
+                    </span>
+                    <span className="rank-score">
+                      {Math.round(entry.win_percentage * 100)}% wins
+                    </span>
+                    <span className="rank-count">
+                      ({entry.wins}W–{entry.losses}L{entry.ties ? `–${entry.ties}T` : ''})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {labelToModel && Object.keys(labelToModel).length > 0 && (
+            <div className="label-map">
+              {Object.entries(labelToModel)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([label, model]) => (
+                  <span key={label} className="label-map-item">
+                    {label} → {getModelDisplayName(model)}
+                  </span>
+                ))}
+            </div>
+          )}
+
+          <details className="raw-output-details">
+            <summary>
+              Individual reviews ({rankings.length}) — raw output
+            </summary>
+            <p className="stage-description">
+              Reviewers identify errors, disagreements, gaps, and useful insights using anonymized labels
+              (Response A, B, C, etc.), with optional rankings. Below, model names are shown in <strong>bold</strong>
+              for readability, but the original output uses anonymous labels.
+            </p>
+
+            <div className="tabs">
+              {rankings.map((rank, index) => (
+                <button
+                  key={index}
+                  className={`tab ${activeIndex === index ? 'active' : ''}`}
+                  onClick={() => setActiveTab(index)}
+                >
+                  {getModelDisplayName(rank.model)}
+                </button>
+              ))}
+            </div>
+
+            <div className="tab-content">
+              <div className="ranking-model">
+                {rankings[activeIndex].model}
+              </div>
+              <div className="ranking-content markdown-content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {deAnonymizeText(rankings[activeIndex].ranking, labelToModel)}
+                </ReactMarkdown>
+              </div>
+
+              {rankings[activeIndex].parsed_ranking &&
+                rankings[activeIndex].parsed_ranking.length > 0 && (
+                  <div className="parsed-ranking">
+                    <strong>Extracted Ranking:</strong>
+                    <ol>
+                      {rankings[activeIndex].parsed_ranking.map((label, i) => (
+                        <li key={i}>
+                          {labelToModel && labelToModel[label]
+                            ? getModelDisplayName(labelToModel[label])
+                            : label}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+            </div>
+          </details>
         </>
       )}
     </div>

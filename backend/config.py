@@ -20,13 +20,13 @@ if not OPENROUTER_API_KEY:
 # Default council members - list of OpenRouter model identifiers
 # These are used when no custom council is configured
 DEFAULT_COUNCIL_MODELS = [
-    "google/gemini-4-argon",
     "~anthropic/claude-opus-latest",
+    "~openai/gpt-astra-latest",
     "~x-ai/grok-latest",
 ]
 
 # Default chairman model - synthesizes final response
-DEFAULT_CHAIRMAN_MODEL = "google/gemini-4-argon"
+DEFAULT_CHAIRMAN_MODEL = "~anthropic/claude-opus-latest"
 
 # OpenRouter API endpoint
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"

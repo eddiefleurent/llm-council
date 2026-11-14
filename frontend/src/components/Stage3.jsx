@@ -15,9 +15,9 @@ export default function Stage3({ finalResponse, chairmanOnly = false }) {
   return (
     <div className={`stage stage3 ${chairmanOnly ? 'chairman-only' : ''}`}>
       <div className="stage-header">
-        <h3 className="stage-title">
-          {chairmanOnly ? 'Chairman Response' : 'Stage 3: Final Council Answer'}
-        </h3>
+        <h2 className="stage-title">
+          {chairmanOnly ? 'Chairman Response' : 'Final Council Answer'}
+        </h2>
         <button
           type="button"
           className="stage-collapse-btn"

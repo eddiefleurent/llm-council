@@ -41,3 +41,12 @@
     font-size: 14px;
   }
 }
+
+.stage3 {
+  border-width: 2px;
+}
+
+.stage3 .stage-title {
+  font-size: 17px;
+  color: var(--stage3-text);
+}

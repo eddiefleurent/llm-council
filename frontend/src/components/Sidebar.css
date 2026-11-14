@@ -193,8 +193,15 @@
 }
 
 .conversation-item:hover .delete-conversation-btn,
+.conversation-item:focus-within .delete-conversation-btn,
 .conversation-item.active .delete-conversation-btn {
   opacity: 1;
+}
+
+.delete-conversation-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
 }
 
 .delete-conversation-btn:hover {
@@ -214,4 +221,27 @@
   font-size: 12px;
   text-align: center;
   border-bottom: 1px solid var(--border-primary);
+}
+
+.sidebar-close-btn {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.sidebar-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+@media (max-width: 768px) {
+  .sidebar-close-btn {
+    display: block;
+  }
 }

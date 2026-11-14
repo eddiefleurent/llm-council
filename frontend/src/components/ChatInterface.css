@@ -559,3 +559,32 @@
   min-width: 0;
   /* allows flex children to shrink instead of overflowing */
 }
+
+.send-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px 8px;
+  padding: 10px 14px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  color: var(--error-text);
+  font-size: 14px;
+}
+
+.send-error-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--error-text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.send-error-dismiss:hover {
+  opacity: 0.7;
+}
