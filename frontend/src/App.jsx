@@ -557,6 +557,18 @@ function App() {
       if (conversationId && currentConversationIdRef.current === conversationId) {
         loadConversation(conversationId);
       }
+      // If the resync fails (e.g. backend unreachable), clear any stale
+      // "Running stage…" indicators left on the optimistic message.
+      updateCurrentAssistantMessage(conversationId, (lastMsg) =>
+        lastMsg.loading
+          ? {
+              ...lastMsg,
+              loading: Object.fromEntries(
+                Object.keys(lastMsg.loading).map((key) => [key, false])
+              ),
+            }
+          : lastMsg
+      );
       if (generationStarted) {
         setActiveGenerationConversationId((prev) =>
           prev === conversationId ? null : prev

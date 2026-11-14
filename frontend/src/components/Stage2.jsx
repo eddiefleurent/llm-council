@@ -147,8 +147,8 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
             </summary>
             <p className="stage-description">
               Reviewers identify errors, disagreements, gaps, and useful insights using anonymized labels
-              (Response A, B, C, etc.), with optional rankings. Below, model names are shown in <strong>bold</strong>
-              for readability, but the original output uses anonymous labels.
+              (Response A, B, C, etc.), with optional rankings. Below, model names are shown in{' '}
+              <strong>bold</strong> for readability, but the original output uses anonymous labels.
             </p>
 
             <div className="tabs">
