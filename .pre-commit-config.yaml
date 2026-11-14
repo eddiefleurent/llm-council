@@ -17,7 +17,10 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^\.devin/
       - id: end-of-file-fixer
+        exclude: ^\.devin/
       - id: check-yaml
       - id: check-added-large-files
+        exclude: ^\.devin/
       - id: check-merge-conflict
