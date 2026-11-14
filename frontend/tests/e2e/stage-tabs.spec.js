@@ -110,6 +110,13 @@ test('stage tabs stay within the selected conversation results', async ({ page }
   await page.getByText('Long Council', { exact: true }).click();
   const stage1 = page.locator('.stage1');
   const stage2 = page.locator('.stage2');
+
+  // Stages 1–2 auto-collapse once the final answer lands; expand them,
+  // and open Stage 2's collapsed raw-output disclosure.
+  await stage1.getByRole('button', { name: 'Expand' }).click();
+  await stage2.getByRole('button', { name: 'Expand' }).click();
+  await stage2.getByText('Individual reviews').click();
+
   await expect(stage1.getByText('Long answer A')).toBeVisible();
 
   await stage1.getByRole('button', { name: 'model-b', exact: true }).click();
@@ -117,6 +124,9 @@ test('stage tabs stay within the selected conversation results', async ({ page }
   await expect(stage1.getByText('Long answer B')).toBeVisible();
 
   await page.getByText('Short Council', { exact: true }).click();
+  await stage1.getByRole('button', { name: 'Expand' }).click();
+  await stage2.getByRole('button', { name: 'Expand' }).click();
+  await stage2.getByText('Individual reviews').click();
   await expect(stage1.getByText('Short answer C')).toBeVisible();
   await expect(stage2.getByText('Short ranking C')).toBeVisible();
 });

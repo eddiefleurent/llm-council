@@ -13,7 +13,7 @@ test('council response renders all three stages', async ({ page }) => {
 
   await expect(page.getByText('Stage 1: Individual Responses')).toBeVisible();
   await expect(page.getByText('Stage 2: Evidence Review')).toBeVisible();
-  await expect(page.getByText('Stage 3: Final Council Answer')).toBeVisible();
+  await expect(page.getByText('Final Council Answer')).toBeVisible();
   await expect(page.getByText('Council final answer')).toBeVisible();
   await expect(page.getByText('Compare caching strategies')).toBeVisible();
 });

@@ -275,7 +275,10 @@ export default function ChatInterface({
               </div>
             )}
             {conversation.messages.map((msg, index) => (
-              <div key={index} className="message-group">
+              <div
+                key={conversation.id ? `${conversation.id}-${index}` : index}
+                className="message-group"
+              >
                 {msg.role === 'user' ? (
                   <div className="user-message">
                     <div className="message-label">You</div>
