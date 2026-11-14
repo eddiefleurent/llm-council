@@ -111,10 +111,14 @@ export default function ChatInterface({
     e.preventDefault();
     if (hasSendContent && !isLoading && !isUploadingAttachment && !isSendLocked && !isMutatingConversations) {
       const sentInput = input;
+      const sentAttachment = attachment;
       onSendMessage(input, attachment, {
         // If the send fails before anything is queued, restore the draft
-        // so the user's text is never lost.
-        onSendFailed: () => setInput(sentInput),
+        // so the user's text and attachment are never lost.
+        onSendFailed: () => {
+          setInput(sentInput);
+          setAttachment(sentAttachment);
+        },
       });
       setInput('');
       setAttachment(null);
