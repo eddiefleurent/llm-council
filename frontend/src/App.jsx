@@ -70,6 +70,10 @@ function App() {
   // Apply theme to root element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+    if (colorSchemeMeta) {
+      colorSchemeMeta.content = theme;
+    }
     localStorage.setItem('theme', theme);
   }, [theme]);
 

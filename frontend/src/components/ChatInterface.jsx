@@ -137,6 +137,11 @@ export default function ChatInterface({
     // Submit on Enter (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Don't submit while an IME composition is in progress (CJK input):
+      // Enter confirms the conversion candidate, not the message.
+      if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+        return;
+      }
       handleSubmit(e);
     }
   };
@@ -145,7 +150,9 @@ export default function ChatInterface({
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    if (textareaRef.current) {
+    // scrollHeight autosizing is only a fallback for browsers without
+    // CSS field-sizing (e.g. Firefox < 152, Safari < 26.2)
+    if (textareaRef.current && !CSS.supports('field-sizing', 'content')) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
