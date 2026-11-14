@@ -359,6 +359,10 @@
 
 .message-input {
   width: 100%;
+  height: auto;
+  /* Auto-grow with content (Baseline 2026-06); unsupported browsers keep
+     the JS scrollHeight fallback, then degrade to fixed-height scrolling. */
+  field-sizing: content;
   padding: 4px 6px;
   background: transparent;
   border: none;
