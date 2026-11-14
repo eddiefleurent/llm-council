@@ -294,6 +294,7 @@ Major improvements since forking from [karpathy/llm-council](https://github.com/
 - 🎯 **Per-Conversation Model Config** - Each conversation remembers its own models; config UI moved to chat interface for intuitive per-conversation settings
 - 🔄 **Fresh Start on Load** - App opens with new conversation instead of resuming last one (refresh preserves current conversation)
 - 🔌 **Resilient Streaming UX** - In-progress responses continue server-side even if the client disconnects, and the sidebar remains navigable during generation
+- 🔐 **Flexible API Auth** - Set `LLM_COUNCIL_API_TOKEN` to a password you choose (asked once per browser), or `LLM_COUNCIL_AUTH_DISABLED=1` to skip the token check on trusted networks
 
 ### 🛠️ Development Tools
 - ✅ **Ruff Linter** - Fast Python linting and formatting with pre-commit hooks

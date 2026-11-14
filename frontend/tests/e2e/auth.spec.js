@@ -48,9 +48,11 @@ test('parallel 401s produce a single prompt and reuse the entered token', async 
 
   await page.goto('/');
 
-  await expect.poll(() => seen.length).toBeGreaterThanOrEqual(2);
+  // Wait for the authenticated retries, not just the initial 401'd calls.
+  await expect
+    .poll(() => seen.filter((auth) => auth === `Bearer ${TOKEN}`).length)
+    .toBeGreaterThanOrEqual(2);
   expect(prompts).toBe(1);
-  expect(seen.filter((auth) => auth === `Bearer ${TOKEN}`).length).toBeGreaterThanOrEqual(2);
 });
 
 test('captures ?token= from the URL and strips it', async ({ page }) => {
