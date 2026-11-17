@@ -45,10 +45,15 @@ contains the same potentially sensitive inputs as the conversation history.
 
 ## Limits and telemetry
 
-- Each model call has a 120-second total deadline, including retries and waits.
-- The council pipeline has a 240-second deadline across all stages. A resume gets
-  a fresh deadline. Context summarization is separately bounded to 60 seconds.
-- Title generation has a 10-second deadline and 128 output tokens. Panel and
+- Each model call has a 300-second total deadline (`OPENROUTER_CALL_TIMEOUT`),
+  including retries and waits. Responses stream; an attempt that goes 60
+  seconds without receiving any data (`OPENROUTER_STALL_TIMEOUT`) counts as
+  stalled and may retry within the call deadline. Provider keep-alive frames
+  count as data, so slow-but-progressing generations stay alive.
+- The council pipeline has a 900-second deadline across all stages
+  (`COUNCIL_DEADLINE_SECONDS`). A resume gets a fresh deadline. Context
+  summarization is separately bounded to 60 seconds.
+- Title generation has a 30-second deadline and 128 output tokens. Panel and
   review outputs have 4096-token limits; synthesis has 8192. These limits also
   constrain reasoning tokens where the provider counts them toward completion.
 - Input size is checked against model catalog context lengths, reserving output

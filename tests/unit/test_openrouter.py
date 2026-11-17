@@ -1,17 +1,27 @@
 """Mock transport tests; never use paid model calls."""
 
+import json
+
 import httpx
 import pytest
 
 from backend import openrouter
 
 
+def _sse_response(*frames: dict, done: bool = True) -> httpx.Response:
+    """Build an SSE body from chunk dicts, terminated by [DONE]."""
+    payload = "".join(f"data: {json.dumps(frame)}\n\n" for frame in frames)
+    if done:
+        payload += "data: [DONE]\n\n"
+    return httpx.Response(200, content=payload.encode("utf-8"))
+
+
 @pytest.mark.parametrize("content", [None, "", "   "])
 async def test_empty_provider_answer_is_error(monkeypatch, content):
     real_client = httpx.AsyncClient
     transport = httpx.MockTransport(
-        lambda request: httpx.Response(
-            200, json={"choices": [{"message": {"content": content}}]}
+        lambda request: _sse_response(
+            {"choices": [{"delta": {"content": content}, "finish_reason": "stop"}]}
         )
     )
     monkeypatch.setattr(
@@ -27,26 +37,24 @@ async def test_preserve_usage_citations_and_truncation(monkeypatch):
     real_client = httpx.AsyncClient
 
     def respond(request):
-        import json
-
         body = json.loads(request.content)
         assert body["max_tokens"] == 128
         assert body["provider"]["require_parameters"] is True
-        return httpx.Response(
-            200,
-            json={
+        assert body["stream"] is True
+        return _sse_response(
+            {
                 "id": "generation",
-                "usage": {"cost": 0.01, "prompt_tokens": 12},
                 "choices": [
                     {
-                        "finish_reason": "length",
-                        "message": {
+                        "delta": {
                             "content": "answer",
                             "annotations": [{"url": "https://example.com"}],
                         },
+                        "finish_reason": "length",
                     }
                 ],
             },
+            {"choices": [], "usage": {"cost": 0.01, "prompt_tokens": 12}},
         )
 
     monkeypatch.setattr(
@@ -65,6 +73,92 @@ async def test_preserve_usage_citations_and_truncation(monkeypatch):
     assert result["truncated"] is True
     assert result["attempts"] == 1
     assert result["generation_id"] == "generation"
+
+
+async def test_stream_error_frame_retries_then_succeeds(monkeypatch):
+    real_client = httpx.AsyncClient
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return _sse_response(
+                {"error": {"code": 503, "message": "provider overloaded"}}
+            )
+        return _sse_response(
+            {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}
+        )
+
+    monkeypatch.setattr(
+        openrouter.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    result = await openrouter.query_model("model", [{"role": "user", "content": "q"}])
+    assert result["content"] == "ok"
+    assert result["attempts"] == 2
+    assert len(calls) == 2
+
+
+async def test_stream_skips_keepalives_and_malformed_frames(monkeypatch):
+    real_client = httpx.AsyncClient
+    body = (
+        b": OPENROUTER PROCESSING\n\n"
+        b"data: {not valid json\n\n"
+        b'data: {"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+    monkeypatch.setattr(
+        openrouter.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, content=body)
+            ),
+            **kwargs,
+        ),
+    )
+    result = await openrouter.query_model("model", [{"role": "user", "content": "q"}])
+    assert result["content"] == "ok"
+
+
+async def test_reasoning_details_merged_across_deltas(monkeypatch):
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(
+        lambda request: _sse_response(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "reasoning_details": [
+                                {"type": "reasoning.text", "index": 0, "text": "part "}
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "reasoning_details": [
+                                {"type": "reasoning.text", "index": 0, "text": "two"}
+                            ],
+                            "content": "done",
+                        },
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
+        )
+    )
+    monkeypatch.setattr(
+        openrouter.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    result = await openrouter.query_model("model", [{"role": "user", "content": "q"}])
+    assert result["reasoning_details"][0]["text"] == "part two"
 
 
 async def test_context_limit_fails_before_network():
