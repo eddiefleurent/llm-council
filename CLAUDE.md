@@ -45,7 +45,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `stage2_collect_rankings(user_query, stage1_results, council_models=None, *, context=None, catalog=None)`:
   - Anonymizes responses as "Response A, B, C, etc." and builds a required-label JSON schema
   - Uses the full conversation context and returns (results, label_to_model, errors)
-  - Each successful result has `evaluation`, `ranking`, `parsed_ranking`, and validated `review`
+  - Each successful result has `ranking` (raw JSON), `parsed_ranking`, and validated `review` containing `evaluation` and `final_ranking`
 - `stage3_synthesize_final(user_query, stage1_results, stage2_results, label_to_model, aggregate_rankings, tournament_rankings, chairman_model=None, *, context=None, catalog=None)`:
   - Chairman synthesizes from anonymous candidates, citations, and reviews
   - Optional `chairman_model` parameter

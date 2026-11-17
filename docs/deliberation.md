@@ -25,8 +25,9 @@ The existing message and message/stream routes accept an optional review mode:
   synthesis call. With N panelists, this uses N+2 primary completions instead of
   2N+1. Actual costs depend on tokens, models, search and retries.
 
-No default quality advantage is assumed. The API returns readable `evaluation` text
-and `parsed_ranking`; the raw JSON remains available as `ranking`. Mode selection and resumption are backend API features.
+No default quality advantage is assumed. The API returns each successful review as
+`review.evaluation` plus `review.final_ranking`, with `parsed_ranking` and the raw
+JSON still available as `ranking`. Mode selection and resumption are backend API features.
 
 POST `/api/conversations/{id}/resume` resumes the latest council turn. Saved
 successful stages are reused; an interrupted stage may need to run again. A failed
