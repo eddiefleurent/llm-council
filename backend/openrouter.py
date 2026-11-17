@@ -197,6 +197,7 @@ async def _query_model(
                 generation_id: str | None = None
                 provider_error: Any = None
                 saw_data = False
+                saw_done = False
                 # Upstream failures can arrive as a plain JSON body instead of
                 # SSE frames; keep non-data lines for classification.
                 raw_body = bytearray()
@@ -215,6 +216,7 @@ async def _query_model(
                     saw_data = True
                     data_str = line.removeprefix("data:").strip()
                     if data_str == "[DONE]":
+                        saw_done = True
                         break
                     try:
                         chunk = json.loads(data_str)
@@ -304,6 +306,27 @@ async def _query_model(
                         error_type=error_type,
                         message=f"Provider error: {err_msg}",
                         status_code=err_code,
+                        model=model,
+                    )
+
+                if finish_reason is None and not saw_done:
+                    # The stream ended without a completion signal (no
+                    # finish_reason, no [DONE]) — accumulated content may be
+                    # truncated mid-generation and must not be accepted.
+                    if attempt < _MAX_ATTEMPTS - 1:
+                        wait = _RETRY_WAIT[attempt]
+                        logger.warning(
+                            "[%s] Stream ended before completion (attempt %d/%d), retrying in %ds...",
+                            model,
+                            attempt + 1,
+                            _MAX_ATTEMPTS,
+                            wait,
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    return ModelQueryError(
+                        error_type="incomplete_stream",
+                        message=f"Stream ended before the response completed. All {_MAX_ATTEMPTS} attempts failed.",
                         model=model,
                     )
 
