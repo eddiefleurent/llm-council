@@ -31,6 +31,17 @@ DEFAULT_CHAIRMAN_MODEL = "google/gemini-4-argon"
 # OpenRouter API endpoint
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Total deadline (seconds) for one model call across all retry attempts.
+OPENROUTER_CALL_TIMEOUT = float(os.getenv("OPENROUTER_CALL_TIMEOUT", "300"))
+
+# Max seconds a streamed response may receive no data at all before the
+# attempt counts as stalled and is retried. Provider keep-alive frames count
+# as data, so a long but progressing generation stays alive.
+OPENROUTER_STALL_TIMEOUT = float(os.getenv("OPENROUTER_STALL_TIMEOUT", "60"))
+
+# End-to-end deadline (seconds) for a full 3-stage council run.
+COUNCIL_DEADLINE_SECONDS = float(os.getenv("COUNCIL_DEADLINE_SECONDS", "900"))
+
 # Data directory for conversation storage
 DATA_DIR = "data/conversations"
 

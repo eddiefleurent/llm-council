@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .config import (
+    COUNCIL_DEADLINE_SECONDS,
     DEFAULT_CHAIRMAN_MODEL,
     get_council_config,
     get_effective_models,
@@ -701,7 +702,7 @@ Title:"""
     messages = [{"role": "user", "content": title_prompt}]
 
     # Use chairman model for title generation (configurable)
-    response = await query_model(chairman_model, messages, timeout=10.0, max_tokens=128)
+    response = await query_model(chairman_model, messages, timeout=30.0, max_tokens=128)
 
     if isinstance(response, ModelQueryError):
         # Fallback to a generic title
@@ -728,7 +729,7 @@ async def run_full_council(
     web_search_enabled: bool | None = None,
     *,
     review_mode: str = "peer",
-    deadline_seconds: float = 240,
+    deadline_seconds: float = COUNCIL_DEADLINE_SECONDS,
     checkpoint: dict | None = None,
     save_checkpoint: Callable[[dict], None] | None = None,
     on_event: Callable[[dict], Awaitable[None]] | None = None,

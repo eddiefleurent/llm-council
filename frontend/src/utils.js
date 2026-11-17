@@ -45,7 +45,7 @@ export function getErrorMessage(error) {
 
   switch (error.error_type) {
     case 'timeout':
-      return 'Timeout (120s exceeded)';
+      return error.message || 'Timeout exceeded';
     case 'rate_limit':
       return 'Rate limit exceeded';
     case 'auth':

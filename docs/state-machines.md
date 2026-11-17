@@ -145,8 +145,9 @@ desynchronize from the backend.
   with 409 (`backend/main.py:748-764`, `backend/council.py:755-756`).
 - Completed stages are reused on resume; missing/failed stages rerun
   (`backend/council.py:785-858`).
-- The whole pipeline is bounded by `deadline_seconds=240`; each model call has
-  its own 120-second deadline.
+- The whole pipeline is bounded by `deadline_seconds`
+  (`COUNCIL_DEADLINE_SECONDS`, default 900); each model call has its own
+  deadline (`OPENROUTER_CALL_TIMEOUT`, default 300).
 - Stage artifacts are persisted before their SSE completion events are emitted
   (`backend/council.py:773-873`).
 - `status` is `"failed"` iff `stage3.error` is present after the pipeline body
@@ -186,11 +187,16 @@ desynchronize from the backend.
 
 - `_MAX_ATTEMPTS = 4`; waits are `_RETRY_WAIT = [1, 2, 4]` seconds.
 - Retriable HTTP statuses are `{429, 500, 502, 503, 504}`; provider error
-  bodies use the same retry policy when they carry those codes.
-- 401/402/404 are terminal. Timeouts retry until the single outer deadline.
+  frames use the same retry policy when they carry those codes.
+- 401/402/404 are terminal. Stalls and timeouts retry until the single outer
+  deadline.
+- Responses stream (`"stream": true`); the per-attempt httpx `read` timeout is
+  `OPENROUTER_STALL_TIMEOUT` (default 60s) and bounds idle gaps, not total
+  duration — provider keep-alive frames reset it. Connect/write/pool bounds
+  are clamped to the stall budget (`backend/openrouter.py:121-127`).
 - `query_model` bounds all attempts and retry waits with one
-  `asyncio.timeout(timeout)`; per-attempt httpx timeout is the same value, but
-  the outer deadline is authoritative (`backend/openrouter.py:248-263`).
+  `asyncio.timeout(timeout)`; the outer deadline is authoritative
+  (`backend/openrouter.py:query_model`).
 
 ### Transition table
 
@@ -201,7 +207,7 @@ desynchronize from the backend.
 | `retry_wait` | sleep completes | `attempting` | next attempt |
 | `attempting` | 401/402/404 | `failed_terminal` | no retry |
 | `attempting` | retriable status on attempt 4 | `failed_terminal` | error says all attempts failed |
-| `attempting` | timeout before final attempt | `retry_wait` | same backoff |
+| `attempting` | stall/timeout before final attempt | `retry_wait` | same backoff |
 | `attempting`/`retry_wait` | outer deadline expires | `deadline_exceeded` | `TimeoutError` -> `ModelQueryError("timeout")` |
 | any | unexpected exception | `failed_terminal` | logged and converted to `ModelQueryError("unknown")` |
 
