@@ -243,9 +243,13 @@ async def _query_model(
                             idx = detail.get("index", len(reasoning_details))
                             if idx in reasoning_details:
                                 merged = reasoning_details[idx]
-                                merged["text"] = (merged.get("text") or "") + (
-                                    detail.get("text") or ""
-                                )
+                                for key, value in detail.items():
+                                    if key == "text":
+                                        merged["text"] = (merged.get("text") or "") + (
+                                            value or ""
+                                        )
+                                    else:
+                                        merged[key] = value
                             else:
                                 reasoning_details[idx] = dict(detail)
                         if delta.get("annotations"):
