@@ -150,19 +150,20 @@ async def stage2_collect_rankings(
     context: list[dict[str, str]] | None = None,
     catalog: dict[str, ModelInfo] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
-    """Review evidence, retaining optional rankings for existing clients."""
+    """Collect readable evaluations and complete, required rankings."""
     models = _normalize_council_models(council_models)
     labels = [
         f"Response {_index_to_alpha_label(i)}" for i in range(len(stage1_results))
     ]
     mapping = dict(zip(labels, [r["model"] for r in stage1_results], strict=True))
+    schema = review_schema(labels)
     prompt = (
         "Candidate answers:\n"
         + candidate_payload(stage1_results, labels)
         + "\nAllowed labels: "
         + json.dumps(labels)
         + "\nOutput schema: "
-        + json.dumps(review_schema()["json_schema"]["schema"])
+        + json.dumps(schema["json_schema"]["schema"])
     )
     messages = [
         {"role": "system", "content": REVIEW_POLICY},
@@ -181,7 +182,7 @@ async def stage2_collect_rankings(
             model,
             messages,
             max_tokens=4096,
-            response_format=review_schema() if supported else None,
+            response_format=schema if supported else None,
             context_limit=await model_context_limit(model, catalog=catalog),
         )
 

@@ -18,13 +18,21 @@ const STAGE1 = [
 const STAGE2 = [
   {
     model: 'test/model-a',
-    ranking: '{"findings": [], "final_ranking": ["Response A", "Response B"]}',
+    ranking: '{"evaluation": "Response A gives the clearest **supported answer**. [Source](https://example.com/evidence)", "final_ranking": ["Response A", "Response B"]}',
     parsed_ranking: ['Response A', 'Response B'],
+    review: {
+      evaluation: 'Response A gives the clearest **supported answer**. [Source](https://example.com/evidence)',
+      final_ranking: ['Response A', 'Response B'],
+    },
   },
   {
     model: 'test/model-b',
-    ranking: '{"findings": [], "final_ranking": ["Response B", "Response A"]}',
+    ranking: '{"evaluation": "Response B preserves the budget constraint.", "final_ranking": ["Response B", "Response A"]}',
     parsed_ranking: ['Response B', 'Response A'],
+    review: {
+      evaluation: 'Response B preserves the budget constraint.',
+      final_ranking: ['Response B', 'Response A'],
+    },
   },
 ];
 
@@ -106,7 +114,7 @@ function assistantMessage(mode) {
     metadata: {
       label_to_model: STAGE2_METADATA.label_to_model,
       aggregate_rankings: STAGE2_METADATA.aggregate_rankings,
-      prompt_version: 'evidence-v1',
+      prompt_version: 'evidence-v2',
       status: 'complete',
     },
   };

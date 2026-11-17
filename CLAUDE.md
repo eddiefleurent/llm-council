@@ -42,13 +42,12 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Accepts `messages` list for conversation context
   - Optional `council_models` parameter (defaults to configured)
   - Returns tuple: (results, errors)
-- `stage2_collect_rankings(user_query, stage1_results, council_models=None)`:
-  - Anonymizes responses as "Response A, B, C, etc."
-  - Creates `label_to_model` mapping for de-anonymization
-  - Optional `council_models` parameter
-  - Returns tuple: (rankings_list, label_to_model_dict, errors)
-- `stage3_synthesize_final(user_query, stage1_results, stage2_results, chairman_model=None)`:
-  - Chairman synthesizes from all responses + rankings
+- `stage2_collect_rankings(user_query, stage1_results, council_models=None, *, context=None, catalog=None)`:
+  - Anonymizes responses as "Response A, B, C, etc." and builds a required-label JSON schema
+  - Uses the full conversation context and returns (results, label_to_model, errors)
+  - Each successful result has `evaluation`, `ranking`, `parsed_ranking`, and validated `review`
+- `stage3_synthesize_final(user_query, stage1_results, stage2_results, label_to_model, aggregate_rankings, tournament_rankings, chairman_model=None, *, context=None, catalog=None)`:
+  - Chairman synthesizes from anonymous candidates, citations, and reviews
   - Optional `chairman_model` parameter
   - Returns tuple: (result, errors)
 - `chairman_direct_response(messages, chairman_model=None)`:
@@ -59,7 +58,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `run_full_council(messages, council_models=None, chairman_model=None, web_search_enabled=None)`: Full orchestration
   - Now accepts optional model parameters and web search flag
   - Metadata now includes `council_models`, `chairman_model`, and `web_search_enabled` used
-- `parse_ranking_from_text()`: Parses strict JSON `final_ranking` output
+- `parse_ranking_from_text()`: Parses strict JSON `final_ranking` output; primary reviews use strict Pydantic validation
 - `calculate_aggregate_rankings()`: Mean position averaging
 - **`calculate_tournament_rankings()`**: Pairwise comparison (Condorcet voting) - more robust to outliers
 - `generate_conversation_title(user_query, chairman_model=None)`: Uses configurable chairman
@@ -245,9 +244,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Model count in title: "[X queried, Y successful, Z failed]"
 
 **`components/Stage2.jsx`**
-- Tab view showing RAW evaluation text from each model
-- De-anonymization happens CLIENT-SIDE for display
-- Shows "Extracted Ranking" below each evaluation
+- Tab view showing the readable evaluation and complete ranking for each model
+- De-anonymization happens CLIENT-SIDE for display, preserving Markdown and citation links
+- Older saved findings JSON is displayed as raw review text without showing its JSON ranking as prose
 - Aggregate rankings shown with average position and vote count
 - Uses `getModelDisplayName()` for safe model name display
 - **Error display**: Shows failed models in warning section with error details
@@ -350,8 +349,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 ### Evidence review and recovery
 - `reviews.py` owns versioned system policies and strict Pydantic review schemas.
-- Stage 2 returns findings (errors, disagreements, agreement, gaps, unique insights), evidence, resolution status, and optional complete rankings. Unknown labels and partial/duplicate rankings are rejected.
-- Structured outputs are requested only for models advertising `structured_outputs`; local validation applies to every response.
+- Stage 2 returns readable `evaluation` text plus a required complete ranking. Every candidate must appear exactly once; duplicate, unknown, partial, or absent rankings are rejected, as are blank or missing evaluations.
+- The enforced schema has candidate-specific label enums and item-count limits. Structured outputs are requested only for models advertising `structured_outputs` (using `require_parameters`); local uniqueness validation applies to every response. Without discovery support, the schema remains in the prompt but output is not provider-enforced.
 - Stage 3 gets anonymous candidates, citation annotations, and substantive reviews. Model IDs and ranker identities are omitted from its prompt.
 - All stages receive the same task context, including attachments and history.
 - `run_full_council` is shared by HTTP and SSE, emits the existing stage events, and checkpoints completed stages.
@@ -467,7 +466,7 @@ The project includes a `Makefile` with common development commands:
 
 1. **Module Import Errors**: Run backend as `python -m backend.main` from project root
 2. **CORS Issues**: Frontend origin must be listed in `LLM_COUNCIL_CORS_ORIGINS` (see `backend/security.py`)
-3. **Ranking Parse Failures**: Parser is strict JSON-only — returns empty on invalid JSON (no fallback regex). Failed parses are recorded as `parse_failure` errors in Stage 2.
+3. **Review Validation Failures**: Reviews require valid JSON, nonblank evaluation text, and a unique complete ranking. Invalid reviews become `parse_failure` errors and are excluded from synthesis, while successful reviewers still contribute. Older saved findings remain readable.
 4. **Metadata Persistence**: Council metadata and errors are persisted on assistant messages; the latest checkpoint is stored as `council_run`.
 5. **Model as Array**: Some APIs return model as array - use `getModelDisplayName()`
 

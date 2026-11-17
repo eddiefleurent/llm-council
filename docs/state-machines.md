@@ -141,7 +141,7 @@ desynchronize from the backend.
 
 ### Invariants
 
-- `PROMPT_VERSION` must equal `"evidence-v1"`; stale checkpoints are rejected
+- `PROMPT_VERSION` must equal `"evidence-v2"`; stale checkpoints are rejected
   with 409 (`backend/main.py:748-764`, `backend/council.py:755-756`).
 - Completed stages are reused on resume; missing/failed stages rerun
   (`backend/council.py:785-858`).

@@ -340,7 +340,7 @@ export default function ChatInterface({
                     {msg.loading?.stage2 && (
                       <div className="stage-loading">
                         <div className="spinner"></div>
-                        <span>Running Stage 2: Peer rankings...</span>
+                        <span>Running Stage 2: Evidence review...</span>
                       </div>
                     )}
                     {msg.stage2 && (

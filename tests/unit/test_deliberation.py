@@ -1,4 +1,4 @@
-"""Behavioral coverage for context, evidence review, and resumable orchestration."""
+"""Behavioral coverage for context, required reviews, and resumable orchestration."""
 
 import asyncio
 import json
@@ -8,7 +8,7 @@ import pytest
 
 from backend import council, storage
 from backend.openrouter import ModelQueryError
-from backend.reviews import candidate_payload, parse_review
+from backend.reviews import candidate_payload, parse_review, review_schema
 
 
 @pytest.fixture
@@ -26,25 +26,84 @@ def fake_models(monkeypatch):
     monkeypatch.setattr(council, "get_available_models", catalog)
 
 
-def test_review_rejects_unknown_labels_and_duplicate_rankings():
-    base = {"findings": [], "final_ranking": ["Response A", "Response A"]}
+@pytest.mark.parametrize(
+    "ranking",
+    [
+        [],
+        ["Response A"],
+        ["Response A", "Response A"],
+        ["Response A", "Response Z"],
+        ["Response A", "Response B", "Response B"],
+        ["Response A", 2],
+        "Response A, Response B",
+        None,
+    ],
+)
+def test_review_requires_complete_unique_ranking(ranking):
+    base = {"evaluation": "A is more accurate than B.", "final_ranking": ranking}
     with pytest.raises(ValueError):
         parse_review(json.dumps(base), {"Response A", "Response B"})
-    base = {
-        "findings": [
-            {
-                "kind": "error",
-                "responses": ["Response Z"],
-                "claim": "x",
-                "assessment": "wrong",
-                "evidence": [],
-                "resolution": "unsupported",
-            }
-        ],
-        "final_ranking": [],
-    }
+
+
+@pytest.mark.parametrize("evaluation", ["", " \n\t", None, [], 42])
+def test_review_requires_nonblank_text(evaluation):
     with pytest.raises(ValueError):
-        parse_review(json.dumps(base), {"Response A"})
+        parse_review(
+            json.dumps({"evaluation": evaluation, "final_ranking": ["Response A"]}),
+            {"Response A"},
+        )
+
+
+@pytest.mark.parametrize("missing_field", ["evaluation", "final_ranking"])
+def test_review_requires_both_fields(missing_field):
+    review = {"evaluation": "A is accurate.", "final_ranking": ["Response A"]}
+    del review[missing_field]
+    with pytest.raises(ValueError):
+        parse_review(json.dumps(review), {"Response A"})
+
+
+def test_review_rejects_extra_fields():
+    with pytest.raises(ValueError):
+        parse_review(
+            json.dumps(
+                {
+                    "evaluation": "A is accurate.",
+                    "final_ranking": ["Response A"],
+                    "findings": [],
+                }
+            ),
+            {"Response A"},
+        )
+
+
+def test_review_preserves_freeform_markdown_and_citations():
+    evaluation = (
+        "### Close call\nResponse B preserves the budget constraint.\n\n"
+        "Response A has a useful minority insight; [source](https://example.com)."
+    )
+    review = parse_review(
+        json.dumps(
+            {"evaluation": evaluation, "final_ranking": ["Response B", "Response A"]}
+        ),
+        {"Response A", "Response B"},
+    )
+    assert review.evaluation == evaluation
+    assert review.final_ranking == ["Response B", "Response A"]
+
+
+@pytest.mark.parametrize("label_count", [1, 3, 28])
+def test_schema_limits_rankings_to_current_candidates(label_count):
+    labels = [f"Response {_index}" for _index in range(label_count)]
+    response_format = review_schema(labels)
+    assert response_format["json_schema"]["strict"] is True
+    schema = response_format["json_schema"]["schema"]
+    assert set(schema["required"]) == {"evaluation", "final_ranking"}
+    assert schema["properties"]["final_ranking"]["items"]["enum"] == labels
+    assert schema["properties"]["final_ranking"]["minItems"] == label_count
+    assert schema["properties"]["final_ranking"]["maxItems"] == label_count
+    # Building a smaller council's schema must not mutate an earlier one.
+    review_schema(["Response A"])
+    assert schema["properties"]["final_ranking"]["items"]["enum"] == labels
 
 
 async def test_reviews_and_synthesis_keep_context_and_hide_model_ids(
@@ -55,7 +114,12 @@ async def test_reviews_and_synthesis_keep_context_and_hide_model_ids(
     async def query(model, messages, **kwargs):
         calls.append((model, messages, kwargs))
         return {
-            "content": json.dumps({"findings": [], "final_ranking": []}),
+            "content": json.dumps(
+                {
+                    "evaluation": "Response A matches X=12.",
+                    "final_ranking": ["Response A"],
+                }
+            ),
             "annotations": [{"url": "https://example.com"}],
             "usage": {"cost": 0.1},
         }
@@ -73,11 +137,13 @@ async def test_reviews_and_synthesis_keep_context_and_hide_model_ids(
             "annotations": [{"url": "https://example.com"}],
         }
     ]
+    candidates[0]["annotations"] = [{"url": "https://cited.example.com"}]
     reviews, labels, errors = await council.stage2_collect_rankings(
         "Compare options", candidates, ["a", "b"], context=context
     )
     assert not errors
     assert calls[0][2]["response_format"]["type"] == "json_schema"
+    assert calls[0][2]["response_format"] == review_schema(["Response A"])
     assert calls[1][2]["response_format"] is None
     result, errors = await council.stage3_synthesize_final(
         "Compare options", candidates, reviews, labels, [], [], "a", context=context
@@ -89,6 +155,53 @@ async def test_reviews_and_synthesis_keep_context_and_hide_model_ids(
         assert "secret/model-a" not in json.dumps(messages)
         assert expected_payload in messages[-1]["content"]
     assert result["usage"]["cost"] == 0.1
+    assert reviews[0]["review"]["evaluation"] == "Response A matches X=12."
+    assert (
+        '"citations": [{"url": "https://cited.example.com"}]'
+        in calls[-1][1][-1]["content"]
+    )
+    assert "unexpected" not in calls[-1][1][-1]["content"]
+    assert '"evaluation": "Response A matches X=12."' in calls[-1][1][-1]["content"]
+    assert '"final_ranking": ["Response A"]' in calls[-1][1][-1]["content"]
+
+
+async def test_invalid_ranking_is_reported_without_losing_other_reviewers(monkeypatch):
+    # "online" must resolve the base model's capability for structured output.
+    async def catalog():
+        info = SimpleNamespace(
+            context_length=100000, supported_parameters=["structured_outputs"]
+        )
+        return SimpleNamespace(models_by_id={"a": info})
+
+    monkeypatch.setattr(council, "get_available_models", catalog)
+
+    async def query(model, messages, **kwargs):
+        assert kwargs["response_format"] == review_schema(["Response A", "Response B"])
+        ranking = (
+            ["Response B", "Response A"] if model == "a:online" else ["Response A"]
+        )
+        return {
+            "content": json.dumps(
+                {"evaluation": "Response B cites the source.", "final_ranking": ranking}
+            )
+        }
+
+    monkeypatch.setattr(council, "query_model", query)
+    candidates = [
+        {"model": "a", "response": "A"},
+        {"model": "b", "response": "B"},
+    ]
+    reviews, labels, errors = await council.stage2_collect_rankings(
+        "Compare", candidates, ["a:online", "a"]
+    )
+    assert [review["model"] for review in reviews] == ["a:online"]
+    assert errors[0]["model"] == "a"
+    assert errors[0]["error_type"] == "parse_failure"
+    assert '"final_ranking": ["Response A"]' in errors[0]["raw_text"]
+    assert council.calculate_aggregate_rankings(reviews, labels) == [
+        {"model": "b", "average_rank": 1.0, "rankings_count": 1},
+        {"model": "a", "average_rank": 2.0, "rankings_count": 1},
+    ]
 
 
 async def test_failed_synthesis_resume_reuses_completed_stages(
@@ -102,7 +215,9 @@ async def test_failed_synthesis_resume_reuses_completed_stages(
         if model == "a":
             return {"content": "candidate answer"}
         if kwargs.get("max_tokens") == 4096:
-            return {"content": '{"findings": [], "final_ranking": []}'}
+            return {
+                "content": '{"evaluation": "Response A is accurate.", "final_ranking": ["Response A"]}'
+            }
         if fail:
             return ModelQueryError("server", "unavailable", model=model)
         return {"content": "final answer"}
@@ -210,7 +325,14 @@ async def test_run_shares_discovery_across_stages_and_refreshes_next_run(
         assert kwargs["context_limit"] == (32000 if discovery_fails else 100000)
         if messages[0]["content"] == council.REVIEW_POLICY:
             assert bool(kwargs["response_format"]) is not discovery_fails
-            return {"content": '{"findings": [], "final_ranking": []}'}
+            return {
+                "content": json.dumps(
+                    {
+                        "evaluation": "All candidates answer the question.",
+                        "final_ranking": [f"Response {label}" for label in "ABCDEFG"],
+                    }
+                )
+            }
         return {"content": "answer"}
 
     monkeypatch.setattr(models, "_cache", models.ModelsCache())
@@ -229,6 +351,7 @@ async def test_run_shares_discovery_across_stages_and_refreshes_next_run(
             save_checkpoint=snapshots.append,
         )
         assert result[3]["status"] == "complete"
+        assert result[3]["errors"]["stage2"] == []
         assert len(discovery_calls) == run + 1
         assert len(completions) == (run + 1) * 15
 
