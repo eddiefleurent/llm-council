@@ -196,6 +196,10 @@ async def _query_model(
                 usage: dict[str, Any] = {}
                 generation_id: str | None = None
                 provider_error: Any = None
+                saw_data = False
+                # Upstream failures can arrive as a plain JSON body instead of
+                # SSE frames; keep non-data lines for classification.
+                raw_body = bytearray()
 
                 async for line in response.aiter_lines():
                     line = line.strip()
@@ -205,7 +209,10 @@ async def _query_model(
                     if not line or line.startswith(":"):
                         continue
                     if not line.startswith("data:"):
+                        if len(raw_body) < 16384:
+                            raw_body.extend(line.encode("utf-8") + b"\n")
                         continue
+                    saw_data = True
                     data_str = line.removeprefix("data:").strip()
                     if data_str == "[DONE]":
                         break
@@ -243,6 +250,34 @@ async def _query_model(
                             annotations.extend(delta["annotations"])
                         if choice.get("finish_reason"):
                             finish_reason = choice["finish_reason"]
+
+                if provider_error is None and not saw_data and raw_body:
+                    # The whole body was a classic JSON response rather than
+                    # SSE frames.
+                    try:
+                        parsed = json.loads(raw_body.decode("utf-8", errors="replace"))
+                    except json.JSONDecodeError:
+                        parsed = None
+                    if isinstance(parsed, dict) and "error" in parsed:
+                        provider_error = parsed["error"]
+                    elif isinstance(parsed, dict) and parsed.get("choices"):
+                        # Provider ignored streaming and returned a complete
+                        # JSON completion; use its message as the payload.
+                        message = parsed["choices"][0].get("message") or {}
+                        if message.get("content"):
+                            content_parts.append(message["content"])
+                        if message.get("reasoning"):
+                            reasoning_parts.append(message["reasoning"])
+                        for detail in message.get("reasoning_details") or []:
+                            reasoning_details.setdefault(
+                                detail.get("index", len(reasoning_details)),
+                                dict(detail),
+                            )
+                        annotations.extend(message.get("annotations") or [])
+                        finish_reason = parsed["choices"][0].get("finish_reason")
+                        generation_id = parsed.get("id") or generation_id
+                        if parsed.get("usage"):
+                            usage.update(parsed["usage"])
 
                 if provider_error is not None:
                     error_type, err_code, err_msg = _classify_provider_error(
