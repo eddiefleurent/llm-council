@@ -31,13 +31,29 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
     if (autoCollapse) setIsCollapsed(true);
   }
 
-  if (!rankings || rankings.length === 0) {
+  const displayRankings = (rankings || []).filter(
+    (review) => review && (review.review || review.ranking),
+  );
+  const reviewCount = displayRankings.length;
+  const hasFailed = errors && errors.length > 0;
+  if (reviewCount === 0 && !hasFailed) {
     return null;
   }
 
-  const totalQueried = rankings.length + (errors?.length || 0);
-  const hasFailed = errors && errors.length > 0;
-  const activeIndex = Math.min(activeTab, rankings.length - 1);
+  const totalQueried = reviewCount + (errors?.length || 0);
+  const activeIndex = Math.min(activeTab, reviewCount - 1);
+  const activeReview = displayRankings[activeIndex];
+
+  // New reviews expose readable evaluation text. Older saved reviews keep their
+  // raw payload visible, except empty findings lists that only contained JSON.
+  let evaluation = activeReview?.review?.evaluation;
+  if (evaluation == null) {
+    if (activeReview?.review) {
+      evaluation = activeReview.review.findings?.length ? activeReview.ranking : '';
+    } else {
+      evaluation = activeReview?.ranking ?? '';
+    }
+  }
 
   return (
     <div className="stage stage2">
@@ -46,7 +62,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
           Stage 2: Evidence Review
           {totalQueried > 0 && (
             <span className="model-count">
-              {' '}[{totalQueried} model{totalQueried === 1 ? '' : 's'} queried, {rankings.length} successful
+              {' '}[{totalQueried} model{totalQueried === 1 ? '' : 's'} queried, {reviewCount} successful
               {hasFailed && `, ${errors.length} failed`}]
             </span>
           )}
@@ -141,18 +157,18 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
             </div>
           )}
 
-          <details className="raw-output-details">
+          {activeReview && <details className="raw-output-details">
             <summary>
-              Individual reviews ({rankings.length}) — raw output
+              Individual reviews ({reviewCount})
             </summary>
             <p className="stage-description">
               Reviewers identify errors, disagreements, gaps, and useful insights using anonymized labels
-              (Response A, B, C, etc.), with optional rankings. Below, model names are shown in{' '}
-              <strong>bold</strong> for readability, but the original output uses anonymous labels.
+              (Response A, B, C, etc.) and rank every candidate from best to worst. Below, model names
+              are shown in <strong>bold</strong> for readability.
             </p>
 
             <div className="tabs">
-              {rankings.map((rank, index) => (
+              {displayRankings.map((rank, index) => (
                 <button
                   key={index}
                   className={`tab ${activeIndex === index ? 'active' : ''}`}
@@ -165,20 +181,20 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
 
             <div className="tab-content">
               <div className="ranking-model">
-                {rankings[activeIndex].model}
+                {activeReview.model}
               </div>
               <div className="ranking-content markdown-content">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {deAnonymizeText(rankings[activeIndex].ranking, labelToModel)}
+                  {deAnonymizeText(evaluation, labelToModel)}
                 </ReactMarkdown>
               </div>
 
-              {rankings[activeIndex].parsed_ranking &&
-                rankings[activeIndex].parsed_ranking.length > 0 && (
+              {activeReview.parsed_ranking &&
+                activeReview.parsed_ranking.length > 0 && (
                   <div className="parsed-ranking">
-                    <strong>Extracted Ranking:</strong>
+                    <strong>Ranking (best to worst):</strong>
                     <ol>
-                      {rankings[activeIndex].parsed_ranking.map((label, i) => (
+                      {activeReview.parsed_ranking.map((label, i) => (
                         <li key={i}>
                           {labelToModel && labelToModel[label]
                             ? getModelDisplayName(labelToModel[label])
@@ -189,7 +205,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings, tour
                   </div>
                 )}
             </div>
-          </details>
+          </details>}
         </>
       )}
     </div>

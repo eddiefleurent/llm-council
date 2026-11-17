@@ -29,6 +29,30 @@ test('chairman mode renders a direct chairman response', async ({ page }) => {
   await expect(page.getByText('Stage 1: Individual Responses')).toHaveCount(0);
 });
 
+test('reviews render readable evaluations, citations, and complete rankings after reload', async ({ page }) => {
+  await page.getByPlaceholder('Ask your question...').fill('Compare caching strategies');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText('Council final answer')).toBeVisible();
+
+  // Check both the streamed result and the persisted conversation shape.
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    const stage2 = page.locator('.stage2');
+    await stage2.getByRole('button', { name: 'Expand' }).click();
+    await stage2.getByText('Individual reviews (2)', { exact: true }).click();
+    await expect(stage2.locator('.ranking-content')).toContainText('model-a gives the clearest supported answer.');
+    await expect(stage2.locator('.ranking-content strong')).toHaveText(['model-a', 'supported answer']);
+    await expect(stage2.getByRole('link', { name: 'Source' })).toHaveAttribute('href', 'https://example.com/evidence');
+    await expect(stage2.locator('.ranking-content')).not.toContainText('final_ranking');
+    await expect(stage2.locator('.parsed-ranking li')).toHaveText(['model-a', 'model-b']);
+    await expect(stage2.locator('.rank-count')).toHaveText(['(2 votes)', '(2 votes)']);
+
+    await stage2.getByRole('button', { name: 'model-b', exact: true }).click();
+    await expect(stage2.locator('.ranking-content')).toHaveText('model-b preserves the budget constraint.');
+    await expect(stage2.locator('.parsed-ranking li')).toHaveText(['model-b', 'model-a']);
+  }
+});
+
 test('configuration modal opens with quick presets', async ({ page }) => {
   await page
     .getByRole('button', { name: 'Configure models for this conversation' })

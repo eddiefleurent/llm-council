@@ -6,7 +6,7 @@ evidence. Agreement is not treated as proof. Candidate model IDs are omitted fro
 review and synthesis prompts; models can still self-identify in their answer text.
 
 `backend/reviews.py` contains the versioned policies and review schema. Rankings
-remain available for existing clients but are optional and secondary to findings.
+are required, with every candidate ranked exactly once from best to worst.
 Every stage receives the same context, including attachment text and follow-up
 history. Citation annotations returned by OpenRouter are retained and supplied to
 synthesis. This preserves provenance; it does not independently verify every URL.
@@ -25,8 +25,9 @@ The existing message and message/stream routes accept an optional review mode:
   synthesis call. With N panelists, this uses N+2 primary completions instead of
   2N+1. Actual costs depend on tokens, models, search and retries.
 
-No default quality advantage is assumed. The frontend continues to show raw review
-JSON and optional rankings. Mode selection and resumption are backend API features.
+No default quality advantage is assumed. The API returns each successful review as
+`review.evaluation` plus `review.final_ranking`, with `parsed_ranking` and the raw
+JSON still available as `ranking`. Mode selection and resumption are backend API features.
 
 POST `/api/conversations/{id}/resume` resumes the latest council turn. Saved
 successful stages are reused; an interrupted stage may need to run again. A failed
@@ -42,6 +43,37 @@ files. As before, the generation lock is per-process: use one server worker with
 this file storage implementation. This is not a distributed job queue. Completed
 stages survive restart, but unfinished network requests do not. A checkpoint
 contains the same potentially sensitive inputs as the conversation history.
+
+## Review contract
+
+Each review must contain two fields and nothing else:
+
+```json
+{
+  "evaluation": "Your readable critique, including evidence and caveats.",
+  "final_ranking": ["Response B", "Response A", "Response C"]
+}
+```
+
+- `evaluation` must be nonblank text, not an array or object. Plain text and
+  Markdown are supported; there are no required sections or finding categories.
+  The UI renders it with ReactMarkdown and remark-gfm. This does not sanitize
+  raw HTML, and links are not independently verified.
+- `final_ranking` must contain every candidate exactly once, ordered best to
+  worst with no ties. There is no empty-ranking exception.
+- The request JSON schema supplies candidate-specific label enums and item-count
+  limits. Local Pydantic validation enforces field types, nonblank text, unique
+  complete rankings, and rejects extra fields. Provider support for uniqueness
+  constraints varies; local validation is required even with structured outputs.
+- Unsupported provider capabilities fall back to prompt instructions only, never
+  to relaxed local acceptance. Invalid reviews are excluded from synthesis, but
+  valid reviews from other models still contribute.
+- Saved conversations retain their original review payloads. New `evaluation`
+  text is preferred for display; older findings JSON remains readable without
+  interpreting its findings as ranking explanations.
+- Prompt version `evidence-v2` invalidates old checkpoints; it does not migrate
+  historical messages or rewrite old runtime records. Saved Stage 3 responses
+  keep their original inputs.
 
 ## Limits and telemetry
 
@@ -70,10 +102,11 @@ contains the same potentially sensitive inputs as the conversation history.
 - Successful calls retain `usage`, `generation_id`, `latency_seconds`, `attempts`,
   `finish_reason`, `truncated`, and `annotations`. Empty text is a failure. Failed
   calls include latency; billing for timed-out attempts may be unknown.
-- Invalid reviews are recorded as parse failures. Synthesis can proceed with a
-  partial panel or absent reviews, and the metadata preserves those errors.
 - Structured outputs use OpenRouter JSON Schema only when model discovery advertises
   support, with `require_parameters` routing. All reviews are validated locally.
+  The schema is built for the current candidate labels and does not affect other runs.
+  When discovery lacks support, the same schema and requirements are included in the
+  prompt and reviews are still validated locally.
 
 ## Comparing quality
 

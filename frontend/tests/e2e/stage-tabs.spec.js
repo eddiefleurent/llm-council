@@ -46,10 +46,15 @@ const SHORT_CONVERSATION = {
     {
       role: 'assistant',
       stage1: [{ model: 'test/model-c', response: 'Short answer C' }],
-      stage2: [{ model: 'test/model-c', ranking: 'Short ranking C', parsed_ranking: [] }],
+      stage2: [{
+        model: 'test/model-c',
+        ranking: '{"findings":[{"claim":"Short ranking C"}],"final_ranking":["Response A"]}',
+        review: { findings: [{ claim: 'Short ranking C' }], final_ranking: ['Response A'] },
+        parsed_ranking: ['Response A'],
+      }],
       stage3: { model: 'test/chairman', response: 'Short final answer' },
       metadata: {
-        label_to_model: {},
+        label_to_model: { 'Response A': 'test/model-c' },
         aggregate_rankings: [],
         status: 'complete',
       },
@@ -57,7 +62,46 @@ const SHORT_CONVERSATION = {
   ],
 };
 
-const CONVERSATIONS = [LONG_CONVERSATION, SHORT_CONVERSATION];
+const EMPTY_REVIEW_CONVERSATION = {
+  ...SHORT_CONVERSATION,
+  id: 'conv-empty-review',
+  title: 'Empty Legacy Review',
+  messages: [
+    SHORT_CONVERSATION.messages[0],
+    {
+      ...SHORT_CONVERSATION.messages[1],
+      stage2: [{
+        ...SHORT_CONVERSATION.messages[1].stage2[0],
+        ranking: JSON.stringify({ findings: [], final_ranking: ['Response A'] }),
+        review: { findings: [], final_ranking: ['Response A'] },
+      }],
+    },
+  ],
+};
+
+const FAILED_CONVERSATION = {
+  id: 'conv-failed-reviews',
+  created_at: '2026-01-03T00:00:00.000Z',
+  title: 'Failed Reviews',
+  messages: [
+    { role: 'user', content: 'Review these candidates' },
+    {
+      role: 'assistant',
+      stage1: LONG_CONVERSATION.messages[1].stage1,
+      stage2: [],
+      stage3: { model: 'test/chairman', response: 'Answer without reviews' },
+      errors: {
+        stage2: [
+          { model: 'test/model-a', error_type: 'parse_failure', message: 'Invalid structured review' },
+          { model: 'test/model-b', error_type: 'parse_failure', message: 'Invalid structured review' },
+        ],
+      },
+      metadata: { label_to_model: {}, aggregate_rankings: [], status: 'complete' },
+    },
+  ],
+};
+
+const CONVERSATIONS = [LONG_CONVERSATION, SHORT_CONVERSATION, EMPTY_REVIEW_CONVERSATION, FAILED_CONVERSATION];
 
 function json(route, body, status = 200) {
   return route.fulfill({
@@ -122,11 +166,40 @@ test('stage tabs stay within the selected conversation results', async ({ page }
   await stage1.getByRole('button', { name: 'model-b', exact: true }).click();
   await stage2.getByRole('button', { name: 'model-b', exact: true }).click();
   await expect(stage1.getByText('Long answer B')).toBeVisible();
+  await expect(stage2.getByText('Long ranking B')).toBeVisible();
 
   await page.getByText('Short Council', { exact: true }).click();
   await stage1.getByRole('button', { name: 'Expand' }).click();
   await stage2.getByRole('button', { name: 'Expand' }).click();
   await stage2.getByText('Individual reviews').click();
   await expect(stage1.getByText('Short answer C')).toBeVisible();
-  await expect(stage2.getByText('Short ranking C')).toBeVisible();
+  await expect(stage2.locator('.ranking-content')).toContainText('Short ranking C');
+  await expect(stage2.locator('.parsed-ranking li')).toHaveText(['model-c']);
+});
+
+test('legacy empty findings keep their ranking without a JSON prose review', async ({ page }) => {
+  await mockStageTabApi(page);
+  await page.goto('/');
+  await page.getByText('Empty Legacy Review', { exact: true }).click();
+  const stage2 = page.locator('.stage2');
+  await stage2.getByRole('button', { name: 'Expand' }).click();
+  await stage2.getByText('Individual reviews (1)', { exact: true }).click();
+  await expect(stage2.locator('.ranking-content')).toBeEmpty();
+  await expect(stage2.locator('.ranking-content')).not.toContainText('final_ranking');
+  await expect(stage2.locator('.parsed-ranking li')).toHaveText(['model-c']);
+  await expect(stage2.locator('.tabs button')).toHaveCount(1);
+});
+
+test('all failed reviews remain visible without review tabs or a leaderboard', async ({ page }) => {
+  await mockStageTabApi(page);
+  await page.goto('/');
+  await page.getByText('Failed Reviews', { exact: true }).click();
+  const stage2 = page.locator('.stage2');
+  await expect(stage2).toContainText('2 models queried, 0 successful, 2 failed');
+  await stage2.getByRole('button', { name: 'Expand' }).click();
+  await expect(stage2.locator('.error-item')).toHaveCount(2);
+  await expect(stage2.getByText('Invalid structured review', { exact: true })).toHaveCount(2);
+  await expect(stage2.locator('.tabs')).toHaveCount(0);
+  await expect(stage2.locator('.aggregate-rankings')).toHaveCount(0);
+  await expect(page.getByText('Answer without reviews', { exact: true })).toBeVisible();
 });

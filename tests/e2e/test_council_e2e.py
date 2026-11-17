@@ -53,7 +53,7 @@ async def test_council_json_run_persists_full_pipeline(harness):
 
     metadata = data["metadata"]
     assert metadata["status"] == "complete"
-    assert metadata["prompt_version"] == "evidence-v1"
+    assert metadata["prompt_version"] == "evidence-v2"
     assert metadata["review_mode"] == "peer"
     assert metadata["council_models"] == COUNCIL_MODELS
     assert metadata["chairman_model"] == CHAIRMAN_MODEL
@@ -68,7 +68,12 @@ async def test_council_json_run_persists_full_pipeline(harness):
     assistant = saved.json()["messages"][-1]
     assert assistant["role"] == "assistant"
     assert assistant["stage3"]["response"] == "Final council answer"
-    assert assistant["metadata"]["prompt_version"] == "evidence-v1"
+    assert assistant["metadata"]["prompt_version"] == "evidence-v2"
+    assert assistant["stage2"] == data["stage2"]
+    assert assistant["stage2"][0]["review"] == {
+        "evaluation": "Response A gives the clearest supported answer.",
+        "final_ranking": ["Response A", "Response B"],
+    }
 
 
 async def test_council_stream_emits_ordered_events_and_persists(harness):

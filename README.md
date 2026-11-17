@@ -249,17 +249,18 @@ In **Stage 2**, council members rank each other's responses using two algorithms
 2. **Tournament-Style Pairwise (Condorcet)**: Head-to-head wins between responses (more robust to outliers)
 
 Responses are anonymized as "Response A", "Response B", etc. to prevent bias.
-Models provide rankings as strict JSON:
+Stage 2 uses OpenRouter structured output (when supported) to require readable evaluations and complete candidate rankings:
 
 ```json
-{"final_ranking": ["Response C", "Response A", "Response B"]}
+{"evaluation": "Response C handles the budget correctly; Response A misses that constraint.", "final_ranking": ["Response C", "Response A", "Response B"]}
 ```
 
-Both ranking methods appear in the metadata, and the Chairman sees both when synthesizing the final answer in Stage 3.
+Each candidate label must appear exactly once. Both ranking methods appear in the metadata, and the Chairman receives the evaluations and rankings when synthesizing the final answer in Stage 3. See [backend deliberation and evaluation](docs/deliberation.md) for validation and recovery.
 
 ## Changelog
 
-### Evidence-focused council reviews
+### Simplified evidence-focused reviews
+- Reviews combine a readable critique and their ranking in one enforced JSON object, instead of nested finding records. Rankings must include every candidate exactly once.
 - Reviews now identify factual errors, disagreements, missing requirements, and useful minority insights.
 - Follow-up context and attachments reach every council stage.
 - Failed council runs can resume from saved stages through the API; a single-analyst review mode is available for comparison.

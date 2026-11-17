@@ -69,7 +69,10 @@ class FakeOpenRouter:
                 handled = await self.stage2_handler(model, last_content)
                 if handled is not None:
                     return handled
-            review = {"findings": [], "final_ranking": _allowed_labels(last_content)}
+            review = {
+                "evaluation": "Response A gives the clearest supported answer.",
+                "final_ranking": _allowed_labels(last_content),
+            }
             return json.dumps(review)
 
         if "Answer the user's actual request" in system:
