@@ -349,7 +349,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 ### Evidence review and recovery
 - `reviews.py` owns versioned system policies and strict Pydantic review schemas.
-- Stage 2 returns readable `evaluation` text plus a required complete ranking. Every candidate must appear exactly once; duplicate, unknown, partial, or absent rankings are rejected, as are blank or missing evaluations.
+- Stage 2 review payloads contain readable `evaluation` text plus a required complete ranking. Every candidate must appear exactly once; duplicate, unknown, partial, or absent rankings are rejected, as are blank or missing evaluations.
 - The enforced schema has candidate-specific label enums and item-count limits. Structured outputs are requested only for models advertising `structured_outputs` (using `require_parameters`); local uniqueness validation applies to every response. Without discovery support, the schema remains in the prompt but output is not provider-enforced.
 - Stage 3 gets anonymous candidates, citation annotations, and substantive reviews. Model IDs and ranker identities are omitted from its prompt.
 - All stages receive the same task context, including attachments and history.
